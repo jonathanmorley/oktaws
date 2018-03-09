@@ -22,6 +22,8 @@ struct AwsCredentialStore {
 pub fn find_saml_attributes(saml_assertion: &str) -> Result<HashMap<String, String>, Error> {
     let decoded_saml = String::from_utf8(decode(&saml_assertion)?)?;
 
+    debug!("Decoded SAML: {}", decoded_saml);
+
     let mut reader = Reader::from_str(&decoded_saml);
     reader.trim_text(true);
 
@@ -99,5 +101,6 @@ pub fn set_credentials(profile: &str, credentials: &Credentials) -> Result<(), E
         )
         .set("aws_session_token", credentials.session_token.to_owned());
 
+    info!("Saving AWS credentials to {}", path);
     Ok(conf.write_to_file(path)?)
 }

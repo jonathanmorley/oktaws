@@ -1,45 +1,96 @@
 use failure::Error;
-use ini::Ini;
+use serde_json;
+use toml;
 
-use std::path::PathBuf;
+use std::collections::HashMap;
 use std::env;
+use std::path::Path;
+use std::fs::File;
+use std::io::Read;
+use std::iter::FromIterator;
+use std::iter;
 
-pub struct OktawsConfig {
+#[serde(default)]
+#[derive(StructOpt, Debug, Deserialize, Default)]
+pub struct Config {
+    /// Profile to update
+    pub profile: Option<String>,
+
+    /// Forces new credentials
+    #[structopt(short = "f", long = "force-new")]
+    pub force_new: bool,
+
+    /// Specify Okta username (will prompt if not provided)
+    #[structopt(short = "u", long = "username")]
+    pub username: Option<String>,
+
+    /// Sets the level of verbosity
+    #[structopt(short = "v", long = "verbose")]
+    pub verbosity: u64,
+
+    /// Profile information (in json object format)
+    #[structopt(long = "profiles", parse(try_from_str = "parse_map"), default_value = "{}")]
+    pub profiles: HashMap<String, Profile>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Profile {
     pub organization: String,
     pub app_id: String,
     pub role: String,
 }
 
-fn find_config_file() -> PathBuf {
-    let test_paths = vec![
-        env::current_dir().unwrap().join(".oktaws"),
-        env::home_dir().unwrap().join(".oktaws/config"),
-    ];
+impl Config {
+    pub fn from_file(file_path: &Path) -> Result<Self, Error> {
+        let mut buffer = String::new();
 
-    if let Some(existing_file) = test_paths.iter().find(|path| path.exists()) {
-        existing_file.into()
-    } else {
-        error!("No config files found, tried {:?}.", test_paths);
-        panic!();
+        if file_path.exists() && file_path.is_file() {
+            File::open(file_path)?.read_to_string(&mut buffer)?;
+            Ok(toml::from_str(&buffer)?)
+        } else {
+            let old_config_path = env::home_dir().unwrap().join(".oktaws/config");
+            if old_config_path.exists() && old_config_path.is_file() {
+                warn!(
+                    "Deprecated config file found at {:?}, please move this to {:?} and convert \
+                     to TOML (add quotes and 'profiles.' prefix to object keys)",
+                    old_config_path, file_path
+                );
+            }
+            Ok(Config::default())
+        }
+    }
+
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            profile: self.profile.or(other.profile),
+            force_new: self.force_new || other.force_new,
+            verbosity: self.verbosity + other.verbosity,
+            username: self.username.or(other.username),
+            profiles: HashMap::from_iter(
+                self.profiles.into_iter().chain(other.profiles.into_iter()),
+            ),
+        }
+    }
+
+    pub fn into_profiles(mut self) -> Vec<(String, Profile)> {
+        match self.profile {
+            Some(profile_name) => match self.profiles.remove(&profile_name) {
+                Some(profile) => iter::once((profile_name, profile)).collect(),
+                None => {
+                    error!(
+                        "Could not find profile '{}' in {:?}",
+                        profile_name,
+                        self.profiles.keys()
+                    );
+
+                    iter::empty().collect()
+                }
+            },
+            None => self.profiles.into_iter().collect(),
+        }
     }
 }
 
-pub fn fetch_config(profile: &str) -> Result<OktawsConfig, Error> {
-    let path_buf = find_config_file();
-    let path = path_buf.to_str().unwrap();
-
-    debug!("Using oktaws config file at {}", path);
-
-    let conf = Ini::load_from_file(path)?;
-
-    if let Some(section) = conf.section(Some(profile.to_owned())) {
-        Ok(OktawsConfig {
-            organization: section.get("organization").unwrap().to_owned(),
-            app_id: section.get("app_id").unwrap().to_owned(),
-            role: section.get("role").unwrap().to_owned(),
-        })
-    } else {
-        error!("Could not find section '{}' in {}.", profile, path);
-        panic!();
-    }
+fn parse_map(src: &str) -> Result<HashMap<String, Profile>, Error> {
+    serde_json::from_str(src).map_err(|e| e.into())
 }
