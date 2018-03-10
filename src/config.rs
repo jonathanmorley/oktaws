@@ -25,11 +25,12 @@ pub struct Config {
     pub username: Option<String>,
 
     /// Sets the level of verbosity
-    #[structopt(short = "v", long = "verbose")]
+    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     pub verbosity: u64,
 
     /// Profile information (in json object format)
-    #[structopt(long = "profiles", parse(try_from_str = "parse_map"), default_value = "{}")]
+    #[structopt(long = "profiles", parse(try_from_str = "serde_json::from_str"),
+                default_value = "{}")]
     pub profiles: HashMap<String, Profile>,
 }
 
@@ -89,8 +90,4 @@ impl Config {
             None => self.profiles.into_iter().collect(),
         }
     }
-}
-
-fn parse_map(src: &str) -> Result<HashMap<String, Profile>, Error> {
-    serde_json::from_str(src).map_err(|e| e.into())
 }

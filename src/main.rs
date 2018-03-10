@@ -1,25 +1,26 @@
 extern crate base64;
+#[macro_use]
 extern crate failure;
 extern crate ini;
 extern crate keyring;
+extern crate kuchiki;
 #[macro_use]
 extern crate log;
 extern crate loggerv;
-extern crate quick_xml;
 extern crate reqwest;
 extern crate rpassword;
 extern crate rusoto_core;
 extern crate rusoto_credential;
 extern crate rusoto_sts;
-extern crate scraper;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_ini;
 extern crate serde_json;
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
+extern crate sxd_document;
+extern crate sxd_xpath;
 #[macro_use]
 extern crate text_io;
 extern crate toml;
@@ -29,6 +30,7 @@ mod okta;
 mod aws;
 mod config;
 mod credentials;
+mod saml;
 
 use config::Profile;
 
@@ -45,7 +47,7 @@ fn main() {
         loggerv::Logger::new()
             .verbosity(args_opts.verbosity)
             .level(true)
-            .module_path(false)
+            .module_path(true)
             .init()?;
 
         let config_file_path = env::home_dir().unwrap().join(".oktaws/config.toml");
@@ -75,18 +77,15 @@ fn main() {
             let session_token = okta::login(&organization, &username, &password)?.session_token;
             debug!("Session Token: {}", session_token);
 
-            let saml_assertion = okta::fetch_saml(&organization, &app_id, &session_token)?;
-            debug!("SAML assertion: {}", saml_assertion);
+            let saml = saml::Response::from_okta(&organization, &app_id, &session_token)?;
+            debug!("SAML assertion: {:?}", saml);
 
-            let saml_attributes = aws::find_saml_attributes(&saml_assertion)?;
-            debug!("SAML attributes: {:?}", saml_attributes);
-
-            let principal_arn = saml_attributes
+            let principal_arn = saml.roles
                 .get(&role)
                 .expect("Error getting the principal ARN from SAML attributes");
             debug!("Principal ARN: {}", principal_arn);
 
-            let credentials = aws::assume_role(principal_arn, &role, &saml_assertion)?
+            let credentials = aws::assume_role(principal_arn, &role, &saml.raw)?
                 .credentials
                 .expect("Error fetching credentials from assumed AWS role");
             debug!("Credentials: {:?}", credentials);
