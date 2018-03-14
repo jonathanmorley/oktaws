@@ -3,18 +3,22 @@ use serde_json;
 use toml;
 
 use std::collections::HashMap;
-use std::env;
-use std::path::Path;
-use std::fs::File;
-use std::io::Read;
 use std::iter::FromIterator;
-use std::iter;
+use path_abs::{PathDir, PathFile, PathType};
 
 #[serde(default)]
-#[derive(StructOpt, Debug, Deserialize, Default)]
+#[derive(Clone, StructOpt, Debug, Deserialize, Default)]
 pub struct Config {
     /// Profile to update
     pub profile: Option<String>,
+
+    /// Okta organization to use
+    #[structopt(short = "o", long = "organization")]
+    pub organization: Option<String>,
+
+    /// AWS role to use by default
+    #[structopt(short = "r", long = "role")]
+    pub role: Option<String>,
 
     /// Forces new credentials
     #[structopt(short = "f", long = "force-new")]
@@ -26,44 +30,66 @@ pub struct Config {
 
     /// Sets the level of verbosity
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+    #[serde(skip)]
     pub verbosity: u64,
 
     /// Profile information (in json object format)
     #[structopt(long = "profiles", parse(try_from_str = "serde_json::from_str"),
                 default_value = "{}")]
-    pub profiles: HashMap<String, Profile>,
+    pub profiles: HashMap<String, ProfileConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum ProfileConfig {
+    Simple(String),
+    Detailed {
+        application: String,
+        role: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Profile {
-    pub organization: String,
-    pub app_id: String,
+    pub id: String,
+    pub application: String,
     pub role: String,
 }
 
 impl Config {
-    pub fn from_file(file_path: &Path) -> Result<Self, Error> {
-        let mut buffer = String::new();
+    pub fn from_file(path: &PathFile) -> Result<Self, Error> {
+        let config: Config = toml::from_str(&path.read_string()?)?;
+        let org_config = Config {
+            organization: path.as_path()
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned()),
+            ..Config::default()
+        };
 
-        if file_path.exists() && file_path.is_file() {
-            File::open(file_path)?.read_to_string(&mut buffer)?;
-            Ok(toml::from_str(&buffer)?)
-        } else {
-            let old_config_path = env::home_dir().unwrap().join(".oktaws/config");
-            if old_config_path.exists() && old_config_path.is_file() {
-                warn!(
-                    "Deprecated config file found at {:?}, please move this to {:?} and convert \
-                     to TOML (add quotes and 'profiles.' prefix to object keys)",
-                    old_config_path, file_path
-                );
+        Ok(config.merge(org_config))
+    }
+
+    pub fn from_dir(dir_path: &PathDir) -> Result<Vec<Result<Config, Error>>, Error> {
+        let mut configs = Vec::new();
+
+        for path in dir_path.list()? {
+            if let Ok(PathType::File(path)) = path {
+                if let Some(ext) = path.as_path().extension() {
+                    if ext == "toml" {
+                        configs.push(Config::from_file(&path));
+                    }
+                }
             }
-            Ok(Config::default())
         }
+
+        Ok(configs)
     }
 
     pub fn merge(self, other: Self) -> Self {
         Self {
             profile: self.profile.or(other.profile),
+            organization: self.organization.or(other.organization),
+            role: self.role.or(other.role),
             force_new: self.force_new || other.force_new,
             verbosity: self.verbosity + other.verbosity,
             username: self.username.or(other.username),
@@ -73,21 +99,38 @@ impl Config {
         }
     }
 
-    pub fn into_profiles(mut self) -> Vec<(String, Profile)> {
-        match self.profile {
-            Some(profile_name) => match self.profiles.remove(&profile_name) {
-                Some(profile) => iter::once((profile_name, profile)).collect(),
-                None => {
-                    error!(
-                        "Could not find profile '{}' in {:?}",
-                        profile_name,
-                        self.profiles.keys()
-                    );
+    pub fn profiles(&self) -> Vec<Result<Profile, Error>> {
+        let mut profiles = Vec::new();
 
-                    iter::empty().collect()
-                }
-            },
-            None => self.profiles.into_iter().collect(),
+        for (id, profile_config) in &self.profiles {
+            let profile = match (&self.role, profile_config) {
+                (&Some(ref role), &ProfileConfig::Simple(ref app))
+                | (
+                    _,
+                    &ProfileConfig::Detailed {
+                        application: ref app,
+                        role: Some(ref role),
+                    },
+                )
+                | (
+                    &Some(ref role),
+                    &ProfileConfig::Detailed {
+                        application: ref app,
+                        role: None,
+                    },
+                ) => Ok(Profile {
+                    id: id.to_owned(),
+                    application: app.to_owned(),
+                    role: role.to_owned(),
+                }),
+                (&None, &ProfileConfig::Detailed { role: None, .. }) | (&None, _) => Err(
+                    format_err!("No role defined on {} and no default role specified", id),
+                ),
+            };
+
+            profiles.push(profile)
         }
+
+        profiles
     }
 }

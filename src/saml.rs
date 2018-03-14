@@ -4,12 +4,13 @@ use sxd_document::parser;
 use sxd_xpath::{Context, Factory, Value};
 
 use std::str::FromStr;
-use std::collections::HashMap;
+
+use aws::Role;
 
 #[derive(Debug)]
 pub struct Response {
     pub raw: String,
-    pub roles: HashMap<String, String>,
+    pub roles: Vec<Role>,
 }
 
 impl FromStr for Response {
@@ -34,21 +35,16 @@ impl FromStr for Response {
             .evaluate(&context, document.root())
             .expect("XPath evaluation failed");
 
-        let mut roles = HashMap::new();
-
+        let mut roles = Vec::new();
         if let Value::Nodeset(ns) = value {
             for a in ns.iter() {
-                let text = a.string_value();
-                let splitted: Vec<_> = text.split(',').collect();
-                if splitted.len() == 2 {
-                    roles.insert(splitted[1].to_owned(), splitted[0].to_owned());
-                }
+                roles.push(a.string_value().parse()?);
             }
         }
 
         Ok(Response {
             raw: s.to_owned(),
-            roles: roles,
+            roles,
         })
     }
 }

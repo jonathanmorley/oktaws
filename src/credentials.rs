@@ -1,38 +1,35 @@
 use keyring::Keyring;
-use rpassword;
 use username;
+use dialoguer::{Input, PasswordInput};
 
-use std::error::Error;
+use failure::Error;
 
-use std::io::stdout;
-use std::io::Write;
-
-pub fn get_username() -> String {
-    let system_user = username::get_user_name().unwrap();
-    print!("Okta Username [{}]: ", system_user);
-    stdout().flush().unwrap();
-    let response: String = read!("{}\n");
-    match &response as &str {
-        "" => system_user,
-        response => response.to_owned(),
+pub fn get_username() -> Result<String, Error> {
+    let mut input = Input::new("Okta Username");
+    if let Ok(system_user) = username::get_user_name() {
+        input.default(&system_user);
     }
+
+    input.interact().map_err(|e| e.into())
 }
 
-pub fn get_password(username: &str, force_new: bool) -> String {
-    fn prompt_for_password() -> String {
-        rpassword::prompt_password_stdout("Okta Password: ").unwrap()
+pub fn get_password(username: &str, force_new: bool) -> Result<String, Error> {
+    fn prompt_for_password() -> Result<String, Error> {
+        PasswordInput::new("Okta Password")
+            .interact()
+            .map_err(|e| e.into())
     }
 
     if force_new {
         debug!("Force new is set, prompting for password");
         prompt_for_password()
     } else {
-        match Keyring::new("oktaws::okta", &username).get_password() {
-            Ok(password) => password,
+        match Keyring::new("oktaws::okta", username).get_password() {
+            Ok(password) => Ok(password),
             Err(e) => {
                 debug!(
                     "Get password failed, prompting for password because of {:?}",
-                    e.description()
+                    e
                 );
                 prompt_for_password()
             }

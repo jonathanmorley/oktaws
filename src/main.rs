@@ -1,4 +1,7 @@
+#![warn(unused)]
+
 extern crate base64;
+extern crate dialoguer;
 #[macro_use]
 extern crate failure;
 extern crate ini;
@@ -7,22 +10,21 @@ extern crate kuchiki;
 #[macro_use]
 extern crate log;
 extern crate loggerv;
+extern crate path_abs;
+extern crate regex;
 extern crate reqwest;
-extern crate rpassword;
 extern crate rusoto_core;
 extern crate rusoto_credential;
 extern crate rusoto_sts;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate serde_str;
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 extern crate sxd_document;
 extern crate sxd_xpath;
-#[macro_use]
-extern crate text_io;
 extern crate toml;
 extern crate username;
 
@@ -32,17 +34,18 @@ mod config;
 mod credentials;
 mod saml;
 
-use config::Profile;
+use config::Config;
 
 use structopt::StructOpt;
 use failure::Error;
 
 use std::env;
 use std::process;
+use path_abs::PathDir;
 
 fn main() {
     fn run() -> Result<(), Error> {
-        let args_opts = config::Config::from_args();
+        let args_opts = Config::from_args();
 
         loggerv::Logger::new()
             .verbosity(args_opts.verbosity)
@@ -50,50 +53,76 @@ fn main() {
             .module_path(true)
             .init()?;
 
-        let config_file_path = env::home_dir().unwrap().join(".oktaws/config.toml");
-        let config_opts = config::Config::from_file(&config_file_path)?;
+        let configs = match config_dir() {
+            Ok(dir) => Config::from_dir(&dir)?,
+            Err(e) => {
+                warn!("{}, using default config", e);
+                vec![Ok(Config::default())]
+            }
+        };
 
-        let opts = args_opts.merge(config_opts);
-        debug!("Options: {:?}", opts);
+        for config in configs {
+            let opts = args_opts.clone().merge(config?);
 
-        let username = opts.username
-            .clone()
-            .unwrap_or_else(|| credentials::get_username());
-        let password = credentials::get_password(&username, opts.force_new);
+            let username = opts.username
+                .clone()
+                .unwrap_or_else(|| credentials::get_username().unwrap());
+            let password = credentials::get_password(&username, opts.force_new).unwrap();
 
-        let profiles = opts.into_profiles();
+            let org = opts.organization.clone().unwrap();
 
-        for (
-            name,
-            Profile {
-                organization,
-                app_id,
-                role,
-            },
-        ) in profiles
-        {
-            info!("Generating tokens for {}", name);
+            let login_request =
+                okta::OktaLoginRequest::from_credentials(username.clone(), password.clone());
+            let session_id = okta::login(&org, &login_request)?;
 
-            let session_token = okta::login(&organization, &username, &password)?.session_token;
-            debug!("Session Token: {}", session_token);
+            let okta_apps = okta::get_apps(&org, &session_id)?;
 
-            let saml = saml::Response::from_okta(&organization, &app_id, &session_token)?;
-            debug!("SAML assertion: {:?}", saml);
+            let profile_spec = opts.profile.clone();
 
-            let principal_arn = saml.roles
-                .get(&role)
-                .expect("Error getting the principal ARN from SAML attributes");
-            debug!("Principal ARN: {}", principal_arn);
+            for profile in opts.profiles() {
+                let profile = profile?;
 
-            let credentials = aws::assume_role(principal_arn, &role, &saml.raw)?
-                .credentials
-                .expect("Error fetching credentials from assumed AWS role");
-            debug!("Credentials: {:?}", credentials);
+                if let Some(profile_spec) = profile_spec.clone() {
+                    if profile.id != profile_spec {
+                        continue;
+                    }
+                }
 
-            aws::set_credentials(&name, &credentials)?;
+                info!("Generating tokens for {}", &profile.id);
+
+                //println!("Okta Apps: {:?}", okta_apps);
+
+                let app = okta_apps
+                    .iter()
+                    .find(|app| app.app_name == "amazon_aws" && app.label == profile.application);
+
+                match app {
+                    Some(app) => {
+                        let mut saml =
+                            saml::Response::from_okta(&org, app.link_url.clone(), &session_id)?;
+                        debug!("SAML assertion: {:?}", saml);
+
+                        let saml_raw = saml.raw;
+
+                        for role in saml.roles {
+                            if role.role_name()? == profile.role {
+                                debug!("Role: {:?}", role);
+
+                                let credentials = aws::assume_role(role, saml_raw.clone())?
+                                    .credentials
+                                    .expect("Error fetching credentials from assumed AWS role");
+                                debug!("Credentials: {:?}", credentials);
+
+                                aws::set_credentials(&profile.id, &credentials)?;
+                            }
+                        }
+                    }
+                    None => error!("Could not find application {}", &profile.id),
+                }
+            }
+
+            credentials::set_credentials(&username, &password);
         }
-
-        credentials::set_credentials(&username, &password);
 
         Ok(())
     }
@@ -101,5 +130,12 @@ fn main() {
     if let Err(e) = run() {
         error!("{:?}", e);
         process::exit(1);
+    }
+}
+
+fn config_dir() -> Result<PathDir, Error> {
+    match env::home_dir() {
+        None => bail!("Could not get home dir"),
+        Some(home_dir) => PathDir::create_all(home_dir.join(".oktaws")).map_err(|e| e.into()),
     }
 }
