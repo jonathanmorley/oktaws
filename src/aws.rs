@@ -74,8 +74,6 @@ pub fn assume_role(
         Region::UsEast1,
     );
 
-    info!("Created client");
-
     client.assume_role_with_saml(&req).map_err(|e| e.into())
 }
 

@@ -36,18 +36,19 @@ mod saml;
 
 use config::Config;
 
-use structopt::StructOpt;
 use failure::Error;
+use path_abs::PathDir;
+use structopt::StructOpt;
+use loggerv::Logger;
 
 use std::env;
 use std::process;
-use path_abs::PathDir;
 
 fn main() {
     fn run() -> Result<(), Error> {
         let args_opts = Config::from_args();
 
-        loggerv::Logger::new()
+        Logger::new()
             .verbosity(args_opts.verbosity)
             .level(true)
             .module_path(true)
@@ -64,12 +65,14 @@ fn main() {
         for config in configs {
             let opts = args_opts.clone().merge(config?);
 
-            let username = opts.username
-                .clone()
-                .unwrap_or_else(|| credentials::get_username().unwrap());
-            let password = credentials::get_password(&username, opts.force_new).unwrap();
-
             let org = opts.organization.clone().unwrap();
+
+            let username = match opts.username.clone() {
+                Some(username) => username,
+                None => (|| credentials::get_username(&org))()?,
+            };
+
+            let password = credentials::get_password(&org, &username, opts.force_new)?;
 
             let login_request =
                 okta::OktaLoginRequest::from_credentials(username.clone(), password.clone());
@@ -90,8 +93,6 @@ fn main() {
 
                 info!("Generating tokens for {}", &profile.id);
 
-                //println!("Okta Apps: {:?}", okta_apps);
-
                 let app = okta_apps
                     .iter()
                     .find(|app| app.app_name == "amazon_aws" && app.label == profile.application);
@@ -108,12 +109,14 @@ fn main() {
                             if role.role_name()? == profile.role {
                                 debug!("Role: {:?}", role);
 
-                                let credentials = aws::assume_role(role, saml_raw.clone())?
-                                    .credentials
-                                    .expect("Error fetching credentials from assumed AWS role");
-                                debug!("Credentials: {:?}", credentials);
+                                let assumption_response = aws::assume_role(role, saml_raw.clone())?;
+                                if let Some(credentials) = assumption_response.credentials {
+                                    debug!("Credentials: {:?}", credentials);
 
-                                aws::set_credentials(&profile.id, &credentials)?;
+                                    aws::set_credentials(&profile.id, &credentials)?;
+                                } else {
+                                    error!("Error fetching credentials from assumed AWS role")
+                                }
                             }
                         }
                     }
@@ -121,7 +124,7 @@ fn main() {
                 }
             }
 
-            credentials::set_credentials(&username, &password);
+            credentials::set_credentials(&org, &username, &password);
         }
 
         Ok(())

@@ -5,6 +5,7 @@ use toml;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use path_abs::{PathDir, PathFile, PathType};
+use std::ffi::OsStr;
 
 #[serde(default)]
 #[derive(Clone, StructOpt, Debug, Deserialize, Default)]
@@ -74,10 +75,8 @@ impl Config {
 
         for path in dir_path.list()? {
             if let Ok(PathType::File(path)) = path {
-                if let Some(ext) = path.as_path().extension() {
-                    if ext == "toml" {
-                        configs.push(Config::from_file(&path));
-                    }
+                if Some(OsStr::new("toml")) == path.as_path().extension() {
+                    configs.push(Config::from_file(&path));
                 }
             }
         }
