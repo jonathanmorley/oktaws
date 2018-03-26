@@ -1,0 +1,46 @@
+#compdef oktaws
+
+autoload -U is-at-least
+
+_oktaws() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" \
+'-o+[Okta organization to use]' \
+'--organization=[Okta organization to use]' \
+'-r+[AWS role to use by default]' \
+'--role=[AWS role to use by default]' \
+'-u+[Specify Okta username (will prompt if not provided)]' \
+'--username=[Specify Okta username (will prompt if not provided)]' \
+'--profiles=[Profile information (in json object format)]' \
+'-f[Forces new credentials]' \
+'--force-new[Forces new credentials]' \
+'*-v[Sets the level of verbosity]' \
+'*--verbose[Sets the level of verbosity]' \
+'-h[Prints help information]' \
+'--help[Prints help information]' \
+'-V[Prints version information]' \
+'--version[Prints version information]' \
+'::profile -- Profile to update:_files' \
+&& ret=0
+    
+}
+
+(( $+functions[_oktaws_commands] )) ||
+_oktaws_commands() {
+    local commands; commands=(
+        
+    )
+    _describe -t commands 'oktaws commands' commands "$@"
+}
+
+_oktaws "$@"

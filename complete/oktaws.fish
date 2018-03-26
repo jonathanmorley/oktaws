@@ -1,0 +1,8 @@
+complete -c oktaws -n "__fish_use_subcommand" -s o -l organization -d 'Okta organization to use'
+complete -c oktaws -n "__fish_use_subcommand" -s r -l role -d 'AWS role to use by default'
+complete -c oktaws -n "__fish_use_subcommand" -s u -l username -d 'Specify Okta username (will prompt if not provided)'
+complete -c oktaws -n "__fish_use_subcommand" -l profiles -d 'Profile information (in json object format)'
+complete -c oktaws -n "__fish_use_subcommand" -s f -l force-new -d 'Forces new credentials'
+complete -c oktaws -n "__fish_use_subcommand" -s v -l verbose -d 'Sets the level of verbosity'
+complete -c oktaws -n "__fish_use_subcommand" -s h -l help -d 'Prints help information'
+complete -c oktaws -n "__fish_use_subcommand" -s V -l version -d 'Prints version information'
