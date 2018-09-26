@@ -5,7 +5,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 
 [dependencies]
-reqwest = "0.8.1"
+reqwest = "0.9.2"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
