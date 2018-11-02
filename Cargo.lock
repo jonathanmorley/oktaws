@@ -981,7 +981,7 @@ dependencies = [
  "serde_str 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt-derive 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "sxd-document 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sxd-document 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sxd-xpath 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1715,6 +1715,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sxd-document"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "peresil 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "typed-arena 1.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "sxd-xpath"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2422,6 +2431,7 @@ dependencies = [
 "checksum structopt 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)" = "d77af7242f18c40fd19cb270985930f239ee1646cfb482050bbae9da1d18743b"
 "checksum structopt-derive 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)" = "17ff01fe96de9d16e7372ae5f19dd7ece2c703b51043c3db9ea27f9e393ea311"
 "checksum sxd-document 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "1e360d2575b173847506841ca97dbab96b6d27a2ec660b70932fe32a2b12e0a2"
+"checksum sxd-document 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7f9daa5f04135690dcb001fd5d4f1d536d62e988262954e68abb3ab7db36a4f9"
 "checksum sxd-xpath 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "65cd8c2e541fc41aea5dc94473c9c4403bfdbd51b21d56c4760958616070febf"
 "checksum syn 0.13.11 (registry+https://github.com/rust-lang/crates.io-index)" = "14f9bf6292f3a61d2c716723fdb789a41bbe104168e6f496dc6497e531ea1b9b"
 "checksum syn 0.14.9 (registry+https://github.com/rust-lang/crates.io-index)" = "261ae9ecaa397c42b960649561949d69311f08eeaea86a65696e6e46517cf741"
