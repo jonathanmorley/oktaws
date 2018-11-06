@@ -27,6 +27,7 @@ extern crate structopt;
 #[allow(unused_imports)]
 #[macro_use]
 extern crate structopt_derive;
+extern crate backoff;
 extern crate itertools;
 extern crate sxd_document;
 extern crate sxd_xpath;
@@ -75,28 +76,25 @@ pub struct Opt {
     pub organizations: Pattern,
 
     /// Forces new credentials
-    #[structopt(short = "f", long = "force-new")]
-    pub force_new: bool,
+    #[structopt(short = "f", long = "force-auth")]
+    pub force_auth: bool,
 
     /// Sets the level of verbosity
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     pub verbosity: usize,
 
-    /// Silence all output
-    #[structopt(short = "q", long = "quiet")]
-    pub quiet: bool,
-
-    /// Run in an asynchronous manner (parallel)
-    #[structopt(short = "a", long = "async")]
-    pub asynchronous: bool,
+    /// Run in an synchronous manner
+    #[structopt(short = "s", long = "sync")]
+    pub synchronous: bool,
 }
 
 fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
     let log_level = match opt.verbosity {
-        0 => "info",
-        1 => "debug",
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
         _ => "trace",
     };
     env::set_var("RUST_LOG", format!("{}={}", module_path!(), log_level));
@@ -125,7 +123,7 @@ fn main() -> Result<(), Error> {
         let mut okta_client = OktaClient::new(organization.okta_organization.clone());
         let username = organization.username.to_owned();
         let password =
-            credentials::get_password(&organization.okta_organization, &username, opt.force_new)?;
+            credentials::get_password(&organization.okta_organization, &username, opt.force_auth)?;
 
         let session_token = okta_client.get_session_token(&LoginRequest::from_credentials(
             username.clone(),
@@ -159,7 +157,11 @@ fn main() -> Result<(), Error> {
             Ok(acc)
         };
 
-        let org_credentials: HashMap<_, _> = if opt.asynchronous {
+        let org_credentials: HashMap<_, _> = if opt.synchronous {
+            profiles
+                .iter()
+                .try_fold(HashMap::new(), credentials_folder)?
+        } else {
             profiles
                 .par_iter()
                 .try_fold_with(HashMap::new(), credentials_folder)
@@ -170,10 +172,6 @@ fn main() -> Result<(), Error> {
                     println!("No profiles");
                     Ok(HashMap::new())
                 })?
-        } else {
-            profiles
-                .iter()
-                .try_fold(HashMap::new(), credentials_folder)?
         };
 
         for (name, creds) in org_credentials {

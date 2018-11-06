@@ -1,3 +1,4 @@
+use backoff::{ExponentialBackoff, Operation};
 use failure::Error;
 use itertools::Itertools;
 use reqwest::header::{HeaderValue, ACCEPT, COOKIE};
@@ -37,11 +38,16 @@ impl Client {
     }
 
     pub fn get_response(&self, url: Url) -> Result<Response, Error> {
-        self.client
-            .get(url)
-            .header(COOKIE, self.cookie_header())
-            .send()?
-            .error_for_status()
+        let mut op = || {
+            self.client
+                .get(url.clone())
+                .header(COOKIE, self.cookie_header())
+                .send()?
+                .error_for_status()
+                .map_err(|e| e.into())
+        };
+
+        op.retry(&mut ExponentialBackoff::default())
             .map_err(|e| e.into())
     }
 
