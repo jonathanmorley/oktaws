@@ -2,7 +2,7 @@ pub mod credentials;
 pub mod organization;
 
 use config::organization::Organization;
-use dirs;
+use dirs::home_dir;
 use failure::Error;
 use std::env::var as env_var;
 use std::path::Path;
@@ -10,19 +10,15 @@ use std::path::PathBuf;
 use try_from::TryInto;
 use walkdir::WalkDir;
 
+#[derive(Debug)]
 pub struct Config {
     organizations: Vec<Organization>,
 }
 
 impl Config {
     pub fn new() -> Result<Config, Error> {
-        let oktaws_home = match env_var("OKTAWS_HOME") {
-            Ok(path) => PathBuf::from(path),
-            Err(_) => default_profile_location()?,
-        };
-
         Ok(Config {
-            organizations: organizations_from_dir(&oktaws_home).collect(),
+            organizations: organizations_from_dir(&default_oktaws_location()?).collect(),
         })
     }
 
@@ -47,9 +43,20 @@ fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
         })
 }
 
-fn default_profile_location() -> Result<PathBuf, Error> {
-    match dirs::home_dir() {
-        Some(home_dir) => Ok(home_dir.join(".oktaws")),
-        None => bail!("The environment variable HOME must be set."),
+pub fn default_oktaws_location() -> Result<PathBuf, Error> {
+    let env = env_var("OKTAWS_HOME").ok().filter(|e| !e.is_empty());
+    match env {
+        Some(path) => Ok(PathBuf::from(path)),
+        None => hardcoded_oktaws_location(),
+    }
+}
+
+fn hardcoded_oktaws_location() -> Result<PathBuf, Error> {
+    match home_dir() {
+        Some(mut home_path) => {
+            home_path.push(".oktaws");
+            Ok(home_path)
+        }
+        None => bail!("Failed to determine home directory."),
     }
 }

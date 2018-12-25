@@ -8,9 +8,10 @@ use username;
 use failure::Error;
 
 pub fn get_username(org: &Organization) -> Result<String, Error> {
-    let mut input = Input::new(&format!("Username for {}", org.base_url));
+    let mut input = Input::new();
+    input.with_prompt(&format!("Username for {}", org.base_url));
     if let Ok(system_user) = username::get_user_name() {
-        input.default(&system_user);
+        input.default(system_user);
     }
 
     input.interact().map_err(|e| e.into())
@@ -22,7 +23,7 @@ pub fn get_password(
     force_new: bool,
 ) -> Result<String, Error> {
     if force_new {
-        debug!("Force new is set, prompting for password");
+        debug!("Force new is set. Prompting for password");
         prompt_password(organization, username)
     } else {
         match Keyring::new(&format!("oktaws::okta::{}", organization.name), username).get_password()
@@ -30,7 +31,7 @@ pub fn get_password(
             Ok(password) => Ok(password),
             Err(e) => {
                 debug!(
-                    "Retrieving cached password failed, prompting for password because of {:?}",
+                    "Retrieving cached password failed ({:?}). Prompting for password",
                     e
                 );
                 prompt_password(organization, username)
@@ -55,7 +56,8 @@ fn prompt_password(organization: &Organization, username: &str) -> Result<String
     url.set_username(username)
         .map_err(|_| format_err!("Cannot set username for URL"))?;
 
-    PasswordInput::new(&format!("Password for {}", url))
+    PasswordInput::new()
+        .with_prompt(&format!("Password for {}", url))
         .interact()
         .map_err(|e| e.into())
 }

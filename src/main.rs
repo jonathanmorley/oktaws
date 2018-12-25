@@ -20,6 +20,7 @@ extern crate serde_derive;
 extern crate dirs;
 extern crate glob;
 extern crate rayon;
+#[macro_use]
 extern crate serde;
 extern crate serde_ini;
 extern crate serde_str;
@@ -28,6 +29,7 @@ extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 extern crate backoff;
+extern crate chrono;
 extern crate itertools;
 extern crate sxd_document;
 extern crate sxd_xpath;
@@ -41,7 +43,7 @@ mod config;
 mod okta;
 mod saml;
 
-use aws::credentials::CredentialsStore;
+use aws::credentials::CredentialsFile;
 use aws::role::Role;
 use config::credentials;
 use config::organization::Organization;
@@ -57,6 +59,7 @@ use rusoto_sts::Credentials;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 
@@ -75,9 +78,13 @@ pub struct Opt {
     )]
     pub organizations: Pattern,
 
-    /// Forces new credentials
-    #[structopt(short = "f", long = "force-auth")]
+    /// Forces prompting for new credentials rather than using cache
+    #[structopt(long = "force-auth")]
     pub force_auth: bool,
+
+    /// Path to credentials file. Also accepts the AWS_SHARED_CREDENTIALS_FILE environment variable
+    #[structopt(long = "aws-credentials", parse(from_os_str))]
+    pub credentials: Option<PathBuf>,
 
     /// Sets the level of verbosity
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
@@ -103,7 +110,7 @@ fn main() -> Result<(), Error> {
 
     let config = Config::new()?;
 
-    let credentials_store = Arc::new(Mutex::new(CredentialsStore::new()?));
+    let credentials_store = Arc::new(Mutex::new(CredentialsFile::new(opt.credentials.clone())?));
 
     let mut organizations = config
         .organizations()
@@ -168,7 +175,8 @@ fn main() -> Result<(), Error> {
                 .try_reduce_with(|mut a, b| -> Result<_, Error> {
                     a.extend(b.into_iter());
                     Ok(a)
-                }).unwrap_or_else(|| {
+                })
+                .unwrap_or_else(|| {
                     println!("No profiles");
                     Ok(HashMap::new())
                 })?
@@ -178,14 +186,14 @@ fn main() -> Result<(), Error> {
             credentials_store
                 .lock()
                 .unwrap()
-                .set_profile(name.clone(), creds)?;
+                .set_profile_sts(name.clone(), creds)?;
         }
 
         credentials::save_credentials(&organization.okta_organization, &username, &password)?;
     }
 
     Arc::try_unwrap(credentials_store)
-        .map_err(|_| format_err!("Failed to un-reference count the credentials store"))?
+        .map_err(|_| format_err!("Failed to un-reference-count the credentials store"))?
         .into_inner()
         .map_err(|_| format_err!("Failed to un-mutex the credentials store"))?
         .save()
@@ -206,7 +214,8 @@ fn fetch_credentials(
         .into_iter()
         .find(|app_link| {
             app_link.app_name == "amazon_aws" && app_link.label == profile.application_name
-        }).ok_or_else(|| {
+        })
+        .ok_or_else(|| {
             format_err!(
                 "Could not find Okta application for profile {}/{}",
                 organization.okta_organization.name,
