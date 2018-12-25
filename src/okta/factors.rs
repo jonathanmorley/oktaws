@@ -1,9 +1,9 @@
+use crate::okta::auth::LoginResponse;
+use crate::okta::client::Client;
+use crate::okta::Links;
+use crate::okta::Links::Multi;
+use crate::okta::Links::Single;
 use failure::Error;
-use okta::auth::LoginResponse;
-use okta::client::Client;
-use okta::Links;
-use okta::Links::Multi;
-use okta::Links::Single;
 use std::collections::HashMap;
 use std::fmt;
 

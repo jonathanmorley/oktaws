@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
 
-use okta::Organization;
+use crate::okta::Organization;
 
 pub struct Client {
     client: HttpClient,

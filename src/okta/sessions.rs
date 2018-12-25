@@ -1,7 +1,7 @@
 use failure::Error;
 use itertools::Itertools;
 
-use okta::client::Client;
+use crate::okta::client::Client;
 
 use std::collections::HashSet;
 use std::fmt;
@@ -55,9 +55,9 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws::role::Role;
+    use crate::aws::role::Role;
+    use crate::saml::Response;
     use base64::encode;
-    use saml::Response;
     use std::fs::File;
     use std::io::Read;
 
@@ -82,7 +82,8 @@ mod tests {
                 provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
                 role_arn: String::from("arn:aws:iam::123456789012:role/role2"),
             },
-        ].into_iter()
+        ]
+        .into_iter()
         .collect::<HashSet<Role>>();
 
         assert_eq!(response.roles, expected_roles);

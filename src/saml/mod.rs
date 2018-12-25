@@ -6,7 +6,7 @@ use sxd_xpath::{Context, Factory, Value};
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use aws::role::Role;
+use crate::aws::role::Role;
 
 #[derive(Debug)]
 pub struct Response {
@@ -75,7 +75,8 @@ mod tests {
                 provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
                 role_arn: String::from("arn:aws:iam::123456789012:role/role2"),
             },
-        ].into_iter()
+        ]
+        .into_iter()
         .collect::<HashSet<Role>>();
 
         assert_eq!(response.roles, expected_roles);

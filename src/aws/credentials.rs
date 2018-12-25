@@ -2,17 +2,14 @@
 //! Adapted from https://raw.githubusercontent.com/rusoto/rusoto/master/rusoto/credential/src/profile.rs
 
 use failure::Error;
-use path_abs::{FileEdit, FileRead, PathFile, FileWrite};
+use path_abs::{FileRead, FileWrite, PathFile};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::env::var as env_var;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::path::{Path, PathBuf};
+use std::fmt;
+use std::path::PathBuf;
 use std::str::FromStr;
 use try_from::{TryFrom, TryInto};
-use serde_ini;
-use std::fmt;
 
 use dirs::home_dir;
 use regex::Regex;
@@ -42,20 +39,31 @@ impl CredentialsFile {
     pub fn new(path: Option<PathBuf>) -> Result<CredentialsFile, Error> {
         match path {
             Some(path) => path.try_into(),
-            None => default_location()?.try_into()
+            None => default_location()?.try_into(),
         }
     }
 
-    pub fn set_profile<S, C>(&mut self, name: S, creds: C) -> Result<(), Error> where S: Into<String>, C: Into<AwsCredentials> {
+    #[allow(dead_code)]
+    pub fn set_profile<S, C>(&mut self, name: S, creds: C) -> Result<(), Error>
+    where
+        S: Into<String>,
+        C: Into<AwsCredentials>,
+    {
         self.credentials.set_profile(name, creds)
     }
 
-    pub fn set_profile_sts<S, C>(&mut self, name: S, creds: C) -> Result<(), Error> where S: Into<String>, C: Into<StsCredentials> {
+    pub fn set_profile_sts<S, C>(&mut self, name: S, creds: C) -> Result<(), Error>
+    where
+        S: Into<String>,
+        C: Into<StsCredentials>,
+    {
         self.credentials.set_profile_sts(name, creds)
     }
 
     pub fn save(self) -> Result<(), Error> {
-        FileWrite::create(self.file_path)?.write_str(&format!("{}", self.credentials)).map_err(|e| e.into())
+        FileWrite::create(self.file_path)?
+            .write_str(&format!("{}", self.credentials))
+            .map_err(|e| e.into())
     }
 }
 
@@ -190,7 +198,11 @@ impl fmt::Display for CredentialProfiles {
 }
 
 impl CredentialProfiles {
-    fn set_profile<S, C>(&mut self, name: S, credentials: C) -> Result<(), Error> where S: Into<String>, C: Into<AwsCredentials> {
+    fn set_profile<S, C>(&mut self, name: S, credentials: C) -> Result<(), Error>
+    where
+        S: Into<String>,
+        C: Into<AwsCredentials>,
+    {
         match self.0.entry(name.into()) {
             Entry::Occupied(mut entry) => {
                 if entry.get().token().is_some() {
@@ -209,7 +221,11 @@ impl CredentialProfiles {
         Ok(())
     }
 
-    fn set_profile_sts<S, C>(&mut self, name: S, credentials: C) -> Result<(), Error> where S: Into<String>, C: Into<StsCredentials> {
+    fn set_profile_sts<S, C>(&mut self, name: S, credentials: C) -> Result<(), Error>
+    where
+        S: Into<String>,
+        C: Into<StsCredentials>,
+    {
         let credentials = credentials.into();
 
         let expiry = chrono::DateTime::parse_from_rfc3339(&credentials.expiration)?;
@@ -219,7 +235,7 @@ impl CredentialProfiles {
             credentials.access_key_id,
             credentials.secret_access_key,
             Some(credentials.session_token),
-            Some(expiry_utc)
+            Some(expiry_utc),
         );
         self.set_profile(name, aws_credentials)
     }
@@ -232,9 +248,8 @@ mod tests {
     extern crate tempfile;
 
     use self::tempfile::Builder;
-    use super::*;
     use std::fs::File;
-    use std::io::{Read, Seek, SeekFrom, Write};
+    use std::io::{Read, Write};
 
     #[test]
     fn parse_sts() {
@@ -277,11 +292,21 @@ aws_secret_access_key=SECRET_ACCESS_KEY"
         let mut profiles = BTreeMap::new();
         profiles.insert(
             String::from("example1"),
-            AwsCredentials::new("EXAMPLE1_ACCESS_KEY", "EXAMPLE1_SECRET_ACCESS_KEY", Some(String::from("EXAMPLE1_SESSION_TOKEN")), None)
+            AwsCredentials::new(
+                "EXAMPLE1_ACCESS_KEY",
+                "EXAMPLE1_SECRET_ACCESS_KEY",
+                Some(String::from("EXAMPLE1_SESSION_TOKEN")),
+                None,
+            ),
         );
         profiles.insert(
             String::from("example2"),
-            AwsCredentials::new("EXAMPLE2_ACCESS_KEY", "EXAMPLE2_SECRET_ACCESS_KEY", None, None)
+            AwsCredentials::new(
+                "EXAMPLE2_ACCESS_KEY",
+                "EXAMPLE2_SECRET_ACCESS_KEY",
+                None,
+                None,
+            ),
         );
 
         let credential_profiles = CredentialProfiles(profiles);
@@ -314,19 +339,31 @@ aws_session_token=OLD_SESSION_TOKEN"
 
         let mut credentials_file: CredentialsFile = PathBuf::from(temp_path).try_into().unwrap();
 
-        credentials_file.credentials.set_profile("edited", AwsCredentials::new(
-            "NEW_ACCESS_KEY",
-            "NEW_SECRET_ACCESS_KEY",
-            Some(String::from("NEW_SESSION_TOKEN")),
-            None,
-        ));
+        credentials_file
+            .credentials
+            .set_profile(
+                "edited",
+                AwsCredentials::new(
+                    "NEW_ACCESS_KEY",
+                    "NEW_SECRET_ACCESS_KEY",
+                    Some(String::from("NEW_SESSION_TOKEN")),
+                    None,
+                ),
+            )
+            .unwrap();
 
-        credentials_file.credentials.set_profile("new", AwsCredentials::new(
-            "NEW_ACCESS_KEY",
-            "NEW_SECRET_ACCESS_KEY",
-            Some(String::from("NEW_SESSION_TOKEN")),
-            None,
-        ));
+        credentials_file
+            .credentials
+            .set_profile(
+                "new",
+                AwsCredentials::new(
+                    "NEW_ACCESS_KEY",
+                    "NEW_SECRET_ACCESS_KEY",
+                    Some(String::from("NEW_SESSION_TOKEN")),
+                    None,
+                ),
+            )
+            .unwrap();
 
         credentials_file.save().unwrap();
 

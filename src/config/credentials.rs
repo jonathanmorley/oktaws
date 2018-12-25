@@ -1,6 +1,6 @@
+use crate::okta::Organization;
 use dialoguer::{Input, PasswordInput};
 use keyring::Keyring;
-use okta::Organization;
 #[cfg(windows)]
 use rpassword;
 use username;

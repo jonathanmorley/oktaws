@@ -3,10 +3,10 @@ use dialoguer::Input;
 use failure::Error;
 use std::collections::HashMap;
 
-use okta::client::Client;
-use okta::factors::{Factor, FactorVerificationRequest};
-use okta::users::User;
-use okta::Links;
+use crate::okta::client::Client;
+use crate::okta::factors::{Factor, FactorVerificationRequest};
+use crate::okta::users::User;
+use crate::okta::Links;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

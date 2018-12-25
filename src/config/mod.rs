@@ -1,7 +1,7 @@
 pub mod credentials;
 pub mod organization;
 
-use config::organization::Organization;
+use crate::config::organization::Organization;
 use dirs::home_dir;
 use failure::Error;
 use std::env::var as env_var;

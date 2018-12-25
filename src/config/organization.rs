@@ -5,8 +5,8 @@ use std::path::Path;
 use toml;
 use try_from::TryFrom;
 
-use config::credentials;
-use okta::Organization as OktaOrganization;
+use crate::config::credentials;
+use crate::okta::Organization as OktaOrganization;
 
 #[derive(Clone, Debug)]
 pub struct Profile {
@@ -24,14 +24,16 @@ impl Profile {
             entry.1.get("application")
         } else {
             Some(entry.1)
-        }.and_then(|a| toml_to_string(a))
+        }
+        .and_then(|a| toml_to_string(a))
         .unwrap();
 
         let role = if entry.1.is_table() {
             entry.1.get("role").and_then(|r| toml_to_string(r))
         } else {
             default_role
-        }.ok_or_else(|| format_err!("No profile role or default role specified"))?;
+        }
+        .ok_or_else(|| format_err!("No profile role or default role specified"))?;
 
         Ok(Profile {
             name: entry.0,

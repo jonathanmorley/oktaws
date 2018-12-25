@@ -20,7 +20,6 @@ extern crate serde_derive;
 extern crate dirs;
 extern crate glob;
 extern crate rayon;
-#[macro_use]
 extern crate serde;
 extern crate serde_ini;
 extern crate serde_str;
@@ -43,16 +42,16 @@ mod config;
 mod okta;
 mod saml;
 
-use aws::credentials::CredentialsFile;
-use aws::role::Role;
-use config::credentials;
-use config::organization::Organization;
-use config::organization::Profile;
-use config::Config;
+use crate::aws::credentials::CredentialsFile;
+use crate::aws::role::Role;
+use crate::config::credentials;
+use crate::config::organization::Organization;
+use crate::config::organization::Profile;
+use crate::config::Config;
+use crate::okta::auth::LoginRequest;
+use crate::okta::client::Client as OktaClient;
 use failure::Error;
 use glob::Pattern;
-use okta::auth::LoginRequest;
-use okta::client::Client as OktaClient;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rusoto_sts::Credentials;
@@ -121,7 +120,7 @@ fn main() -> Result<(), Error> {
         bail!("No organizations found called {}", opt.organizations);
     }
 
-    for mut organization in organizations {
+    for organization in organizations {
         info!(
             "Evaluating profiles in {}",
             organization.okta_organization.name

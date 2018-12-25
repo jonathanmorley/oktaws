@@ -1,5 +1,5 @@
+use crate::okta::client::Client;
 use failure::Error;
-use okta::client::Client;
 use reqwest::Url;
 use serde_str;
 
