@@ -1,4 +1,5 @@
 use failure::Error;
+use reqwest::Url;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -82,7 +83,12 @@ where
             .map(|(k, v)| Profile::from_entry((k.to_owned(), v), default_role.clone()))
             .collect::<Result<Vec<Profile>, Error>>()?;
 
-        let okta_organization = filename.parse()?;
+        let okta_organization =
+            if let Some(base_url) = file_toml.get("url").and_then(|u| toml_to_string(u)) {
+                OktaOrganization::new(filename, Some(Url::parse(&base_url)?))?
+            } else {
+                OktaOrganization::new(filename, None)?
+            };
 
         let username = match file_toml.get("username").and_then(|u| toml_to_string(u)) {
             Some(username) => username,

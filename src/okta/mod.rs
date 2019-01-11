@@ -13,9 +13,8 @@ use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use reqwest::Url;
 use serde_str;
-
 use std::str;
-use std::str::FromStr;
+use log::{debug, trace};
 
 #[derive(Clone, Debug)]
 pub struct Organization {
@@ -23,14 +22,15 @@ pub struct Organization {
     pub base_url: Url,
 }
 
-impl FromStr for Organization {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Organization {
-            name: String::from(s),
-            base_url: Url::parse(&format!("https://{}.okta.com/", s))?,
-        })
+impl Organization {
+    pub fn new(name: String, base_url: Option<Url>) -> Result<Organization, Error> {
+        match base_url {
+            Some(base_url) => Ok(Organization { name, base_url }),
+            None => Ok(Organization {
+                name: name.clone(),
+                base_url: Url::parse(&format!("https://{}.okta.com/", name))?
+            }),
+        }
     }
 }
 

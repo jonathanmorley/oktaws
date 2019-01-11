@@ -1,41 +1,7 @@
-extern crate base64;
-extern crate dialoguer;
 #[macro_use]
 extern crate failure;
-extern crate keyring;
-extern crate kuchiki;
-#[macro_use]
-extern crate log;
-extern crate path_abs;
-extern crate pretty_env_logger;
-extern crate regex;
-extern crate reqwest;
-#[cfg(windows)]
-extern crate rpassword;
-extern crate rusoto_core;
-extern crate rusoto_credential;
-extern crate rusoto_sts;
 #[macro_use]
 extern crate serde_derive;
-extern crate dirs;
-extern crate glob;
-extern crate rayon;
-extern crate serde;
-extern crate serde_ini;
-extern crate serde_str;
-extern crate structopt;
-#[allow(unused_imports)]
-#[macro_use]
-extern crate structopt_derive;
-extern crate backoff;
-extern crate chrono;
-extern crate itertools;
-extern crate sxd_document;
-extern crate sxd_xpath;
-extern crate toml;
-extern crate try_from;
-extern crate username;
-extern crate walkdir;
 
 mod aws;
 mod config;
@@ -47,89 +13,81 @@ use crate::aws::role::Role;
 use crate::config::credentials;
 use crate::config::organization::Organization;
 use crate::config::organization::Profile;
-use crate::config::Config;
+use crate::config::organizations;
 use crate::okta::auth::LoginRequest;
 use crate::okta::client::Client as OktaClient;
+
+use exitfailure::ExitFailure;
 use failure::Error;
 use glob::Pattern;
-use rayon::iter::IntoParallelRefIterator;
+use log::{debug, info, trace, warn};
 use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
 use rusoto_sts::Credentials;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 
 #[derive(Clone, StructOpt, Debug)]
-pub struct Opt {
-    /// Profile to update
-    #[structopt(default_value = "*", parse(try_from_str))]
-    pub profiles: Pattern,
-
-    /// Okta organization to use
+pub struct Args {
+    /// Glob of Okta profiles to update
     #[structopt(
-        short = "o",
-        long = "organizations",
-        default_value = "*",
+        short = "p",
+        long = "profiles",
+        default_value = "*/*",
         parse(try_from_str)
     )]
-    pub organizations: Pattern,
+    pub profiles: Pattern,
 
     /// Forces prompting for new credentials rather than using cache
     #[structopt(long = "force-auth")]
     pub force_auth: bool,
 
-    /// Path to credentials file. Also accepts the AWS_SHARED_CREDENTIALS_FILE environment variable
-    #[structopt(long = "aws-credentials", parse(from_os_str))]
-    pub credentials: Option<PathBuf>,
-
     /// Sets the level of verbosity
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     pub verbosity: usize,
-
-    /// Run in an synchronous manner
-    #[structopt(short = "s", long = "sync")]
-    pub synchronous: bool,
 }
 
-fn main() -> Result<(), Error> {
-    let opt = Opt::from_args();
+fn main() -> Result<(), ExitFailure> {
+    human_panic::setup_panic!();
 
-    let log_level = match opt.verbosity {
+    let args = Args::from_args();
+
+    let log_level = match args.verbosity {
         0 => "warn",
         1 => "info",
         2 => "debug",
         _ => "trace",
     };
     env::set_var("RUST_LOG", format!("{}={}", module_path!(), log_level));
-
     pretty_env_logger::init();
 
-    let config = Config::new()?;
+    let credentials_store = Arc::new(Mutex::new(CredentialsFile::new(None)?));
 
-    let credentials_store = Arc::new(Mutex::new(CredentialsFile::new(opt.credentials.clone())?));
-
-    let mut organizations = config
-        .organizations()
-        .filter(|o| opt.organizations.matches(&o.okta_organization.name))
-        .peekable();
+    let mut organizations = organizations()?.peekable();
 
     if organizations.peek().is_none() {
-        bail!("No organizations found called {}", opt.organizations);
+        return Err(format_err!("No organizations found").into());
     }
 
     for organization in organizations {
-        info!(
-            "Evaluating profiles in {}",
-            organization.okta_organization.name
-        );
+        info!("Found organization {}", organization.okta_organization.name);
+
+        let profiles = organization.profiles.clone().into_par_iter()
+            .filter(|p| {
+                args.profiles.matches(&format!(
+                    "{}/{}",
+                    organization.okta_organization.name.clone(),
+                    p.name
+                ))
+            });
 
         let mut okta_client = OktaClient::new(organization.okta_organization.clone());
         let username = organization.username.to_owned();
         let password =
-            credentials::get_password(&organization.okta_organization, &username, opt.force_auth)?;
+            credentials::get_password(&organization.okta_organization, &username, args.force_auth)?;
 
         let session_token = okta_client.get_session_token(&LoginRequest::from_credentials(
             username.clone(),
@@ -139,53 +97,34 @@ fn main() -> Result<(), Error> {
         let session_id = okta_client.new_session(session_token, &HashSet::new())?.id;
         okta_client.set_session_id(session_id.clone());
 
-        let profiles = organization
-            .profiles
-            .clone()
-            .into_iter()
-            .filter(|p| opt.profiles.matches(&p.name))
-            .collect::<Vec<Profile>>();
-
-        if profiles.is_empty() {
-            warn!(
-                "No profiles found matching {} in {}",
-                opt.profiles, organization.okta_organization.name
-            );
-            continue;
-        }
-
-        let credentials_folder = |mut acc: HashMap<String, Credentials>,
-                                  profile: &Profile|
-         -> Result<HashMap<String, Credentials>, Error> {
-            let credentials = fetch_credentials(&okta_client, &organization, &profile)?;
-            acc.insert(profile.name.clone(), credentials);
-
-            Ok(acc)
-        };
-
-        let org_credentials: HashMap<_, _> = if opt.synchronous {
+        let org_credentials: HashMap<_, _> =
             profiles
-                .iter()
-                .try_fold(HashMap::new(), credentials_folder)?
-        } else {
-            profiles
-                .par_iter()
-                .try_fold_with(HashMap::new(), credentials_folder)
+                .try_fold_with(HashMap::new(), |mut acc: HashMap<String, Credentials>,
+                                          profile: Profile|
+                 -> Result<HashMap<String, Credentials>, Error> {
+                    let credentials = fetch_credentials(&okta_client, &organization, &profile)?;
+                    acc.insert(profile.name.clone(), credentials);
+
+                    Ok(acc)
+                })
                 .try_reduce_with(|mut a, b| -> Result<_, Error> {
                     a.extend(b.into_iter());
                     Ok(a)
                 })
                 .unwrap_or_else(|| {
-                    println!("No profiles");
+                    warn!("No profiles");
                     Ok(HashMap::new())
-                })?
-        };
+                })?;
 
         for (name, creds) in org_credentials {
-            credentials_store
-                .lock()
-                .unwrap()
-                .set_profile_sts(name.clone(), creds)?;
+            credentials_store.lock().unwrap().set_profile_sts(
+                format!(
+                    "{}/{}",
+                    organization.okta_organization.name.clone(),
+                    name.clone()
+                ),
+                creds,
+            )?;
         }
 
         credentials::save_credentials(&organization.okta_organization, &username, &password)?;
@@ -196,6 +135,7 @@ fn main() -> Result<(), Error> {
         .into_inner()
         .map_err(|_| format_err!("Failed to un-mutex the credentials store"))?
         .save()
+        .map_err(|e| e.into())
 }
 
 fn fetch_credentials(

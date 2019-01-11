@@ -10,12 +10,11 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 use try_from::{TryFrom, TryInto};
-
 use dirs::home_dir;
 use regex::Regex;
-
 use rusoto_credential::{AwsCredentials, CredentialsError};
 use rusoto_sts::Credentials as StsCredentials;
+use chrono::{DateTime, Utc};
 
 const AWS_SHARED_CREDENTIALS_FILE: &str = "AWS_SHARED_CREDENTIALS_FILE";
 
@@ -108,6 +107,7 @@ impl FromStr for CredentialProfiles {
         let mut secret_key: Option<String> = None;
         let mut token: Option<String> = None;
         let mut profile_name: Option<String> = None;
+        let mut expires_at: Option<DateTime<Utc>> = None;
 
         for line in s.lines() {
             // skip empty lines
@@ -131,6 +131,7 @@ impl FromStr for CredentialProfiles {
                 access_key = None;
                 secret_key = None;
                 token = None;
+                expires_at = None;
 
                 let caps = profile_regex.captures(&line).unwrap();
                 profile_name = Some(caps.get(1).unwrap().as_str().to_string());
@@ -162,6 +163,12 @@ impl FromStr for CredentialProfiles {
                         token = Some(v[1].trim_matches(' ').to_string());
                     }
                 }
+            } else if lower_case_line.contains("expires_at") && expires_at.is_none() {
+                let v: Vec<&str> = line.split('=').collect();
+                if !v.is_empty() {
+                    let expires_at_fixed = DateTime::parse_from_rfc3339(&v[1].trim_matches(' ').to_string())?;
+                    expires_at = Some(DateTime::from_utc(expires_at_fixed.naive_utc(), Utc));
+                }
             } else {
                 // Ignore unrecognized fields
                 continue;
@@ -185,6 +192,9 @@ impl fmt::Display for CredentialProfiles {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (key, value) in self.0.iter() {
             writeln!(f, "[{}]", key)?;
+            if let Some(expires_at) = value.expires_at() {
+                writeln!(f, "expires_at={}", expires_at.to_rfc3339())?;
+            }
             writeln!(f, "aws_access_key_id={}", value.aws_access_key_id())?;
             writeln!(f, "aws_secret_access_key={}", value.aws_secret_access_key())?;
             if let Some(token) = value.token() {
@@ -228,8 +238,7 @@ impl CredentialProfiles {
     {
         let credentials = credentials.into();
 
-        let expiry = chrono::DateTime::parse_from_rfc3339(&credentials.expiration)?;
-        let expiry_utc = chrono::DateTime::from_utc(expiry.naive_utc(), chrono::offset::Utc);
+        let expiry_utc = DateTime::from_utc(DateTime::parse_from_rfc3339(&credentials.expiration)?.naive_utc(), Utc);
 
         let aws_credentials = AwsCredentials::new(
             credentials.access_key_id,

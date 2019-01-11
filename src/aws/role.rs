@@ -3,9 +3,9 @@ use rusoto_core::request::HttpClient;
 use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{AssumeRoleWithSAMLRequest, AssumeRoleWithSAMLResponse, Sts, StsClient};
-
 use std::str;
 use std::str::FromStr;
+use log::trace;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Role {

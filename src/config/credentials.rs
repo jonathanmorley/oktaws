@@ -6,6 +6,7 @@ use rpassword;
 use username;
 
 use failure::Error;
+use log::{debug, info};
 
 pub fn get_username(org: &Organization) -> Result<String, Error> {
     let mut input = Input::new();

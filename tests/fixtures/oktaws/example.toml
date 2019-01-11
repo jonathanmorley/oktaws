@@ -1,0 +1,5 @@
+username = 'example'
+role = 'ExampleRole'
+
+[profiles]
+example = 'Amazon Web Services'

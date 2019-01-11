@@ -2,11 +2,11 @@ use dialoguer;
 use dialoguer::Input;
 use failure::Error;
 use std::collections::HashMap;
-
 use crate::okta::client::Client;
 use crate::okta::factors::{Factor, FactorVerificationRequest};
 use crate::okta::users::User;
 use crate::okta::Links;
+use log::{debug, info, trace};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

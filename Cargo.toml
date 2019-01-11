@@ -37,9 +37,14 @@ dirs = "1"
 itertools = "0.8"
 backoff = "0.1"
 chrono = "0.4"
+exitfailure = "0.5"
+human-panic = "1"
 
 [target.'cfg(windows)'.dependencies]
 rpassword = "2"
 
 [dev-dependencies]
 tempfile = "3"
+assert_cmd = "0.10"
+failure = "0.1"
+dirs = "1"
