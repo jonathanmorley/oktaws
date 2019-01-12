@@ -21,8 +21,8 @@ use exitfailure::ExitFailure;
 use failure::Error;
 use glob::Pattern;
 use log::{debug, info, trace, warn};
-use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
 use rusoto_sts::Credentials;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -75,14 +75,28 @@ fn main() -> Result<(), ExitFailure> {
     for organization in organizations {
         info!("Found organization {}", organization.okta_organization.name);
 
-        let profiles = organization.profiles.clone().into_par_iter()
+        let mut profiles = organization
+            .profiles
+            .clone()
+            .into_iter()
             .filter(|p| {
                 args.profiles.matches(&format!(
                     "{}/{}",
                     organization.okta_organization.name.clone(),
                     p.name
                 ))
-            });
+            })
+            .peekable();
+
+        if profiles.peek().is_none() {
+            warn!(
+                "No profiles found matching {} in {}",
+                args.profiles, organization.okta_organization.name
+            );
+            continue;
+        }
+
+        let profiles = profiles.collect::<Vec<Profile>>().into_par_iter();
 
         let mut okta_client = OktaClient::new(organization.okta_organization.clone());
         let username = organization.username.to_owned();
@@ -97,24 +111,26 @@ fn main() -> Result<(), ExitFailure> {
         let session_id = okta_client.new_session(session_token, &HashSet::new())?.id;
         okta_client.set_session_id(session_id.clone());
 
-        let org_credentials: HashMap<_, _> =
-            profiles
-                .try_fold_with(HashMap::new(), |mut acc: HashMap<String, Credentials>,
-                                          profile: Profile|
+        let org_credentials: HashMap<_, _> = profiles
+            .try_fold_with(
+                HashMap::new(),
+                |mut acc: HashMap<String, Credentials>,
+                 profile: Profile|
                  -> Result<HashMap<String, Credentials>, Error> {
                     let credentials = fetch_credentials(&okta_client, &organization, &profile)?;
                     acc.insert(profile.name.clone(), credentials);
 
                     Ok(acc)
-                })
-                .try_reduce_with(|mut a, b| -> Result<_, Error> {
-                    a.extend(b.into_iter());
-                    Ok(a)
-                })
-                .unwrap_or_else(|| {
-                    warn!("No profiles");
-                    Ok(HashMap::new())
-                })?;
+                },
+            )
+            .try_reduce_with(|mut a, b| -> Result<_, Error> {
+                a.extend(b.into_iter());
+                Ok(a)
+            })
+            .unwrap_or_else(|| {
+                warn!("No profiles");
+                Ok(HashMap::new())
+            })?;
 
         for (name, creds) in org_credentials {
             credentials_store.lock().unwrap().set_profile_sts(

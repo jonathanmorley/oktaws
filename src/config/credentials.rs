@@ -1,4 +1,5 @@
 use crate::okta::Organization;
+use atty::Stream;
 use dialoguer::{Input, PasswordInput};
 use keyring::Keyring;
 #[cfg(windows)]
@@ -57,10 +58,14 @@ fn prompt_password(organization: &Organization, username: &str) -> Result<String
     url.set_username(username)
         .map_err(|_| format_err!("Cannot set username for URL"))?;
 
-    PasswordInput::new()
-        .with_prompt(&format!("Password for {}", url))
-        .interact()
-        .map_err(|e| e.into())
+    if atty::is(Stream::Stdin) {
+        PasswordInput::new()
+            .with_prompt(&format!("Password for {}", url))
+            .interact()
+            .map_err(|e| e.into())
+    } else {
+        bail!("Stdin is not a TTY")
+    }
 }
 
 pub fn save_credentials(

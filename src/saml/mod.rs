@@ -1,11 +1,13 @@
+use crate::aws::role::Role;
 use base64::decode;
 use failure::Error;
-use sxd_document::parser;
-use sxd_xpath::{Context, Factory, Value};
+use log::trace;
 use std::collections::HashSet;
 use std::str::FromStr;
-use crate::aws::role::Role;
-use log::trace;
+use sxd_document::parser;
+use sxd_xpath::{Context, Factory, Value};
+
+pub mod response;
 
 #[derive(Debug)]
 pub struct Response {
@@ -83,8 +85,8 @@ mod tests {
 
     #[test]
     fn parse_response_invalid_no_role() {
-        let mut f =
-            File::open("tests/fixtures/saml/saml_response_invalid_no_role.xml").expect("file not found");
+        let mut f = File::open("tests/fixtures/saml/saml_response_invalid_no_role.xml")
+            .expect("file not found");
 
         let mut saml_xml = String::new();
         f.read_to_string(&mut saml_xml)

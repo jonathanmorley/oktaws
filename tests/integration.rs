@@ -13,7 +13,7 @@ fn calling_oktaws_against_test_okta() -> Result<(), Error> {
     assert!(toml_path.exists());
 
     Command::main_binary()?
-        .env("OKTAWS_HOME", oktaws_dir)
+        .env("OKTAWS_CONFIG_DIR", oktaws_dir)
         .arg("--profiles=test/*")
         .assert()
         .success();
