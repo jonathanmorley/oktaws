@@ -6,7 +6,6 @@ description = "Generates temporary AWS credentials with Okta."
 edition = "2018"
 
 [dependencies]
-reqwest = "0.9"
 serde = "1"
 serde_derive = "1"
 serde_str = "0.1"
@@ -40,9 +39,16 @@ chrono = "0.4"
 exitfailure = "0.5"
 human-panic = "1"
 atty = "0.2"
-serde-xml-rs = "0.3"
-serde_with = "0.2"
-roxmltree = "0.4"
+samuel = "0.1"
+okra = { path = "../okra" }
+tokio-core = "0.1"
+hyper = "0.11.1"
+hyper-tls = "0.1"
+futures = "0.1"
+
+[dependencies.reqwest]
+version = "0.9"
+features = ["trust-dns", "rustls"]
 
 [target.'cfg(windows)'.dependencies]
 rpassword = "2"

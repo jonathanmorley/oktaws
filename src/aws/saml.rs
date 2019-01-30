@@ -1,47 +1,54 @@
 use crate::aws::role::Role;
-use base64::decode;
 use failure::Error;
 use log::trace;
 use std::collections::HashSet;
 use std::str::FromStr;
-use sxd_document::parser;
-use sxd_xpath::{Context, Factory, Value};
-
-pub mod response;
+use samuel::assertion::{Assertions, AttributeStatement};
+use samuel::response::Response;
 
 #[derive(Debug)]
-pub struct Response {
+pub struct SamlResponse {
     pub raw: String,
     pub roles: HashSet<Role>,
 }
 
-impl FromStr for Response {
+impl FromStr for SamlResponse {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let decoded_saml = String::from_utf8(decode(&s)?)?;
+        let decoded_saml = String::from_utf8(base64::decode(&s)?)?;
 
-        trace!("SAML: {}", s);
+        trace!("SAML XML Response: {}", decoded_saml);
 
-        let package = parser::parse(&decoded_saml).expect("Failed parsing xml");
-        let document = package.as_document();
+        let response: Response = decoded_saml.parse()?;
 
-        let xpath = Factory::new()
-            .build("//saml2:Attribute[@Name='https://aws.amazon.com/SAML/Attributes/Role']/saml2:AttributeValue")?
-            .ok_or_else(|| format_err!("No XPath was compiled"))?;
+        let mut roles = HashSet::new();
 
-        let mut context = Context::new();
-        context.set_namespace("saml2", "urn:oasis:names:tc:SAML:2.0:assertion");
-
-        let roles = match xpath.evaluate(&context, document.root())? {
-            Value::Nodeset(ns) => ns
-                .iter()
-                .map(|a| a.string_value().parse())
-                .collect::<Result<HashSet<Role>, Error>>()?,
-            _ => HashSet::new(),
+        match response.assertions {
+            Assertions::Plaintexts(assertions) => {
+                for assertion in assertions {
+                    for attribute_statement in assertion.attribute_statement {
+                        match attribute_statement {
+                            AttributeStatement::PlaintextAttributes(attributes) => {
+                                for attribute in attributes {
+                                    if attribute.name == "https://aws.amazon.com/SAML/Attributes/Role" {
+                                        for attribute_value in attribute.values {
+                                            roles.insert(attribute_value.parse()?);
+                                        }
+                                    }
+                                }
+                            },
+                            AttributeStatement::EncryptedAttributes(_) => bail!("Encrypted attributes not supported"),
+                            AttributeStatement::None => bail!("No attributes found"),
+                        }
+                    }
+                }
+            },
+            Assertions::Encrypteds(_) => bail!("Encrypted assertions not supported"),
+            Assertions::None => bail!("No assertions found"),
         };
 
-        Ok(Response {
+        Ok(SamlResponse {
             raw: s.to_owned(),
             roles,
         })
@@ -65,7 +72,7 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response: Response = saml_base64.parse().unwrap();
+        let response: SamlResponse = saml_base64.parse().unwrap();
 
         let expected_roles = vec![
             Role {
@@ -94,7 +101,7 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response: Error = saml_base64.parse::<Response>().unwrap_err();
+        let response: Error = saml_base64.parse::<SamlResponse>().unwrap_err();
 
         assert_eq!(
             response.to_string(),
