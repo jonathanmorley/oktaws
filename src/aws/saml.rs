@@ -1,10 +1,10 @@
 use crate::aws::role::Role;
 use failure::Error;
 use log::trace;
-use std::collections::HashSet;
-use std::str::FromStr;
 use samuel::assertion::{Assertions, AttributeStatement};
 use samuel::response::Response;
+use std::collections::HashSet;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct SamlResponse {
@@ -31,19 +31,23 @@ impl FromStr for SamlResponse {
                         match attribute_statement {
                             AttributeStatement::PlaintextAttributes(attributes) => {
                                 for attribute in attributes {
-                                    if attribute.name == "https://aws.amazon.com/SAML/Attributes/Role" {
+                                    if attribute.name
+                                        == "https://aws.amazon.com/SAML/Attributes/Role"
+                                    {
                                         for attribute_value in attribute.values {
                                             roles.insert(attribute_value.parse()?);
                                         }
                                     }
                                 }
-                            },
-                            AttributeStatement::EncryptedAttributes(_) => bail!("Encrypted attributes not supported"),
+                            }
+                            AttributeStatement::EncryptedAttributes(_) => {
+                                bail!("Encrypted attributes not supported")
+                            }
                             AttributeStatement::None => bail!("No attributes found"),
                         }
                     }
                 }
-            },
+            }
             Assertions::Encrypteds(_) => bail!("Encrypted assertions not supported"),
             Assertions::None => bail!("No assertions found"),
         };

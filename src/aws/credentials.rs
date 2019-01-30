@@ -1,8 +1,13 @@
 //! The Credentials Provider for Credentials stored in a profile inside of a Credentials file.
 //! Adapted from https://raw.githubusercontent.com/rusoto/rusoto/master/rusoto/credential/src/profile.rs
 
+use chrono::{DateTime, Utc};
+use dirs::home_dir;
 use failure::Error;
 use path_abs::{FileRead, FileWrite, PathFile};
+use regex::Regex;
+use rusoto_credential::{AwsCredentials, CredentialsError};
+use rusoto_sts::Credentials as StsCredentials;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::env::var as env_var;
@@ -10,11 +15,6 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 use try_from::{TryFrom, TryInto};
-use dirs::home_dir;
-use regex::Regex;
-use rusoto_credential::{AwsCredentials, CredentialsError};
-use rusoto_sts::Credentials as StsCredentials;
-use chrono::{DateTime, Utc};
 
 const AWS_SHARED_CREDENTIALS_FILE: &str = "AWS_SHARED_CREDENTIALS_FILE";
 
@@ -28,8 +28,8 @@ impl TryFrom<PathBuf> for CredentialsFile {
 
     fn try_from(file_path: PathBuf) -> Result<Self, Self::Err> {
         Ok(CredentialsFile {
+            file_path: PathFile::create(&file_path)?,
             credentials: FileRead::read(&file_path)?.read_string()?.parse()?,
-            file_path: PathFile::create(file_path)?,
         })
     }
 }
@@ -166,7 +166,8 @@ impl FromStr for CredentialProfiles {
             } else if lower_case_line.contains("expires_at") && expires_at.is_none() {
                 let v: Vec<&str> = line.split('=').collect();
                 if !v.is_empty() {
-                    let expires_at_fixed = DateTime::parse_from_rfc3339(&v[1].trim_matches(' ').to_string())?;
+                    let expires_at_fixed =
+                        DateTime::parse_from_rfc3339(&v[1].trim_matches(' ').to_string())?;
                     expires_at = Some(DateTime::from_utc(expires_at_fixed.naive_utc(), Utc));
                 }
             } else {
@@ -178,10 +179,6 @@ impl FromStr for CredentialProfiles {
         if profile_name.is_some() && access_key.is_some() && secret_key.is_some() {
             let creds = AwsCredentials::new(access_key.unwrap(), secret_key.unwrap(), token, None);
             profiles.insert(profile_name.unwrap(), creds);
-        }
-
-        if profiles.is_empty() {
-            return Err(CredentialsError::new("No credentials found."));
         }
 
         Ok(CredentialProfiles(profiles))
@@ -238,7 +235,10 @@ impl CredentialProfiles {
     {
         let credentials = credentials.into();
 
-        let expiry_utc = DateTime::from_utc(DateTime::parse_from_rfc3339(&credentials.expiration)?.naive_utc(), Utc);
+        let expiry_utc = DateTime::from_utc(
+            DateTime::parse_from_rfc3339(&credentials.expiration)?.naive_utc(),
+            Utc,
+        );
 
         let aws_credentials = AwsCredentials::new(
             credentials.access_key_id,

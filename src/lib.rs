@@ -6,11 +6,10 @@ extern crate serde_derive;
 mod aws;
 mod okta;
 
-use std::env::var as env_var;
 use dirs::home_dir;
 use failure::Error;
+use std::env::var as env_var;
 use std::path::PathBuf;
-
 
 pub fn default_oktaws_location() -> Result<PathBuf, Error> {
     let env = env_var("OKTAWS_CONFIG_DIR").ok().filter(|e| !e.is_empty());

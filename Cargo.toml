@@ -40,7 +40,7 @@ exitfailure = "0.5"
 human-panic = "1"
 atty = "0.2"
 samuel = "0.1"
-okra = { path = "../okra" }
+okra = "0.1"
 tokio-core = "0.1"
 hyper = "0.11.1"
 hyper-tls = "0.1"
