@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use dirs::home_dir;
-use failure::Error;
+use failure::{bail, Error};
 use path_abs::{FileRead, FileWrite, PathFile};
 use regex::Regex;
 use rusoto_credential::{AwsCredentials, CredentialsError};
@@ -62,7 +62,7 @@ impl CredentialsFile {
     pub fn save(self) -> Result<(), Error> {
         FileWrite::create(self.file_path)?
             .write_str(&format!("{}", self.credentials))
-            .map_err(|e| e.into())
+            .map_err(Into::into)
     }
 }
 
@@ -95,6 +95,7 @@ fn new_profile_regex() -> Regex {
     Regex::new(r"^\[([^\]]+)\]$").expect("Failed to compile regex")
 }
 
+#[derive(Debug, Default)]
 struct CredentialProfiles(BTreeMap<String, AwsCredentials>);
 
 impl FromStr for CredentialProfiles {
@@ -197,7 +198,7 @@ impl fmt::Display for CredentialProfiles {
             if let Some(token) = value.token() {
                 writeln!(f, "aws_session_token={}", token)?;
             }
-            writeln!(f, "")?;
+            writeln!(f)?;
         }
 
         Ok(())
@@ -402,39 +403,55 @@ aws_session_token=NEW_SESSION_TOKEN
         );
     }
 
-    /*#[test]
-        fn double_entries() {
-            let mut tmpfile: File = tempfile::tempfile().unwrap();
-            write!(
-                tmpfile,
-                "
-    [example]
-    aws_access_key_id=ACCESS_KEY
-    aws_secret_access_key=SECRET_ACCESS_KEY
-    aws_session_token=SESSION_TOKEN
-    [example]
-    aws_access_key_id=ACCESS_KEY
-    aws_secret_access_key=SECRET_ACCESS_KEY
-    aws_session_token=SESSION_TOKEN"
+    #[test]
+    fn double_entries() {
+        let mut named_tempfile = Builder::new()
+            .prefix("credentials")
+            .rand_bytes(5)
+            .tempfile()
+            .unwrap();
+
+        write!(
+            named_tempfile,
+            "[example]
+aws_access_key_id=ACCESS_KEY1
+aws_secret_access_key=SECRET_ACCESS_KEY1
+aws_session_token=SESSION_TOKEN1
+[example]
+aws_access_key_id=ACCESS_KEY2
+aws_secret_access_key=SECRET_ACCESS_KEY2
+aws_session_token=SESSION_TOKEN2
+
+"
+        )
+        .unwrap();
+
+        let temp_path = named_tempfile.path();
+
+        let credentials_file: CredentialsFile = PathBuf::from(temp_path).try_into().unwrap();
+
+        let mut expected_credentials = CredentialProfiles::default();
+
+        expected_credentials
+            .set_profile(
+                "example",
+                AwsCredentials::new(
+                    "ACCESS_KEY2",
+                    "SECRET_ACCESS_KEY2",
+                    Some(String::from("SESSION_TOKEN2")),
+                    None,
+                ),
             )
             .unwrap();
-            tmpfile.seek(SeekFrom::Start(0)).unwrap();
 
-            let credentials_store: CredentialsStore = tmpfile.try_into().unwrap();
+        assert_eq!(
+            credentials_file.credentials.0.len(),
+            expected_credentials.0.len()
+        );
 
-            let mut expected_credentials = BTreeMap::new();
-            expected_credentials.insert(
-                String::from("example"),
-                ProfileCredentials::Sts {
-                    access_key_id: String::from("ACCESS_KEY"),
-                    secret_access_key: String::from("SECRET_ACCESS_KEY"),
-                    session_token: String::from("SESSION_TOKEN"),
-                },
-            );
-
-            assert_eq!(credentials_store.credentials, expected_credentials);
-        }
-
-        */
-
+        assert_eq!(
+            format!("{:?}", credentials_file.credentials.0["example"]),
+            format!("{:?}", expected_credentials.0["example"])
+        );
+    }
 }

@@ -1,5 +1,5 @@
 use crate::aws::role::Role;
-use failure::Error;
+use failure::{bail, Error};
 use log::trace;
 use samuel::assertion::{Assertions, AttributeStatement};
 use samuel::response::Response;
@@ -24,33 +24,33 @@ impl FromStr for SamlResponse {
 
         let mut roles = HashSet::new();
 
-        match response.assertions {
-            Assertions::Plaintexts(assertions) => {
-                for assertion in assertions {
-                    for attribute_statement in assertion.attribute_statement {
-                        match attribute_statement {
-                            AttributeStatement::PlaintextAttributes(attributes) => {
-                                for attribute in attributes {
-                                    if attribute.name
-                                        == "https://aws.amazon.com/SAML/Attributes/Role"
-                                    {
-                                        for attribute_value in attribute.values {
-                                            roles.insert(attribute_value.parse()?);
-                                        }
-                                    }
-                                }
-                            }
-                            AttributeStatement::EncryptedAttributes(_) => {
-                                bail!("Encrypted attributes not supported")
-                            }
-                            AttributeStatement::None => bail!("No attributes found"),
-                        }
-                    }
-                }
-            }
+        let assertions = match response.assertions {
+            Assertions::Plaintexts(assertions) => assertions,
             Assertions::Encrypteds(_) => bail!("Encrypted assertions not supported"),
             Assertions::None => bail!("No assertions found"),
         };
+
+        let attribute_statements = assertions.into_iter().flat_map(|a| a.attribute_statement);
+
+        for attribute_statement in attribute_statements {
+            let attributes = match attribute_statement {
+                AttributeStatement::PlaintextAttributes(attributes) => attributes,
+                AttributeStatement::EncryptedAttributes(_) => {
+                    bail!("Encrypted attributes not supported")
+                }
+                AttributeStatement::None => bail!("No attributes found"),
+            };
+
+            let values = attributes
+                .into_iter()
+                .filter(|a| a.name == "https://aws.amazon.com/SAML/Attributes/Role")
+                .flat_map(|a| a.values)
+                .map(|v| v.parse());
+
+            for value in values {
+                roles.insert(value?);
+            }
+        }
 
         Ok(SamlResponse {
             raw: s.to_owned(),
@@ -109,7 +109,7 @@ mod tests {
 
         assert_eq!(
             response.to_string(),
-            "Not enough elements in arn:aws:iam::123456789012:saml-provider/okta-idp"
+            "No captures resolved in string 'arn:aws:iam::123456789012:saml-provider/okta-idp'"
         );
     }
 }

@@ -1,10 +1,11 @@
 use crate::aws::saml::SamlResponse;
-use failure::{Compat, Error};
+use failure::{Compat, Error, Fail};
 use kuchiki;
 use kuchiki::traits::TendrilSink;
-use log::trace;
+use log_derive::logfn;
 use std::str;
 
+#[logfn(Trace)]
 pub fn extract_saml_response(text: String) -> Result<SamlResponse, ExtractSamlResponseError> {
     let doc = kuchiki::parse_html().one(text);
     let input_node = doc
@@ -18,8 +19,7 @@ pub fn extract_saml_response(text: String) -> Result<SamlResponse, ExtractSamlRe
         .get("value")
         .ok_or(ExtractSamlResponseError::NotFound)?;
 
-    trace!("SAML: {}", saml);
-    saml.parse().map_err(|e: Error| e.into())
+    saml.parse().map_err(Into::into)
 }
 
 #[derive(Fail, Debug)]

@@ -1,121 +1,90 @@
-#[macro_use]
-extern crate failure;
-
 mod aws;
+mod config;
 mod okta;
+mod profile;
 
 use crate::aws::credentials::CredentialsFile;
 use crate::aws::role::Role;
-use crate::okta::organization::Organization;
-use crate::okta::organization::Profile;
+use crate::config::Config;
+use crate::profile::Profile;
+use clap_verbosity_flag::Verbosity;
 use exitfailure::ExitFailure;
 use failure::Error;
-use futures::future::Future;
-use log::{info, trace, warn};
-use std::env;
-use std::ffi::OsStr;
+use failure::*;
+use glob::Pattern;
+use log::*;
+use log_derive::{logfn, logfn_inputs};
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
-use walkdir::WalkDir;
 
-#[derive(Clone, StructOpt, Debug)]
-pub struct Args {
-    /// Okta organizations to update
-    #[structopt(short = "o", long = "organizations")]
-    pub organizations: Option<String>,
-
+#[derive(StructOpt, Debug)]
+struct Args {
     /// Okta profiles to update
-    #[structopt(short = "p", long = "profiles")]
-    pub profiles: Option<String>,
+    #[structopt(short = "p", long = "profiles", default_value = "*/*")]
+    profile_patterns: Vec<Pattern>,
 
-    /// Sets the level of verbosity
-    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
-    pub verbosity: usize,
+    #[structopt(flatten)]
+    verbosity: Verbosity,
 }
 
 fn main() -> Result<(), ExitFailure> {
-    human_panic::setup_panic!();
+    //human_panic::setup_panic!();
 
     let args = Args::from_args();
 
-    let log_level = match args.verbosity {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
-    };
-    env::set_var("RUST_LOG", format!("{}={}", module_path!(), log_level));
-    pretty_env_logger::init();
+    stderrlog::new()
+        .module(module_path!())
+        .verbosity(log_level(&args.verbosity))
+        .init()?;
+
+    debug!("log level: {}", log::max_level());
+
+    // Get all organizations
+
+    let config = Config::new()?;
+
+    let organizations = config
+        .clone()
+        .into_organizations()
+        .map(|org| org.with_session());
+
+    // Get all profiles
+
+    let mut profiles = config
+        .into_profiles()
+        .filter(|profile| {
+            args.profile_patterns
+                .iter()
+                .any(|profile_pattern| profile_pattern.matches(&profile.to_string()))
+        })
+        .peekable();
+
+    for profile in profiles {
+        info!("{:?}", profile);
+    }
+
+    unimplemented!()
+
+    /*if profiles.peek().is_none() {
+        let patterns = args
+            .profile_patterns
+            .iter()
+            .map(Pattern::as_str)
+            .collect::<Vec<_>>();
+        return Err(format_err!("No profiles found matching {:?}", patterns).into());
+    }
 
     let credentials_store = Arc::new(Mutex::new(CredentialsFile::new(None)?));
 
-    let oktaws_dir = oktaws::default_oktaws_location()?;
-    let organizations = WalkDir::new(oktaws_dir)
-        .follow_links(true)
-        .into_iter()
-        .filter_map(|r| r.ok())
-        .filter(|e| e.file_type().is_file())
-        .filter(|f| f.path().extension() == Some(OsStr::new("toml")))
-        .filter(|f| {
-            if let Some(organizations) = args.organizations.as_ref() {
-                f.path()
-                    .file_stem()
-                    .unwrap()
-                    .to_string_lossy()
-                    .contains(organizations)
-            } else {
-                true
-            }
-        })
-        .map(|f| Organization::from_file_path(f.path()))
-        .collect::<Result<Vec<_>, _>>()?;
+    for mut profile in profiles {
+        let org = profile.clone().application.organization.with_session()?;
 
-    if organizations.is_empty() {
-        return Err(format_err!(
-            "No organizations found containing '{}'",
-            args.organizations.unwrap_or_default()
-        )
-        .into());
-    }
+        let credentials = fetch_credentials(&mut profile)?;
 
-    for mut organization in organizations {
-        let profiles = organization
-            .profiles
-            .clone()
-            .into_iter()
-            .filter(|p| {
-                if let Some(profiles) = args.profiles.as_ref() {
-                    p.name.contains(profiles)
-                } else {
-                    true
-                }
-            })
-            .collect::<Vec<_>>();
-
-        info!("Okta profiles: {:?}", profiles);
-
-        if profiles.is_empty() {
-            warn!(
-                "No profiles found containing '{}'",
-                args.profiles.clone().unwrap_or_default()
-            );
-            continue;
-        }
-
-        organization.store_dt_token()?;
-        let auth_transaction = organization.auth_with_credentials()?;
-        if let Some(session_token) = auth_transaction.session_token() {
-            organization.create_session(session_token)?;
-        }
-
-        //let session_id = okta_client.new_session(session_token, &HashSet::new())?.id;
-        //okta_client.set_session_id(session_id.clone());
-        for profile in profiles {
-            credentials_store.lock().unwrap().set_profile_sts(
-                format!("{}/{}", organization.name, profile.name),
-                fetch_credentials(&mut organization, &profile)?,
-            )?;
-        }
+        credentials_store
+            .lock()
+            .unwrap()
+            .set_profile_sts(profile.to_string(), credentials)?;
     }
 
     Arc::try_unwrap(credentials_store)
@@ -123,68 +92,62 @@ fn main() -> Result<(), ExitFailure> {
         .into_inner()
         .map_err(|_| format_err!("Failed to un-mutex the credentials store"))?
         .save()
-        .map_err(|e| e.into())
+        .map_err(Into::into)*/
 }
 
-fn fetch_credentials(
-    organization: &mut Organization,
-    profile: &Profile,
-) -> Result<rusoto_sts::Credentials, Error> {
-    info!(
-        "Requesting tokens for {}/{}",
-        &organization.name, profile.name
-    );
+#[logfn_inputs(Info, fmt = "requesting tokens for {}")]
+#[logfn(Trace)]
+fn fetch_credentials(profile: &mut Profile) -> Result<rusoto_sts::Credentials, Error> {
+    let saml = profile.application.saml_response()?;
+    let roles = saml.roles;
 
-    let app_link = organization
-        .client
-        .user_api()
-        .list_app_links("me", true)
-        .wait()
-        .map_err(|e| format_err!("{:?}", e))?
+    let role: Role = roles
         .into_iter()
-        .filter(|app_link| app_link.app_name() == Some(&String::from("amazon_aws")))
-        .find(|app_link| app_link.label() == Some(&profile.application_name))
-        .ok_or_else(|| {
-            format_err!(
-                "No profile '{}' in Okta organization '{}'",
-                profile.name,
-                organization.name,
-            )
+        .find(|r| {
+            r.role_name()
+                .map(|r| Some(r.to_owned()) == profile.role)
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| OktawsError::UnknownRole {
+            role: profile.role.clone(),
+            profile: profile.name.clone(),
         })?;
 
-    if let Some(app_url) = app_link.link_url() {
-        let saml = organization.get_saml_response(app_url)?;
+    trace!(
+        "Found role: {} for profile {}",
+        role.role_arn,
+        &profile.name
+    );
 
-        let roles = saml.roles;
+    let assumption_response = aws::role::assume_role(role, saml.raw)
+        .map_err(|e| format_err!("Error assuming role for profile {} ({})", profile.name, e))?;
 
-        let role: Role = roles
-            .into_iter()
-            .find(|r| r.role_name().map(|r| r == profile.role).unwrap_or(false))
-            .ok_or_else(|| {
-                format_err!(
-                    "No matching role ({}) found for profile {}",
-                    profile.role,
-                    &profile.name
-                )
-            })?;
+    let credentials = assumption_response
+        .credentials
+        .ok_or_else(|| format_err!("Error fetching credentials from assumed AWS role"))?;
 
-        trace!(
-            "Found role: {} for profile {}",
-            role.role_arn,
-            &profile.name
-        );
+    Ok(credentials)
+}
 
-        let assumption_response = aws::role::assume_role(role, saml.raw)
-            .map_err(|e| format_err!("Error assuming role for profile {} ({})", profile.name, e))?;
-
-        let credentials = assumption_response
-            .credentials
-            .ok_or_else(|| format_err!("Error fetching credentials from assumed AWS role"))?;
-
-        trace!("Credentials: {:?}", credentials);
-
-        Ok(credentials)
-    } else {
-        bail!("No App URL found")
+/// Get the log level.
+pub fn log_level(verbosity: &Verbosity) -> usize {
+    match verbosity.log_level() {
+        Level::Error => 1,
+        Level::Warn => 2,
+        Level::Info => 3,
+        Level::Debug => 4,
+        Level::Trace => 5,
     }
+}
+
+#[derive(Debug, Fail)]
+enum OktawsError {
+    #[fail(
+        display = "no matching role ({:?}) found for profile {}",
+        role, profile
+    )]
+    UnknownRole {
+        role: Option<String>,
+        profile: String,
+    },
 }

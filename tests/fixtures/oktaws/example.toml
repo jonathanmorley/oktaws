@@ -1,5 +1,6 @@
+[example]
 username = 'example'
 role = 'ExampleRole'
 
-[profiles]
+[example.profiles]
 example = 'Amazon Web Services'

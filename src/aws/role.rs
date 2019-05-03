@@ -1,44 +1,26 @@
+use arn::naive::NaiveArn;
 use failure::Error;
 use log::trace;
+use recap::Recap;
 use rusoto_core::request::HttpClient;
 use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{AssumeRoleWithSAMLRequest, AssumeRoleWithSAMLResponse, Sts, StsClient};
+use serde::Deserialize;
 use std::str;
-use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Recap, Deserialize, PartialEq, Eq, Hash)]
+#[recap(regex = r#"(?x)(?P<provider_arn>[^,]+),(?P<role_arn>[^,]+)"#)]
 pub struct Role {
     pub provider_arn: String,
     pub role_arn: String,
 }
 
-impl FromStr for Role {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let splitted: Vec<&str> = s.split(',').collect();
-
-        match splitted.len() {
-            0 | 1 => bail!("Not enough elements in {}", s),
-            2 => Ok(Role {
-                provider_arn: String::from(splitted[0]),
-                role_arn: String::from(splitted[1]),
-            }),
-            _ => bail!("Too many elements in {}", s),
-        }
-    }
-}
-
 impl Role {
     pub fn role_name(&self) -> Result<&str, Error> {
-        let splitted: Vec<&str> = self.role_arn.split('/').collect();
-
-        match splitted.len() {
-            0 | 1 => bail!("Not enough elements in {}", self.role_arn),
-            2 => Ok(splitted[1]),
-            _ => bail!("Too many elements in {}", self.role_arn),
-        }
+        NaiveArn::parse(&self.role_arn)
+            .map(|arn| arn.resource.trim_start_matches("role/"))
+            .map_err(Into::into)
     }
 }
 
@@ -57,15 +39,12 @@ pub fn assume_role(
         saml_assertion,
     };
 
-    let provider = StaticProvider::new_minimal(String::from(""), String::from(""));
+    let provider = StaticProvider::new_minimal(String::new(), String::new());
     let client = StsClient::new_with(HttpClient::new()?, provider, Region::default());
 
     trace!("Assuming role: {:?}", &req);
 
-    client
-        .assume_role_with_saml(req)
-        .sync()
-        .map_err(|e| e.into())
+    client.assume_role_with_saml(req).sync().map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -83,5 +62,17 @@ mod tests {
         };
 
         assert_eq!(attribute.parse::<Role>().unwrap(), expected_role);
+    }
+
+    #[test]
+    fn role_name() {
+        let role = Role {
+            provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
+            role_arn: String::from("arn:aws:iam::123456789012:role/role1"),
+        };
+
+        let expected_role_name = "role1";
+
+        assert_eq!(role.role_name().unwrap(), expected_role_name);
     }
 }
