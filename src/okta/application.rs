@@ -1,14 +1,13 @@
 use crate::aws::saml::SamlResponse;
-use crate::okta::error::OktaError;
+use crate::okta;
 use crate::okta::extract_state_token;
 use crate::okta::organization::Organization;
-use crate::okta::saml;
-use crate::okta::saml::ExtractSamlResponseError;
 use failure::{bail, format_err, Error};
 use log::debug;
 use okra::apis::login_api::LoginApi;
 use okra::okta::models::AppLink;
 use std::borrow::ToOwned;
+use std::convert::TryInto;
 use std::fmt;
 
 #[derive(Debug)]
@@ -32,16 +31,18 @@ impl Application {
         self.link.link_url().ok_or_else(|| format_err!("No URL"))
     }
 
-    pub fn saml_response(&mut self) -> Result<SamlResponse, Error> {
+    pub fn saml_response(&self) -> Result<SamlResponse, Error> {
         let app_url = self.url()?;
 
         let response = self.organization.get(app_url)?;
 
-        match saml::extract_saml_response(response.clone()) {
-            Err(ExtractSamlResponseError::NotFound) => {
+        match okta::extract_saml_response(&response) {
+            None => {
                 debug!("No SAML found for {}, will attempt re-login", &self);
 
-                let state_token = extract_state_token(&response)?;
+                let state_token = extract_state_token(&response)
+                    .ok_or_else(|| format_err!("No state token found"))?;
+
                 dbg!(&state_token);
 
                 let new_auth = self.organization.auth_with_state_token(&state_token)?;
@@ -58,19 +59,15 @@ impl Application {
                         .map_err(|e| format_err!("{:?}", e))?
                         .text()?;
 
-                    match saml::extract_saml_response(response.clone()) {
-                        Err(ExtractSamlResponseError::NotFound) => {
-                            bail!("Could not find SAML even after MFA")
-                        }
-                        Err(e) => Err(e.into()),
-                        Ok(saml) => Ok(saml),
+                    match okta::extract_saml_response(&response) {
+                        None => bail!("Could not find SAML even after MFA"),
+                        Some(saml) => return saml.try_into().map_err(Error::from),
                     }
                 } else {
                     bail!("No Session Token found in re-login")
                 }
             }
-            Err(e) => Err(e.into()),
-            Ok(saml) => Ok(saml),
+            Some(saml) => return saml.try_into().map_err(Error::from),
         }
     }
 }

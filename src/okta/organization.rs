@@ -1,4 +1,3 @@
-use crate::config;
 use crate::okta::application::Application;
 use atty::Stream;
 use dialoguer::{Input, PasswordInput};
@@ -13,9 +12,10 @@ use okra::okta::models::{
     AuthVerifyFactorRequest, AuthenticationRequest, AuthenticationTransaction,
     CreateSessionRequest, Session, TransactionState,
 };
-use regex::Regex;
 #[cfg(windows)]
 use rpassword;
+use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str;
 
@@ -41,20 +41,18 @@ impl fmt::Display for Organization {
     }
 }
 
-impl From<config::Organization> for Organization {
-    fn from(org: config::Organization) -> Self {
-        Organization::new(org.url, org.username)
-    }
-}
-
 impl Clone for Organization {
     fn clone(&self) -> Self {
-        Organization::new(self.base_url.clone(), self.username.clone())
+        Organization {
+            client: OktaClient::new(self.client.configuration().to_owned()),
+            username: self.username.clone(),
+            base_url: self.base_url.clone(),
+        }
     }
 }
 
 impl Organization {
-    fn new(base_url: String, username: String) -> Self {
+    pub fn new(base_url: String, username: String) -> Self {
         Organization {
             client: OktaClient::new(OktaConfiguration::new(base_url.clone())),
             username,
@@ -100,7 +98,7 @@ impl Organization {
     }
 
     fn save_credentials(&self, password: &str) -> Result<(), Error> {
-        info!("saving Okta credentials for {}", self);
+        debug!("saving Okta credentials for {}", self);
 
         let service = format!("oktaws::okta::{}", self.base_url);
 
@@ -222,72 +220,47 @@ impl Organization {
     // Sessions
 
     #[logfn_inputs(Debug, fmt = "authenticating against {}")]
-    pub fn with_session(mut self) -> Result<Self, Error> {
-        self.store_dt_token()?;
-        let auth_transaction = self.auth_with_credentials()?;
-        if let Some(session_token) = auth_transaction.session_token() {
-            self.create_session(session_token)?;
-        }
+    pub fn with_session(self) -> Result<Self, Error> {
+        self.clone().with_ui_session(UISession::try_from(self)?)
+    }
+
+    #[logfn(Trace)]
+    pub fn get_dt_token(&self) -> Result<String, Error> {
+        self.client
+            .login_api()
+            .login_default()
+            .map_err(|e| format_err!("{:?}", e))?
+            .cookies()
+            .find(|cookie| cookie.name() == "DT")
+            .map(|cookie| cookie.value().to_owned())
+            .ok_or_else(|| format_err!("No DT cookie found"))
+    }
+
+    pub fn with_ui_session(mut self, ui_session: UISession) -> Result<Self, Error> {
+        let cookies: HashMap<String, String> = ui_session.into();
+
+        let mut configuration = self.client.configuration().to_owned();
+        configuration.cookies.extend(cookies.into_iter());
+
+        self.client = OktaClient::new(configuration);
 
         Ok(self)
     }
 
-    pub fn store_dt_token(&mut self) -> Result<(), Error> {
-        let dt_pattern = Regex::new(r"DT=([^;]+)")?;
-
-        let res = self
-            .client
-            .login_api()
-            .login_default()
-            .map_err(|e| format_err!("{:?}", e))?;
-        let token = res
-            .headers()
-            .get_all("set-cookie")
-            .iter()
-            .filter_map(|header| header.to_str().ok())
-            .flat_map(|cookie| dt_pattern.captures_iter(cookie))
-            .filter_map(|capture| capture.get(1))
-            .map(|_match| _match.as_str())
-            .next();
-
-        match token {
-            Some(token) => {
-                let token = token.to_owned();
-
-                let mut configuration = self.client.configuration().to_owned();
-                configuration.cookies.insert("DT".into(), token.clone());
-                self.client = OktaClient::new(configuration);
-
-                Ok(())
-            }
-            None => bail!("No DT cookie found"),
-        }
-    }
-
-    #[logfn_inputs(Debug, fmt = "Creating session for {:?} with session token: {}")]
-    pub fn create_session(&mut self, session_token: &str) -> Result<Session, Error> {
+    pub fn convert_session(&self, session_token: &str) -> Result<Session, Error> {
         let req = CreateSessionRequest::new().with_session_token(String::from(session_token));
 
-        // Ensure we remove any old session data first
+        // Run this against a client with no sid
         let mut configuration = self.client.configuration().to_owned();
         configuration.cookies.remove("sid");
-        self.client = OktaClient::new(configuration);
 
-        let session = self.client.session_api().create_session(req)?;
-
-        // Create a new OktaClient so that the `sid` cookie gets propogated to all clients
-        let mut configuration = self.client.configuration().to_owned();
-        configuration
-            .cookies
-            .insert(String::from("sid"), session.id().unwrap().to_string());
-        self.client = OktaClient::new(configuration);
-
-        Ok(session)
+        let temp_client = OktaClient::new(configuration);
+        temp_client.session_api().create_session(req)
     }
 
     // HTTP Client
 
-    /*pub fn get(&self, url: &str) -> Result<String, Error> {
+    pub fn get(&self, url: &str) -> Result<String, Error> {
         let configuration = self.client.configuration();
 
         let cookies = configuration
@@ -304,7 +277,7 @@ impl Organization {
             .send()
             .and_then(|mut res| res.text())
             .map_err(Into::into)
-    }*/
+    }
 
     pub fn into_applications(self) -> Result<impl Iterator<Item = Application>, Error> {
         Ok(self
@@ -332,7 +305,33 @@ impl Organization {
     }
 }
 
-struct UISession {
-    dt: String,
+pub struct UISession {
+    dt_token: String,
     session: Session,
+}
+
+impl From<UISession> for HashMap<String, String> {
+    fn from(value: UISession) -> Self {
+        let mut cookies = HashMap::new();
+        cookies.insert("DT".to_string(), value.dt_token);
+        cookies.insert("sid".to_string(), value.session.id().unwrap().to_string());
+
+        cookies
+    }
+}
+
+impl TryFrom<Organization> for UISession {
+    type Error = failure::Error;
+
+    fn try_from(org: Organization) -> Result<Self, Self::Error> {
+        let auth_transaction = org.auth_with_credentials()?;
+        if let Some(session_token) = auth_transaction.session_token() {
+            Ok(UISession {
+                dt_token: org.get_dt_token()?,
+                session: org.convert_session(session_token)?,
+            })
+        } else {
+            bail!("No session token found")
+        }
+    }
 }

@@ -38,7 +38,7 @@ fn calling_oktaws_against_nonexistant_oktaws_config() {
             home_dir.path().to_string_lossy()
         )))
         .stderr(predicate::str::contains(
-            r#"Error: No profiles found matching ["*/*"]"#,
+            r#"Error: No profiles found matching [""]"#,
         ));
 
     assert!(home_dir.path().join(".config/oktaws/oktaws.toml").exists());

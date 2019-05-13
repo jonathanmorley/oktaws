@@ -1,5 +1,5 @@
 use crate::okta;
-use crate::profile::Profile;
+use crate::profile::{Profile, ProfileId};
 use failure;
 use log::*;
 use log_derive::logfn;
@@ -49,14 +49,10 @@ impl Config {
         config_path()?.try_into()
     }
 
-    pub fn into_organizations(self) -> impl Iterator<Item = okta::Organization> {
-        self.organizations.into_iter().map(|(_, org)| org.into())
-    }
-
-    pub fn into_profiles(self) -> impl Iterator<Item = Profile> {
+    pub fn into_profiles(self) -> impl Iterator<Item = (ProfileId, Profile)> {
         self.organizations
             .into_iter()
-            .flat_map(|(_, org)| org.into_profiles().unwrap())
+            .flat_map(|(org_name, org)| org.into_profiles(org_name).unwrap())
     }
 }
 
@@ -66,73 +62,104 @@ pub struct Organization {
     pub url: String,
     #[serde(rename = "role")]
     default_role: Option<String>,
-    profiles: HashMap<String, PartialProfile>,
+    #[serde(rename = "profiles")]
+    profile_specs: HashMap<String, ProfileSpec>,
 }
 
 impl Organization {
     // Construct dynamic profiles based on available okta tiles
-    pub fn into_org_profiles(self) -> Result<impl Iterator<Item = Profile>, failure::Error> {
-        let org: okta::Organization = self.clone().into();
-        //Ok(org.aws_applications().map(|app| app.try_into().unwrap()));
-
-        Ok(std::iter::empty::<Profile>())
-    }
-
-    // Construct profiles based on config specs
-    pub fn into_config_profiles(self) -> Result<impl Iterator<Item = Profile>, failure::Error> {
+    fn into_org_profiles(
+        self,
+        org_name: String,
+    ) -> Result<HashMap<ProfileId, Profile>, failure::Error> {
         let org_role = self.clone().default_role;
-        let mut okta_org: okta::Organization = self.clone().into();
-        okta_org = okta_org.with_session()?;
+        let okta_org = okta::Organization::from(self).with_session()?;
 
-        let profiles =
-            self.clone()
-                .profiles
-                .into_iter()
-                .map(
-                    move |(profile_name, partial_profile)| match partial_profile {
-                        PartialProfile::Application(application) => Profile {
-                            name: profile_name,
-                            role: org_role.clone(),
-                            application: okta_org.clone().into_application(&application).unwrap(),
-                        },
-                        PartialProfile::ApplicationRole { application, role } => Profile {
-                            name: profile_name,
-                            role: role.clone().or_else(|| org_role.clone()),
-                            application: okta_org.clone().into_application(&application).unwrap(),
-                        },
+        trace!("Getting org profiles for {}", org_name);
+
+        let profiles = okta_org
+            .into_aws_applications()?
+            .map(Profile::from)
+            .map(move |profile| Profile {
+                role: profile.role.clone().or_else(|| org_role.clone()),
+                ..profile
+            })
+            .map(|profile| {
+                (
+                    ProfileId {
+                        org_name: org_name.clone(),
+                        profile_name: profile.application.link.label().unwrap().to_owned(),
                     },
-                );
+                    profile,
+                )
+            })
+            .collect();
 
         Ok(profiles)
     }
 
+    // Construct profiles based on profile specs in the config
+    pub fn into_config_profiles(
+        self,
+        org_name: String,
+    ) -> Result<HashMap<ProfileId, Profile>, failure::Error> {
+        let org_role = self.clone().default_role;
+        let okta_org = okta::Organization::from(self.clone()).with_session()?;
+
+        self.clone()
+            .profile_specs
+            .into_iter()
+            .map(move |(profile_name, profile_spec)| {
+                let application_name = match &profile_spec {
+                    ProfileSpec::Application(application) => application,
+                    ProfileSpec::ApplicationRole { application, .. } => application,
+                };
+
+                let application = okta_org.clone().into_application(application_name)?;
+
+                let role = match profile_spec {
+                    ProfileSpec::Application(_) => org_role.clone(),
+                    ProfileSpec::ApplicationRole { role, .. } => {
+                        role.clone().or_else(|| org_role.clone())
+                    }
+                };
+
+                let profile = (
+                    ProfileId {
+                        org_name: org_name.clone(),
+                        profile_name,
+                    },
+                    Profile { role, application },
+                );
+
+                Ok(profile)
+            })
+            .collect()
+    }
+
     // Combine org profiles and config profiles
-    pub fn into_profiles(self) -> Result<impl Iterator<Item = Profile>, failure::Error> {
-        let org_role = self.default_role.clone();
+    #[logfn(Trace)]
+    pub fn into_profiles(
+        self,
+        org_name: String,
+    ) -> Result<HashMap<ProfileId, Profile>, failure::Error> {
+        let mut org_profiles = self.clone().into_org_profiles(org_name.clone())?;
+        let config_profiles = self.clone().into_config_profiles(org_name.clone())?;
 
-        let org_profiles: Vec<Profile> = self.clone().into_org_profiles()?.collect();
+        org_profiles.extend(config_profiles.into_iter());
+        Ok(org_profiles)
+    }
+}
 
-        info!("org profiles: {:?}", org_profiles);
-
-        let config_profiles: Vec<Profile> = self.clone().into_config_profiles()?.collect();
-
-        info!("config profiles: {:?}", config_profiles);
-
-        Ok(std::iter::empty::<Profile>())
-
-        /*let aws_applications = okta_org
-            .aws_applications()?
-            .map(|app| app.try_into().unwrap());
-
-        Ok(aws_applications)*/
-
-        /**/
+impl From<Organization> for okta::Organization {
+    fn from(org: Organization) -> Self {
+        okta::Organization::new(org.url, org.username)
     }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
-pub enum PartialProfile {
+pub enum ProfileSpec {
     Application(String),
     ApplicationRole {
         application: String,

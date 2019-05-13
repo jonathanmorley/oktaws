@@ -10,11 +10,11 @@ use rusoto_credential::{AwsCredentials, CredentialsError};
 use rusoto_sts::Credentials as StsCredentials;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::convert::{TryFrom, TryInto};
 use std::env::var as env_var;
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
-use try_from::{TryFrom, TryInto};
 
 const AWS_SHARED_CREDENTIALS_FILE: &str = "AWS_SHARED_CREDENTIALS_FILE";
 
@@ -24,9 +24,9 @@ pub struct CredentialsFile {
 }
 
 impl TryFrom<PathBuf> for CredentialsFile {
-    type Err = Error;
+    type Error = Error;
 
-    fn try_from(file_path: PathBuf) -> Result<Self, Self::Err> {
+    fn try_from(file_path: PathBuf) -> Result<Self, Self::Error> {
         Ok(CredentialsFile {
             file_path: PathFile::create(&file_path)?,
             credentials: FileRead::read(&file_path)?.read_string()?.parse()?,
@@ -42,21 +42,13 @@ impl CredentialsFile {
         }
     }
 
-    #[allow(dead_code)]
     pub fn set_profile<S, C>(&mut self, name: S, creds: C) -> Result<(), Error>
     where
         S: Into<String>,
-        C: Into<AwsCredentials>,
+        C: TryInto<Credentials>,
+        C::Error: std::error::Error + Send + Sync + 'static,
     {
         self.credentials.set_profile(name, creds)
-    }
-
-    pub fn set_profile_sts<S, C>(&mut self, name: S, creds: C) -> Result<(), Error>
-    where
-        S: Into<String>,
-        C: Into<StsCredentials>,
-    {
-        self.credentials.set_profile_sts(name, creds)
     }
 
     pub fn save(self) -> Result<(), Error> {
@@ -205,16 +197,41 @@ impl fmt::Display for CredentialProfiles {
     }
 }
 
+pub struct Credentials(AwsCredentials);
+
+impl From<AwsCredentials> for Credentials {
+    fn from(credentials: AwsCredentials) -> Self {
+        Credentials(credentials)
+    }
+}
+
+impl TryFrom<StsCredentials> for Credentials {
+    type Error = chrono::ParseError;
+
+    fn try_from(credentials: StsCredentials) -> Result<Self, Self::Error> {
+        let expiry_fixed_offset = DateTime::parse_from_rfc3339(&credentials.expiration)?;
+        let expiry_utc = DateTime::from_utc(expiry_fixed_offset.naive_utc(), Utc);
+
+        Ok(Credentials(AwsCredentials::new(
+            credentials.access_key_id,
+            credentials.secret_access_key,
+            Some(credentials.session_token),
+            Some(expiry_utc),
+        )))
+    }
+}
+
 impl CredentialProfiles {
     fn set_profile<S, C>(&mut self, name: S, credentials: C) -> Result<(), Error>
     where
         S: Into<String>,
-        C: Into<AwsCredentials>,
+        C: TryInto<Credentials>,
+        C::Error: std::error::Error + Send + Sync + 'static,
     {
         match self.0.entry(name.into()) {
             Entry::Occupied(mut entry) => {
                 if entry.get().token().is_some() {
-                    entry.insert(credentials.into());
+                    entry.insert(credentials.try_into()?.0);
                 } else {
                     bail!(
                         "Profile '{}' does not contain STS credentials. Ignoring",
@@ -223,31 +240,10 @@ impl CredentialProfiles {
                 }
             }
             Entry::Vacant(entry) => {
-                entry.insert(credentials.into());
+                entry.insert(credentials.try_into()?.0);
             }
         }
         Ok(())
-    }
-
-    fn set_profile_sts<S, C>(&mut self, name: S, credentials: C) -> Result<(), Error>
-    where
-        S: Into<String>,
-        C: Into<StsCredentials>,
-    {
-        let credentials = credentials.into();
-
-        let expiry_utc = DateTime::from_utc(
-            DateTime::parse_from_rfc3339(&credentials.expiration)?.naive_utc(),
-            Utc,
-        );
-
-        let aws_credentials = AwsCredentials::new(
-            credentials.access_key_id,
-            credentials.secret_access_key,
-            Some(credentials.session_token),
-            Some(expiry_utc),
-        );
-        self.set_profile(name, aws_credentials)
     }
 }
 
