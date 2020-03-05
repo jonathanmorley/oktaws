@@ -151,7 +151,7 @@ impl Client {
                     .state_token
                     .ok_or_else(|| format_err!("No state token found in factor prompt response"))?;
 
-                let mut input = Input::new("MFA response");
+                let input = Input::new("MFA response");
 
                 let mfa_code = input.interact()?;
 

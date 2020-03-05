@@ -116,7 +116,7 @@ fn main() -> Result<(), Error> {
         bail!("No organizations found called {}", opt.organizations);
     }
 
-    for mut organization in organizations {
+    for organization in organizations {
         info!(
             "Evaluating profiles in {}",
             organization.okta_organization.name
