@@ -26,7 +26,8 @@ impl CredentialsStore {
         match env_var("AWS_SHARED_CREDENTIALS_FILE") {
             Ok(path) => PathBuf::from(path),
             Err(_) => CredentialsStore::default_profile_location()?,
-        }.try_into()
+        }
+        .try_into()
     }
 
     pub fn set_profile<T: Into<ProfileCredentials>>(
@@ -151,7 +152,8 @@ mod tests {
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN"
-        ).unwrap();
+        )
+        .unwrap();
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
 
         let credentials_store: CredentialsStore = tmpfile.try_into().unwrap();
@@ -183,7 +185,8 @@ aws_session_token=SESSION_TOKEN
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN"
-        ).unwrap();
+        )
+        .unwrap();
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
 
         let credentials_store: CredentialsStore = tmpfile.try_into().unwrap();
@@ -219,7 +222,8 @@ aws_secret_access_key=SECRET_ACCESS_KEY
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN"
-        ).unwrap();
+        )
+        .unwrap();
 
         let temp_path = named_tempfile.path();
 
@@ -233,7 +237,8 @@ aws_session_token=SESSION_TOKEN"
                     secret_access_key: String::from("SECRET_ACCESS_KEY2"),
                     session_token: String::from("SESSION_TOKEN2"),
                 },
-            ).unwrap();
+            )
+            .unwrap();
 
         credentials_store.save().unwrap();
 
@@ -257,7 +262,8 @@ aws_session_token=SESSION_TOKEN"
             "[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY"
-        ).unwrap();
+        )
+        .unwrap();
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
 
         let credentials_store: CredentialsStore = tmpfile.try_into().unwrap();
@@ -273,5 +279,4 @@ aws_secret_access_key=SECRET_ACCESS_KEY"
 
         assert_eq!(credentials_store.credentials, expected_credentials);
     }
-
 }

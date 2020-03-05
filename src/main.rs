@@ -166,7 +166,8 @@ fn main() -> Result<(), Error> {
                 .try_reduce_with(|mut a, b| -> Result<_, Error> {
                     a.extend(b.into_iter());
                     Ok(a)
-                }).unwrap_or_else(|| {
+                })
+                .unwrap_or_else(|| {
                     println!("No profiles");
                     Ok(HashMap::new())
                 })?
@@ -208,7 +209,8 @@ fn fetch_credentials(
         .into_iter()
         .find(|app_link| {
             app_link.app_name == "amazon_aws" && app_link.label == profile.application_name
-        }).ok_or_else(|| {
+        })
+        .ok_or_else(|| {
             format_err!(
                 "Could not find Okta application for profile {}/{}",
                 organization.okta_organization.name,
