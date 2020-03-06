@@ -221,7 +221,7 @@ fn fetch_credentials(
     debug!("Application Link: {:?}", &app_link);
 
     let saml = client
-        .get_saml_response(app_link.link_url.clone())
+        .get_saml_response(app_link.link_url)
         .map_err(|e| {
             format_err!(
                 "Error getting SAML response for profile {} ({})",

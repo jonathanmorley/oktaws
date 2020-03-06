@@ -78,7 +78,7 @@ where
             .get("profiles")
             .and_then(|p| p.as_table())
             .ok_or_else(|| format_err!("No profiles table found"))?
-            .into_iter()
+            .iter()
             .map(|(k, v)| Profile::from_entry((k.to_owned(), v), default_role.clone()))
             .collect::<Result<Vec<Profile>, Error>>()?;
 
