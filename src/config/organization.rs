@@ -24,14 +24,16 @@ impl Profile {
             entry.1.get("application")
         } else {
             Some(entry.1)
-        }.and_then(|a| toml_to_string(a))
+        }
+        .and_then(|a| toml_to_string(a))
         .unwrap();
 
         let role = if entry.1.is_table() {
             entry.1.get("role").and_then(|r| toml_to_string(r))
         } else {
             default_role
-        }.ok_or_else(|| format_err!("No profile role or default role specified"))?;
+        }
+        .ok_or_else(|| format_err!("No profile role or default role specified"))?;
 
         Ok(Profile {
             name: entry.0,
@@ -76,7 +78,7 @@ where
             .get("profiles")
             .and_then(|p| p.as_table())
             .ok_or_else(|| format_err!("No profiles table found"))?
-            .into_iter()
+            .iter()
             .map(|(k, v)| Profile::from_entry((k.to_owned(), v), default_role.clone()))
             .collect::<Result<Vec<Profile>, Error>>()?;
 
