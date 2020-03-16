@@ -48,10 +48,10 @@ pub fn assume_role(
         role_arn,
     }: Role,
     saml_assertion: String,
-    duration_seconds: i64,
+    duration_seconds: Option<i64>,
 ) -> Result<AssumeRoleWithSAMLResponse, Error> {
     let req = AssumeRoleWithSAMLRequest {
-        duration_seconds: duration_seconds,
+        duration_seconds,
         policy: None,
         principal_arn: provider_arn,
         role_arn,

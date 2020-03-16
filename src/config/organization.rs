@@ -13,7 +13,7 @@ pub struct Profile {
     pub name: String,
     pub application_name: String,
     pub role: String,
-    pub duration_seconds: i64,
+    pub duration_seconds: Option<i64>,
 }
 
 impl Profile {
@@ -37,11 +37,11 @@ impl Profile {
         .ok_or_else(|| format_err!("No profile role or default role specified"))?;
 
         let duration_seconds = if entry.1.is_table() {
-            entry.1.as_integer("duration")
+            entry.1.get("duration")
         } else {
-            3600
+            None
         }
-        .unwrap();
+        .and_then(|d| d.as_integer());
 
         Ok(Profile {
             name: entry.0,
