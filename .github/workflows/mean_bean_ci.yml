@@ -36,14 +36,6 @@ jobs:
     # artifacts are downloaded first.
     needs: install-cross
     steps:
-      - run: perl -v
-        shell: bash
-      - run: which perl
-        shell: bash
-      - run: C:\\Strawberry\\perl\\bin\\perl.exe -v
-        shell: bash
-      - run: echo "::set-env name=perl::C:\\Strawberry\\perl\\bin\\perl.exe"
-        shell: bash
       - uses: actions/checkout@v2
         with:
           depth: 50
@@ -51,6 +43,8 @@ jobs:
         shell: bash
       - run: ci/build.bash cargo ${{ matrix.target }}
         shell: bash
+        env:
+          PERL: C:\\Strawberry\\perl\\bin\\perl.exe
       - run: ci/test.bash cargo ${{ matrix.target }}
         shell: bash
 
