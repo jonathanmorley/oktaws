@@ -158,7 +158,7 @@ jobs:
           # by default.
           # - i686-unknown-freebsd
           # - x86_64-unknown-freebsd
-          - x86_64-unknown-netbsd
+          # - x86_64-unknown-netbsd
           # Solaris
           # - sparcv9-sun-solaris
           # Bare Metal
