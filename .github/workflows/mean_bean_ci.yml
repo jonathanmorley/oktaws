@@ -44,7 +44,7 @@ jobs:
       - run: ci/build.bash cargo ${{ matrix.target }}
         shell: bash
         env:
-          PERL: C:\\Strawberry\\perl\\bin\\perl.exe
+          OPENSSL_SRC_PERL: C:\\Strawberry\\perl\\bin\\perl.exe
       - run: ci/test.bash cargo ${{ matrix.target }}
         shell: bash
 
