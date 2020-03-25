@@ -5,7 +5,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 
 [dependencies]
-reqwest = { version = "0.9", features = ["rustls-tls"] }
+reqwest = "0.9"
 serde = "1"
 serde_derive = "1"
 serde_str = "0.1"
@@ -37,6 +37,9 @@ itertools = "0.7"
 
 [target.'cfg(windows)'.dependencies]
 rpassword = "2"
+
+[target.'cfg(linux)'.dependencies]
+openssl = { version = '0.10', features = ["vendored"] }
 
 [dev-dependencies]
 tempfile = "3"
