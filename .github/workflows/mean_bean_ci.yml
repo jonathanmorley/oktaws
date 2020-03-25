@@ -36,6 +36,8 @@ jobs:
     # artifacts are downloaded first.
     needs: install-cross
     steps:
+      - run: choco install strawberryperl
+        shell: bash
       - uses: actions/checkout@v2
         with:
           depth: 50
