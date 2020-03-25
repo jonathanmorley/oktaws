@@ -38,6 +38,10 @@ jobs:
     steps:
       - run: perl -v
         shell: bash
+      - run: C:\Strawberry\perl\bin\perl.exe -v
+        shell: bash
+      - run: echo "::set-env name=perl::C:\Strawberry\perl\bin\perl.exe"
+        shell: bash
       - uses: actions/checkout@v2
         with:
           depth: 50
