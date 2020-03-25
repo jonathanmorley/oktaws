@@ -34,6 +34,7 @@ rayon = "1"
 pretty_env_logger = "0.2"
 dirs = "1"
 itertools = "0.7"
+openssl = { version = '0.10', features = ["vendored"] }
 
 [target.'cfg(windows)'.dependencies]
 rpassword = "2"
