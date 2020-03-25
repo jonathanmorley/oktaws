@@ -142,7 +142,7 @@ jobs:
           - armv7-unknown-linux-gnueabihf
           - armv7-unknown-linux-musleabihf
           # - i586-unknown-linux-gnu (fails to compile openssl)
-          - i586-unknown-linux-musl
+          # - i586-unknown-linux-musl (fails to compile openssl)
           - i686-unknown-linux-gnu
           - i686-unknown-linux-musl
           - mips-unknown-linux-gnu
