@@ -36,7 +36,7 @@ jobs:
     # artifacts are downloaded first.
     needs: install-cross
     steps:
-      - run: choco install strawberryperl
+      - run: perl -v
         shell: bash
       - uses: actions/checkout@v2
         with:
@@ -129,7 +129,7 @@ jobs:
           # - wasm32-unknown-emscripten
           # Linux
           - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl
+          # - aarch64-unknown-linux-musl (error while linking)
           - arm-unknown-linux-gnueabi
           - arm-unknown-linux-gnueabihf
           - arm-unknown-linux-musleabi
