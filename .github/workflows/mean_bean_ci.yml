@@ -128,7 +128,7 @@ jobs:
           # WASM, off by default as most rust projects aren't compatible yet.
           # - wasm32-unknown-emscripten
           # Linux
-          - aarch64-unknown-linux-gnu
+          # - aarch64-unknown-linux-gnu (error while linking)
           # - aarch64-unknown-linux-musl (error while linking)
           - arm-unknown-linux-gnueabi
           - arm-unknown-linux-gnueabihf
@@ -156,8 +156,8 @@ jobs:
           - sparc64-unknown-linux-gnu
           # Android
           # - aarch64-linux-android (fails to compile keyring)
-          - arm-linux-androideabi
-          - armv7-linux-androideabi
+          # - arm-linux-androideabi (fails to compile keyring)
+          # - armv7-linux-androideabi (fails to compile keyring)
           # - i686-linux-android (fails to compile keyring)
           - x86_64-linux-android
           # *BSD
