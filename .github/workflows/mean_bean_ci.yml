@@ -88,9 +88,9 @@ jobs:
         target:
           # macOS
           - x86_64-apple-darwin
-          # iOS
-          - aarch64-apple-ios
-          - x86_64-apple-ios
+          # iOS (fails to compile termios)
+          # - aarch64-apple-ios
+          # - x86_64-apple-ios
 
   linux:
     runs-on: ubuntu-latest
