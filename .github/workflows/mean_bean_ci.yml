@@ -140,7 +140,7 @@ jobs:
           # - i586-unknown-linux-gnu (fails to compile openssl)
           # - i586-unknown-linux-musl (fails to compile openssl)
           # - i686-unknown-linux-gnu
-          - i686-unknown-linux-musl
+          # - i686-unknown-linux-musl
           # - mips-unknown-linux-gnu
           # - mips-unknown-linux-musl
           # - mips64-unknown-linux-gnuabi64 (error while linking)

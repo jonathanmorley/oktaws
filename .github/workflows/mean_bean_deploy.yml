@@ -136,7 +136,7 @@ jobs:
           # - arm-unknown-linux-gnueabi
           # - armv7-unknown-linux-gnueabihf
           # - i686-unknown-linux-gnu
-          - i686-unknown-linux-musl
+          # - i686-unknown-linux-musl
           # - mips-unknown-linux-gnu
           # - mips64-unknown-linux-gnuabi64
           # - mips64el-unknown-linux-gnuabi64
