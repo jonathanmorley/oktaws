@@ -40,7 +40,7 @@ jobs:
         shell: bash
       - run: which perl
         shell: bash
-      - run: C:\\Strawberry\\perl\\bin\perl.exe -v
+      - run: C:\\Strawberry\\perl\\bin\\perl.exe -v
         shell: bash
       - run: echo "::set-env name=perl::C:\\Strawberry\\perl\\bin\\perl.exe"
         shell: bash
