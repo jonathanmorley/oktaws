@@ -130,30 +130,30 @@ jobs:
           # Linux
           # - aarch64-unknown-linux-gnu (error while linking)
           # - aarch64-unknown-linux-musl (error while linking)
-          - arm-unknown-linux-gnueabi
-          - arm-unknown-linux-gnueabihf
-          - arm-unknown-linux-musleabi
-          - arm-unknown-linux-musleabihf
+          # - arm-unknown-linux-gnueabi
+          # - arm-unknown-linux-gnueabihf
+          # - arm-unknown-linux-musleabi
+          # - arm-unknown-linux-musleabihf
           # - armv5te-unknown-linux-musleabi (fails to compile openssl)
-          - armv7-unknown-linux-gnueabihf
-          - armv7-unknown-linux-musleabihf
+          # - armv7-unknown-linux-gnueabihf
+          # - armv7-unknown-linux-musleabihf
           # - i586-unknown-linux-gnu (fails to compile openssl)
           # - i586-unknown-linux-musl (fails to compile openssl)
           - i686-unknown-linux-gnu
           - i686-unknown-linux-musl
-          - mips-unknown-linux-gnu
-          - mips-unknown-linux-musl
-          - mips64-unknown-linux-gnuabi64
-          - mips64el-unknown-linux-gnuabi64
-          - mipsel-unknown-linux-gnu
+          # - mips-unknown-linux-gnu
+          # - mips-unknown-linux-musl
+          # - mips64-unknown-linux-gnuabi64 (error while linking)
+          # - mips64el-unknown-linux-gnuabi64
+          # - mipsel-unknown-linux-gnu
           # - mipsel-unknown-linux-musl (error while linking)
-          - powerpc-unknown-linux-gnu
-          - powerpc64-unknown-linux-gnu
-          - powerpc64le-unknown-linux-gnu
-          - s390x-unknown-linux-gnu
+          # - powerpc-unknown-linux-gnu
+          # - powerpc64-unknown-linux-gnu
+          # - powerpc64le-unknown-linux-gnu
+          # - s390x-unknown-linux-gnu
           - x86_64-unknown-linux-gnu
           - x86_64-unknown-linux-musl
-          - sparc64-unknown-linux-gnu
+          # - sparc64-unknown-linux-gnu
           # Android
           # - aarch64-linux-android (fails to compile keyring)
           # - arm-linux-androideabi (fails to compile keyring)
