@@ -143,7 +143,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: install-cross
     steps:
-      - run: sudo apt-get install libgmp3-dev libdbus-1-dev
       - uses: actions/checkout@v2
         with:
           depth: 50
@@ -152,6 +151,12 @@ jobs:
         with:
           name: cross-linux-musl
           path: /tmp/
+      - name: Build cross image
+        run: |
+          test -f cross/Dockerfile.${{ matrix.target }} &&
+          docker build
+            -t cross:${{ matrix.target }}
+            -f cross/Dockerfile.${{ matrix.target }} cross
       - run: chmod +x /tmp/cross
       - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
       - run: ci/build.bash /tmp/cross ${{ matrix.target }}
@@ -178,7 +183,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: install-cross
     steps:
-      - run: sudo apt-get install libgmp3-dev libdbus-1-dev
       - uses: actions/checkout@v2
         with:
           depth: 50
@@ -187,6 +191,12 @@ jobs:
         with:
           name: cross-linux-musl
           path: /tmp/
+      - name: Build cross image
+        run: |
+          test -f cross/Dockerfile.${{ matrix.target }} &&
+          docker build
+            -t cross:${{ matrix.target }}
+            -f cross/Dockerfile.${{ matrix.target }} cross
       - run: chmod +x /tmp/cross
       - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
       - run: ci/build.bash /tmp/cross ${{ matrix.target }}
