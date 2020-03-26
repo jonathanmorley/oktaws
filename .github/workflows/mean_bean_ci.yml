@@ -153,10 +153,11 @@ jobs:
           path: /tmp/
       - name: Build cross image
         run: |
-          test -f cross/Dockerfile.${{ matrix.target }} &&
-          docker build \
-            -t cross:${{ matrix.target }} \
-            -f cross/Dockerfile.${{ matrix.target }} cross
+          if [[ -f cross/Dockerfile.${{ matrix.target }} ]]; then
+            docker build \
+              -t cross:${{ matrix.target }} \
+              -f cross/Dockerfile.${{ matrix.target }} cross
+          fi
       - run: chmod +x /tmp/cross
       - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
       - run: ci/build.bash /tmp/cross ${{ matrix.target }}
@@ -193,10 +194,11 @@ jobs:
           path: /tmp/
       - name: Build cross image
         run: |
-          test -f cross/Dockerfile.${{ matrix.target }} &&
-          docker build \
-            -t cross:${{ matrix.target }} \
-            -f cross/Dockerfile.${{ matrix.target }} cross
+          if [[ -f cross/Dockerfile.${{ matrix.target }} ]]; then
+            docker build \
+              -t cross:${{ matrix.target }} \
+              -f cross/Dockerfile.${{ matrix.target }} cross
+          fi
       - run: chmod +x /tmp/cross
       - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
       - run: ci/build.bash /tmp/cross ${{ matrix.target }}
