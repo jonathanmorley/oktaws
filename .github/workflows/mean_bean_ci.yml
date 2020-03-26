@@ -154,8 +154,8 @@ jobs:
       - name: Build cross image
         run: |
           test -f cross/Dockerfile.${{ matrix.target }} &&
-          docker build
-            -t cross:${{ matrix.target }}
+          docker build \
+            -t cross:${{ matrix.target }} \
             -f cross/Dockerfile.${{ matrix.target }} cross
       - run: chmod +x /tmp/cross
       - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
@@ -194,8 +194,8 @@ jobs:
       - name: Build cross image
         run: |
           test -f cross/Dockerfile.${{ matrix.target }} &&
-          docker build
-            -t cross:${{ matrix.target }}
+          docker build \
+            -t cross:${{ matrix.target }} \
             -f cross/Dockerfile.${{ matrix.target }} cross
       - run: chmod +x /tmp/cross
       - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
