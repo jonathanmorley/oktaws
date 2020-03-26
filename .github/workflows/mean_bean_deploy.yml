@@ -6,7 +6,6 @@ on:
 
 name: Mean Bean Deploy
 env:
-  # TODO: Rename to your binary
   BIN: oktaws
 
 jobs:
