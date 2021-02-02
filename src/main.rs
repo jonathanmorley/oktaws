@@ -251,7 +251,7 @@ fn fetch_credentials(
         &profile.name
     );
 
-    let assumption_response = aws::role::assume_role(role, saml.raw, profile.duration_seconds)
+    let assumption_response = aws::role::assume_role(role, saml.raw, profile.duration_seconds.or(organization.duration_seconds))
         .map_err(|e| format_err!("Error assuming role for profile {} ({})", profile.name, e))?;
 
     let credentials = assumption_response
