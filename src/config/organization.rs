@@ -56,6 +56,7 @@ impl Profile {
 pub struct Organization {
     pub okta_organization: OktaOrganization,
     pub username: String,
+    pub duration_seconds: Option<i64>,
     pub profiles: Vec<Profile>,
 }
 
@@ -98,9 +99,12 @@ where
             None => credentials::get_username(&okta_organization)?,
         };
 
+        let duration_seconds = file_toml.get("duration_seconds").and_then(|u| u.as_integer());
+
         Ok(Organization {
             username,
             profiles,
+            duration_seconds,
             okta_organization,
         })
     }
