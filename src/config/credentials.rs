@@ -1,4 +1,4 @@
-use dialoguer::{Input, PasswordInput};
+use dialoguer::{Input, Password};
 use keyring::Keyring;
 use okta::Organization;
 #[cfg(windows)]
@@ -8,12 +8,14 @@ use username;
 use failure::Error;
 
 pub fn get_username(org: &Organization) -> Result<String, Error> {
-    let mut input = Input::new(&format!("Username for {}", org.base_url));
+    let mut input = Input::<String>::new();
+    input.with_prompt(&format!("Username for {}", org.base_url));
+    
     if let Ok(system_user) = username::get_user_name() {
-        input.default(&system_user);
+        input.default(system_user);
     }
 
-    input.interact().map_err(|e| e.into())
+    input.interact_text().map_err(|e| e.into())
 }
 
 pub fn get_password(
@@ -55,7 +57,7 @@ fn prompt_password(organization: &Organization, username: &str) -> Result<String
     url.set_username(username)
         .map_err(|_| format_err!("Cannot set username for URL"))?;
 
-    PasswordInput::new(&format!("Password for {}", url))
+    Password::new().with_prompt(&format!("Password for {}", url))
         .interact()
         .map_err(|e| e.into())
 }
