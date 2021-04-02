@@ -1,5 +1,4 @@
-[![Build Status](https://travis-ci.org/jonathanmorley/oktaws.svg?branch=master)](https://travis-ci.org/jonathanmorley/oktaws)
-[![Build status](https://ci.appveyor.com/api/projects/status/t78vvs8dmwave53o/branch/master?svg=true)](https://ci.appveyor.com/project/jonathanmorley/oktaws/branch/master)
+[![Build and Test](https://github.com/jonathanmorley/oktaws/actions/workflows/build.yml/badge.svg)](https://github.com/jonathanmorley/oktaws/actions/workflows/build.yml)
 
 # oktaws
 
