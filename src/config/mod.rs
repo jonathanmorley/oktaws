@@ -1,15 +1,16 @@
 pub mod credentials;
 pub mod organization;
 
-use config::organization::Organization;
-use dirs;
-use failure::Error;
+use crate::config::organization::Organization;
+
 use std::env::var as env_var;
 use std::path::Path;
 use std::path::PathBuf;
+
+use dirs;
+use failure::Error;
 use try_from::TryInto;
 use walkdir::WalkDir;
-
 pub struct Config {
     organizations: Vec<Organization>,
 }

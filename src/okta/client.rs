@@ -1,3 +1,7 @@
+use crate::okta::Organization;
+
+use std::collections::HashMap;
+
 use failure::Error;
 use itertools::Itertools;
 use reqwest::header::{HeaderValue, ACCEPT, COOKIE};
@@ -6,9 +10,6 @@ use reqwest::blocking::Response;
 use reqwest::Url;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::collections::HashMap;
-
-use okta::Organization;
 
 pub struct Client {
     client: HttpClient,

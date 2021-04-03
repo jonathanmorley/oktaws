@@ -1,12 +1,12 @@
-use base64::decode;
-use failure::Error;
-use sxd_document::parser;
-use sxd_xpath::{Context, Factory, Value};
+use crate::aws::role::Role;
 
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use aws::role::Role;
+use base64::decode;
+use failure::Error;
+use sxd_document::parser;
+use sxd_xpath::{Context, Factory, Value};
 
 #[derive(Debug)]
 pub struct Response {

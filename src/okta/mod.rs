@@ -4,19 +4,19 @@ pub mod factors;
 pub mod sessions;
 pub mod users;
 
-use failure::{Compat, Error};
-use kuchiki;
-use kuchiki::traits::TendrilSink;
-use okta::auth::LoginRequest;
-use okta::client::Client;
-use regex::Regex;
-use reqwest::Url;
-use serde_str;
-
-use saml::Response as SamlResponse;
+use crate::okta::auth::LoginRequest;
+use crate::okta::client::Client;
+use crate::saml::Response as SamlResponse;
 
 use std::str;
 use std::str::FromStr;
+
+use failure::{Compat, Error};
+use kuchiki;
+use kuchiki::traits::TendrilSink;
+use regex::Regex;
+use reqwest::Url;
+use serde_str;
 
 #[derive(Clone, Debug)]
 pub struct Organization {

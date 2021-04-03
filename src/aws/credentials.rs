@@ -1,8 +1,3 @@
-use dirs;
-use failure::Error;
-use path_abs::PathFile;
-use rusoto_sts::Credentials;
-use serde_ini;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::env::var as env_var;
@@ -12,6 +7,12 @@ use std::io::{Seek, SeekFrom};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str;
+
+use dirs;
+use failure::Error;
+use path_abs::PathFile;
+use rusoto_sts::Credentials;
+use serde_ini;
 use try_from::{TryFrom, TryInto};
 
 #[derive(Debug)]
@@ -136,7 +137,7 @@ impl From<Credentials> for ProfileCredentials {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempfile;
+    use tempfile;
 
     use self::tempfile::Builder;
     use super::*;

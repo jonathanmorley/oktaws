@@ -1,12 +1,13 @@
-use failure::Error;
+use crate::config::credentials;
+use crate::okta::Organization as OktaOrganization;
+
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+use failure::Error;
 use toml;
 use try_from::TryFrom;
-
-use config::credentials;
-use okta::Organization as OktaOrganization;
 
 #[derive(Clone, Debug)]
 pub struct Profile {
