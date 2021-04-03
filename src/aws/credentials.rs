@@ -1,4 +1,4 @@
-use std::collections::btree_map::Entry;
+use std::{collections::btree_map::Entry, convert::{TryFrom, TryInto}};
 use std::collections::BTreeMap;
 use std::env::var as env_var;
 use std::fs::File;
@@ -13,7 +13,6 @@ use failure::Error;
 use path_abs::PathFile;
 use rusoto_sts::Credentials;
 use serde_ini;
-use try_from::{TryFrom, TryInto};
 
 #[derive(Debug)]
 pub struct CredentialsStore {
@@ -69,25 +68,25 @@ impl CredentialsStore {
 }
 
 impl TryFrom<PathBuf> for CredentialsStore {
-    type Err = Error;
+    type Error = Error;
 
-    fn try_from(file_path: PathBuf) -> Result<Self, Self::Err> {
-        (&file_path).try_into()
+    fn try_from(file_path: PathBuf) -> Result<Self, Self::Error> {
+        file_path.as_path().try_into()
     }
 }
 
-impl<'a, T: ?Sized + AsRef<Path>> TryFrom<&'a T> for CredentialsStore {
-    type Err = Error;
+impl TryFrom<&Path> for CredentialsStore {
+    type Error = Error;
 
-    fn try_from(file_path: &'a T) -> Result<Self, Self::Err> {
+    fn try_from(file_path: &Path) -> Result<Self, Self::Error> {
         PathFile::create(&file_path)?.try_into()
     }
 }
 
 impl TryFrom<PathFile> for CredentialsStore {
-    type Err = Error;
+    type Error = Error;
 
-    fn try_from(file_path: PathFile) -> Result<Self, Self::Err> {
+    fn try_from(file_path: PathFile) -> Result<Self, Self::Error> {
         OpenOptions::new()
             .read(true)
             .write(true)
@@ -97,9 +96,9 @@ impl TryFrom<PathFile> for CredentialsStore {
 }
 
 impl TryFrom<File> for CredentialsStore {
-    type Err = Error;
+    type Error = Error;
 
-    fn try_from(mut file: File) -> Result<Self, Self::Err> {
+    fn try_from(mut file: File) -> Result<Self, Self::Error> {
         let credentials = serde_ini::de::from_read(&file)?;
         file.seek(SeekFrom::Start(0))?;
         Ok(CredentialsStore { credentials, file })
