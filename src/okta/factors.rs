@@ -1,11 +1,13 @@
-use failure::Error;
-use okta::auth::LoginResponse;
-use okta::client::Client;
-use okta::Links;
-use okta::Links::Multi;
-use okta::Links::Single;
+use crate::okta::auth::LoginResponse;
+use crate::okta::client::Client;
+use crate::okta::Links;
+use crate::okta::Links::Multi;
+use crate::okta::Links::Single;
+
 use std::collections::HashMap;
 use std::fmt;
+
+use failure::Error;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase", tag = "factorType")]
@@ -167,7 +169,7 @@ pub enum FactorVerificationRequest {
 }
 
 impl fmt::Display for Factor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Factor::Push { .. } => write!(f, "Okta Verify Push"),
             Factor::Sms { ref profile, .. } => write!(f, "Okta SMS to {}", profile.phone_number),

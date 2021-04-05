@@ -1,12 +1,12 @@
-use failure::Error;
-use std::fs::File;
+use crate::config::credentials;
+use crate::okta::Organization as OktaOrganization;
+
+use std::{convert::TryFrom, fs::File};
 use std::io::Read;
 use std::path::Path;
-use toml;
-use try_from::TryFrom;
 
-use config::credentials;
-use okta::Organization as OktaOrganization;
+use failure::Error;
+use toml;
 
 #[derive(Clone, Debug)]
 pub struct Profile {
@@ -60,19 +60,16 @@ pub struct Organization {
     pub profiles: Vec<Profile>,
 }
 
-impl<'a, P> TryFrom<&'a P> for Organization
-where
-    P: ?Sized + AsRef<Path>,
+impl TryFrom<&Path> for Organization
 {
-    type Err = Error;
+    type Error = Error;
 
-    fn try_from(path: &'a P) -> Result<Self, Self::Err> {
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
         let filename = path
-            .as_ref()
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
             .ok_or_else(|| {
-                format_err!("Organization name not parseable from {:?}", path.as_ref())
+                format_err!("Organization name not parseable from {:?}", path)
             })?;
 
         let file_contents = File::open(path)?

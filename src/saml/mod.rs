@@ -1,12 +1,12 @@
-use base64::decode;
-use failure::Error;
-use sxd_document::parser;
-use sxd_xpath::{Context, Factory, Value};
+use crate::aws::role::Role;
 
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use aws::role::Role;
+use base64::decode;
+use failure::Error;
+use sxd_document::parser;
+use sxd_xpath::{Context, Factory, Value};
 
 #[derive(Debug)]
 pub struct Response {
@@ -50,9 +50,11 @@ impl FromStr for Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::encode;
+
     use std::fs::File;
     use std::io::Read;
+
+    use base64::encode;
 
     #[test]
     fn parse_response() {

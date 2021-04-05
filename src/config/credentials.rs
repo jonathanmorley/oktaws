@@ -1,11 +1,11 @@
+use crate::okta::Organization;
+
 use dialoguer::{Input, Password};
+use failure::Error;
 use keyring::Keyring;
-use okta::Organization;
 #[cfg(windows)]
 use rpassword;
 use username;
-
-use failure::Error;
 
 pub fn get_username(org: &Organization) -> Result<String, Error> {
     let mut input = Input::<String>::new();

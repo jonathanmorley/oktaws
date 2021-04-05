@@ -1,62 +1,41 @@
-extern crate base64;
-extern crate dialoguer;
-#[macro_use]
-extern crate failure;
-extern crate keyring;
-extern crate kuchiki;
-#[macro_use]
-extern crate log;
-extern crate path_abs;
-extern crate pretty_env_logger;
-extern crate regex;
-extern crate reqwest;
 #[cfg(windows)]
 extern crate rpassword;
-extern crate rusoto_core;
-extern crate rusoto_credential;
-extern crate rusoto_sts;
+
+#[macro_use]
+extern crate failure;
+#[macro_use]
+extern crate log;
 #[macro_use]
 extern crate serde_derive;
-extern crate dirs;
-extern crate glob;
-extern crate rayon;
-extern crate serde;
-extern crate serde_ini;
-extern crate serde_str;
-extern crate structopt;
 #[allow(unused_imports)]
 #[macro_use]
 extern crate structopt_derive;
-extern crate itertools;
-extern crate sxd_document;
-extern crate sxd_xpath;
-extern crate toml;
-extern crate try_from;
-extern crate username;
-extern crate walkdir;
 
 mod aws;
 mod config;
 mod okta;
 mod saml;
 
-use aws::credentials::CredentialsStore;
-use aws::role::Role;
-use config::credentials;
-use config::organization::Organization;
-use config::organization::Profile;
-use config::Config;
-use failure::Error;
-use glob::Pattern;
-use okta::auth::LoginRequest;
-use okta::client::Client as OktaClient;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-use rusoto_sts::Credentials;
+use crate::aws::credentials::CredentialsStore;
+use crate::aws::role::Role;
+use crate::config::credentials;
+use crate::config::organization::Organization;
+use crate::config::organization::Profile;
+use crate::config::Config;
+use crate::okta::auth::LoginRequest;
+use crate::okta::client::Client as OktaClient;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::sync::{Arc, Mutex};
+
+use failure::Error;
+use glob::Pattern;
+use pretty_env_logger;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+use rusoto_sts::Credentials;
 use structopt::StructOpt;
 
 #[derive(Clone, StructOpt, Debug)]

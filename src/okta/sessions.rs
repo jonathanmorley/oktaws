@@ -1,10 +1,10 @@
-use failure::Error;
-use itertools::Itertools;
-
-use okta::client::Client;
+use crate::okta::client::Client;
 
 use std::collections::HashSet;
 use std::fmt;
+
+use failure::Error;
+use itertools::Itertools;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -26,7 +26,7 @@ pub enum SessionProperties {
 }
 
 impl fmt::Display for SessionProperties {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SessionProperties::CookieToken => write!(f, "cookieToken"),
             SessionProperties::CookieTokenUrl => write!(f, "cookieTokenUrl"),
@@ -54,12 +54,14 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
+    use crate::aws::role::Role;
+    use crate::saml::Response;
     use super::*;
-    use aws::role::Role;
-    use base64::encode;
-    use saml::Response;
+
     use std::fs::File;
     use std::io::Read;
+
+    use base64::encode;
 
     #[test]
     fn parse_response() {
