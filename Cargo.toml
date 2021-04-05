@@ -1,6 +1,6 @@
 [package]
 name = "oktaws"
-version = "0.11.0"
+version = "0.11.1"
 authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2018"
