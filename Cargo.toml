@@ -36,7 +36,7 @@ dirs = "3"
 itertools = "0.10"
 
 [target.'cfg(windows)'.dependencies]
-rpassword = "2"
+rpassword = "5"
 
 [target.'cfg(linux)'.dependencies]
 openssl = { version = '0.10', features = ["vendored"] }
