@@ -50,9 +50,11 @@ impl FromStr for Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::encode;
+
     use std::fs::File;
     use std::io::Read;
+
+    use base64::encode;
 
     #[test]
     fn parse_response() {

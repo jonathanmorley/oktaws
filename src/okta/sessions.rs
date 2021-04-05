@@ -54,12 +54,14 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::aws::role::Role;
-    use base64::encode;
     use crate::saml::Response;
+    use super::*;
+
     use std::fs::File;
     use std::io::Read;
+
+    use base64::encode;
 
     #[test]
     fn parse_response() {

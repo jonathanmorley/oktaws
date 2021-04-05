@@ -136,12 +136,13 @@ impl From<Credentials> for ProfileCredentials {
 
 #[cfg(test)]
 mod tests {
-    use tempfile;
-
-    use self::tempfile::Builder;
     use super::*;
+
     use std::fs::File;
     use std::io::{Read, Seek, SeekFrom, Write};
+
+    use tempfile;
+    use tempfile::Builder;
 
     #[test]
     fn parse_sts() {
