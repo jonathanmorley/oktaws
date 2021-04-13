@@ -43,3 +43,5 @@ openssl = { version = '0.10', features = ["vendored"] }
 
 [dev-dependencies]
 tempfile = "3"
+assert_cmd = "1"
+predicates = "1"
