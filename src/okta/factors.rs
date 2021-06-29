@@ -7,7 +7,9 @@ use crate::okta::Links::Single;
 use std::collections::HashMap;
 use std::fmt;
 
+use dialoguer::Password;
 use failure::Error;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase", tag = "factorType")]
@@ -163,7 +165,10 @@ pub enum FactorVerificationRequest {
     #[serde(rename_all = "camelCase")]
     Call { pass_code: Option<String> },
     #[serde(rename_all = "camelCase")]
-    Totp { pass_code: String },
+    Totp {
+        state_token: String, 
+        pass_code: String
+    },
     #[serde(rename_all = "camelCase")]
     Token { pass_code: String },
 }
@@ -187,20 +192,54 @@ impl Client {
     pub fn verify(
         &self,
         factor: &Factor,
-        request: &FactorVerificationRequest,
+        state_token: String,
     ) -> Result<LoginResponse, Error> {
-        match *factor {
-            Factor::Sms { ref links, .. } => {
+        match factor {
+            Factor::Sms { links, .. } => {
                 let url = match links.get("verify").unwrap() {
                     Single(ref link) => link.href.clone(),
                     Multi(ref links) => links.first().unwrap().href.clone(),
                 };
 
-                self.post_absolute(url, request)
+                let request = FactorVerificationRequest::Sms {
+                    state_token,
+                    pass_code: None,
+                };
+
+                // Trigger sending of SMS
+                let response: LoginResponse = self.post_absolute(url.clone(), &request)?;
+
+                let state_token = response
+                    .state_token
+                    .ok_or_else(|| format_err!("No state token found in factor prompt response"))?;
+
+                let request = FactorVerificationRequest::Sms {
+                    state_token,
+                    pass_code: Some(Password::new().with_prompt(factor.to_string())
+                        .interact()?)
+                };
+
+                self.post_absolute(url, &request)
+            }
+            Factor::Totp { links, .. } => {
+                let mut url = match links.get("verify").unwrap() {
+                    Single(ref link) => link.href.clone(),
+                    Multi(ref links) => links.first().unwrap().href.clone(),
+                };
+
+                url.set_query(Some("rememberDevice"));
+
+                let request = FactorVerificationRequest::Totp {
+                    state_token,
+                    pass_code: Password::new().with_prompt(factor.to_string())
+                        .interact()?
+                };
+
+                self.post_absolute(url, &request)
             }
             _ => {
                 // TODO
-                bail!("Unsupported MFA method")
+                bail!("Unsupported MFA method ({})", factor)
             }
         }
     }

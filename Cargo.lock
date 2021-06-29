@@ -127,6 +127,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base-x"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4521f3e3d031370679b3b140beb36dfe4801b09ac77e30c61941f97df3ef28b"
+
+[[package]]
 name = "base64"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -256,7 +262,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
- "time",
+ "time 0.1.43",
  "winapi 0.3.9",
 ]
 
@@ -294,6 +300,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "confy"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2913470204e9e8498a0f31f17f90a0de801ae92c8c5ac18c49af4819e6786697"
+dependencies = [
+ "directories",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "console"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -309,6 +326,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_fn"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f92cfa0fd5690b3cf8c1ef2cabbd9b7ef22fa53cf5e1f92b05103f6d5d1cf6e7"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -319,6 +342,33 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "cookie"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03a5d7b21829bc7b4bf4754a978a241ae54ea55a40f92bb20216e54096f4b951"
+dependencies = [
+ "percent-encoding 2.1.0",
+ "time 0.2.27",
+ "version_check",
+]
+
+[[package]]
+name = "cookie_store"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3818dfca4b0cb5211a659bbcbb94225b7127407b2b135e650d717bfb78ab10d3"
+dependencies = [
+ "cookie",
+ "idna 0.2.2",
+ "log",
+ "publicsuffix",
+ "serde",
+ "serde_json",
+ "time 0.2.27",
+ "url 2.2.1",
+]
 
 [[package]]
 name = "core-foundation"
@@ -550,6 +600,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "directories"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "551a778172a450d7fc12e629ca3b0428d00f6afa9a43da1b630d54604e97371c"
+dependencies = [
+ "cfg-if 0.1.10",
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -579,6 +639,12 @@ dependencies = [
  "redox_users",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "discard"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212d0f5754cb6769937f4501cc0e67f4f4483c8d2c3e1e922ee9edbe4ab4c7c0"
 
 [[package]]
 name = "dtoa"
@@ -1035,7 +1101,7 @@ dependencies = [
  "log",
  "net2",
  "rustc_version",
- "time",
+ "time 0.1.43",
  "tokio 0.1.22",
  "tokio-buf",
  "tokio-executor",
@@ -1524,6 +1590,7 @@ name = "oktaws"
 version = "0.12.0"
 dependencies = [
  "base64 0.13.0",
+ "confy",
  "dialoguer",
  "dirs 3.0.1",
  "failure",
@@ -1543,15 +1610,13 @@ dependencies = [
  "rusoto_credential",
  "rusoto_sts",
  "serde",
- "serde_derive",
  "serde_ini",
- "serde_str",
  "structopt",
  "structopt-derive",
  "sxd-document",
  "sxd-xpath",
  "tempfile",
- "toml",
+ "url 2.2.1",
  "username",
  "walkdir",
 ]
@@ -1821,6 +1886,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "publicsuffix"
+version = "1.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95b4ce31ff0a27d93c8de1849cf58162283752f065a90d508f1105fa6c9a213f"
+dependencies = [
+ "idna 0.2.2",
+ "url 2.2.1",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2033,6 +2108,8 @@ checksum = "bf12057f289428dbf5c591c74bf10392e4a8003f993405a902f20117019022d4"
 dependencies = [
  "base64 0.13.0",
  "bytes 1.0.1",
+ "cookie",
+ "cookie_store",
  "encoding_rs",
  "futures-core",
  "futures-util",
@@ -2051,6 +2128,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded 0.7.0",
+ "time 0.2.27",
  "tokio 1.4.0",
  "tokio-native-tls",
  "url 2.2.1",
@@ -2095,7 +2173,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "sha2 0.7.1",
- "time",
+ "time 0.1.43",
  "tokio 0.1.22",
  "tokio-timer",
  "url 1.7.2",
@@ -2296,6 +2374,9 @@ name = "serde"
 version = "1.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "558dc50e1a5a5fa7112ca2ce4effcb321b0300c0d4ccf0776a9f60cd89031171"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_derive"
@@ -2327,15 +2408,6 @@ checksum = "799e97dc9fdae36a5c8b8f2cae9ce2ee9fdce2058c57a93e6099d919fd982f79"
 dependencies = [
  "itoa",
  "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde_str"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a26e850fb9dfec51e9fea9dd582030761a4ef011d31b32d904f740961bd16a48"
-dependencies = [
  "serde",
 ]
 
@@ -2372,6 +2444,12 @@ dependencies = [
  "nodrop",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "sha1"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2579985fda508104f7587689507983eadd6a6e84dd35d6d115361f530916fa0d"
 
 [[package]]
 name = "sha2"
@@ -2442,10 +2520,68 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "standback"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e113fb6f3de07a243d434a56ec6f186dfd51cb08448239fe7bcae73f87ff28ff"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "std_prelude"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8207e78455ffdf55661170876f88daf85356e4edd54e0a3dbc79586ca1e50cbe"
+
+[[package]]
+name = "stdweb"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d022496b16281348b52d0e30ae99e01a73d737b2f45d38fed4edf79f9325a1d5"
+dependencies = [
+ "discard",
+ "rustc_version",
+ "stdweb-derive",
+ "stdweb-internal-macros",
+ "stdweb-internal-runtime",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "stdweb-derive"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c87a60a40fccc84bef0652345bbbbbe20a605bf5d0ce81719fc476f5c03b50ef"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_derive",
+ "syn",
+]
+
+[[package]]
+name = "stdweb-internal-macros"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58fa5ff6ad0d98d1ffa8cb115892b6e69d67799f6763e162a1c9db421dc22e11"
+dependencies = [
+ "base-x",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha1",
+ "syn",
+]
+
+[[package]]
+name = "stdweb-internal-runtime"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
 name = "stfu8"
@@ -2647,6 +2783,44 @@ checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
 dependencies = [
  "libc",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "time"
+version = "0.2.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4752a97f8eebd6854ff91f1c1824cd6160626ac4bd44287f7f4ea2035a02a242"
+dependencies = [
+ "const_fn",
+ "libc",
+ "standback",
+ "stdweb",
+ "time-macros",
+ "version_check",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "time-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "957e9c6e26f12cb6d0dd7fc776bb67a706312e7299aed74c8dd5b17ebb27e2f1"
+dependencies = [
+ "proc-macro-hack",
+ "time-macros-impl",
+]
+
+[[package]]
+name = "time-macros-impl"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3c141a1b43194f3f56a1411225df8646c55781d5f26db825b3d98507eb482f"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "standback",
+ "syn",
 ]
 
 [[package]]
@@ -3012,6 +3186,7 @@ dependencies = [
  "idna 0.2.2",
  "matches",
  "percent-encoding 2.1.0",
+ "serde",
 ]
 
 [[package]]

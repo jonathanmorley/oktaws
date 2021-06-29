@@ -13,6 +13,7 @@ use failure::Error;
 use path_abs::PathFile;
 use rusoto_sts::Credentials;
 use serde_ini;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub struct CredentialsStore {

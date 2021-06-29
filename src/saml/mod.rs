@@ -57,34 +57,6 @@ mod tests {
     use base64::encode;
 
     #[test]
-    fn parse_response() {
-        let mut f = File::open("tests/fixtures/saml_response.xml").expect("file not found");
-
-        let mut saml_xml = String::new();
-        f.read_to_string(&mut saml_xml)
-            .expect("something went wrong reading the file");
-
-        let saml_base64 = encode(&saml_xml);
-
-        let response: Response = saml_base64.parse().unwrap();
-
-        let expected_roles = vec![
-            Role {
-                provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
-                role_arn: String::from("arn:aws:iam::123456789012:role/role1"),
-            },
-            Role {
-                provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
-                role_arn: String::from("arn:aws:iam::123456789012:role/role2"),
-            },
-        ]
-        .into_iter()
-        .collect::<HashSet<Role>>();
-
-        assert_eq!(response.roles, expected_roles);
-    }
-
-    #[test]
     fn parse_response_invalid_no_role() {
         let mut f =
             File::open("tests/fixtures/saml_response_invalid_no_role.xml").expect("file not found");

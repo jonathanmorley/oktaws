@@ -1,15 +1,14 @@
 use crate::okta::client::Client;
 
 use failure::Error;
-use reqwest::Url;
-use serde_str;
+use serde::Deserialize;
+use url::Url;
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AppLink {
     id: String,
     pub label: String,
-    #[serde(with = "serde_str")]
     pub link_url: Url,
     pub app_name: String,
 }

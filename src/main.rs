@@ -5,8 +5,6 @@ extern crate rpassword;
 extern crate failure;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate serde_derive;
 #[allow(unused_imports)]
 #[macro_use]
 extern crate structopt_derive;
@@ -101,7 +99,7 @@ fn main() -> Result<(), Error> {
             organization.okta_organization.name
         );
 
-        let mut okta_client = OktaClient::new(organization.okta_organization.clone());
+        let mut okta_client = OktaClient::new(organization.okta_organization.clone())?;
         let username = organization.username.to_owned();
         let password =
             credentials::get_password(&organization.okta_organization, &username, opt.force_new)?;
@@ -111,8 +109,7 @@ fn main() -> Result<(), Error> {
             password.clone(),
         ))?;
 
-        let session_id = okta_client.new_session(session_token, &HashSet::new())?.id;
-        okta_client.set_session_id(session_id.clone());
+        okta_client.new_session(session_token, &HashSet::new())?;
 
         let profiles = organization
             .profiles
@@ -132,29 +129,29 @@ fn main() -> Result<(), Error> {
         let credentials_folder = |mut acc: HashMap<String, Credentials>,
                                   profile: &Profile|
          -> Result<HashMap<String, Credentials>, Error> {
-            let credentials = fetch_credentials(&okta_client, &organization, &profile)?;
+            let credentials = fetch_credentials(&mut okta_client, &organization, &profile)?;
             acc.insert(profile.name.clone(), credentials);
 
             Ok(acc)
         };
 
-        let org_credentials: HashMap<_, _> = if opt.asynchronous {
-            profiles
-                .par_iter()
-                .try_fold_with(HashMap::new(), credentials_folder)
-                .try_reduce_with(|mut a, b| -> Result<_, Error> {
-                    a.extend(b.into_iter());
-                    Ok(a)
-                })
-                .unwrap_or_else(|| {
-                    println!("No profiles");
-                    Ok(HashMap::new())
-                })?
-        } else {
+        let org_credentials: HashMap<_, _> = 
+        //     profiles
+        //         .par_iter()
+        //         .try_fold_with(HashMap::new(), credentials_folder)
+        //         .try_reduce_with(|mut a, b| -> Result<_, Error> {
+        //             a.extend(b.into_iter());
+        //             Ok(a)
+        //         })
+        //         .unwrap_or_else(|| {
+        //             println!("No profiles");
+        //             Ok(HashMap::new())
+        //         })?
+        // } else {
             profiles
                 .iter()
-                .try_fold(HashMap::new(), credentials_folder)?
-        };
+                .try_fold(HashMap::new(), credentials_folder)?;
+        // };
 
         for (name, creds) in org_credentials {
             credentials_store
@@ -174,7 +171,7 @@ fn main() -> Result<(), Error> {
 }
 
 fn fetch_credentials(
-    client: &OktaClient,
+    client: &mut OktaClient,
     organization: &Organization,
     profile: &Profile,
 ) -> Result<Credentials, Error> {
@@ -230,7 +227,7 @@ fn fetch_credentials(
         &profile.name
     );
 
-    let assumption_response = aws::role::assume_role(role, saml.raw, profile.duration_seconds.or(organization.duration_seconds))
+    let assumption_response = aws::role::assume_role(role, saml.raw, profile.duration_seconds)
         .map_err(|e| format_err!("Error assuming role for profile {} ({})", profile.name, e))?;
 
     let credentials = assumption_response

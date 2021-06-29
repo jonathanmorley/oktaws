@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use failure::Error;
+use serde::{Deserialize, Serialize};
 use itertools::Itertools;
 
 #[derive(Serialize, Debug)]
@@ -14,8 +15,17 @@ pub struct SessionRequest {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionResponse {
+pub struct Session {
     pub id: String,
+    pub login: String,
+    pub user_id: String,
+    pub expires_at: String,
+    pub status: SessionStatus,
+    pub last_password_verification: Option<String>,
+    pub last_factor_verification: Option<String>,
+    pub amr: Vec<AuthenticationMethod>,
+    pub idp: IdentityProvider,
+    pub mfa_active: bool
 }
 
 #[allow(dead_code)]
@@ -34,13 +44,65 @@ impl fmt::Display for SessionProperties {
     }
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SessionStatus {
+    Active,
+    MfaRequired,
+    MfaEnroll
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum AuthenticationMethod {
+    #[serde(rename = "pwd")]
+    PasswordAuthentication,
+    #[serde(rename = "swk")]
+    ProofOfPossessionOfSoftwareKey,
+    #[serde(rename = "hwk")]
+    ProofOfPossessionOfHardwareKey,
+    #[serde(rename = "otp")]
+    OneTimePassword,
+    Sms,
+    #[serde(rename = "tel")]
+    TelephoneCall,
+    #[serde(rename = "sms")]
+    Geolocation,
+    #[serde(rename = "fpt")]
+    Fingerprint,
+    #[serde(rename = "kba")]
+    KnowledgeBasedAuthentication,
+    #[serde(rename = "mfa")]
+    MultipleFactorAuthentication,
+    #[serde(rename = "mca")]
+    MultipleChannelAuthentication,
+    #[serde(rename = "sc")]
+    SmartCardAuthentication
+}
+
+#[derive(Deserialize, Debug)]
+pub struct IdentityProvider {
+    id: String,
+    r#type: IdentityProviderType
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum IdentityProviderType {
+    Okta,
+    ActiveDirectory,
+    Ldap,
+    Federation,
+    Social
+}
+
 impl Client {
     pub fn new_session(
-        &self,
+        &mut self,
         session_token: String,
         additional_fields: &HashSet<SessionProperties>,
-    ) -> Result<SessionResponse, Error> {
-        self.post(
+    ) -> Result<(), Error> {
+        let session: Session = self.post(
             &format!(
                 "api/v1/sessions?additionalFields={}",
                 additional_fields.iter().join(",")
@@ -48,65 +110,15 @@ impl Client {
             &SessionRequest {
                 session_token: Some(session_token),
             },
-        )
-    }
-}
+        )?;
 
-#[cfg(test)]
-mod tests {
-    use crate::aws::role::Role;
-    use crate::saml::Response;
-    use super::*;
+        self.set_session_id(session.id);
 
-    use std::fs::File;
-    use std::io::Read;
-
-    use base64::encode;
-
-    #[test]
-    fn parse_response() {
-        let mut f = File::open("tests/fixtures/saml_response.xml").expect("file not found");
-
-        let mut saml_xml = String::new();
-        f.read_to_string(&mut saml_xml)
-            .expect("something went wrong reading the file");
-
-        let saml_base64 = encode(&saml_xml);
-
-        let response: Response = saml_base64.parse().unwrap();
-
-        let expected_roles = vec![
-            Role {
-                provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
-                role_arn: String::from("arn:aws:iam::123456789012:role/role1"),
-            },
-            Role {
-                provider_arn: String::from("arn:aws:iam::123456789012:saml-provider/okta-idp"),
-                role_arn: String::from("arn:aws:iam::123456789012:role/role2"),
-            },
-        ]
-        .into_iter()
-        .collect::<HashSet<Role>>();
-
-        assert_eq!(response.roles, expected_roles);
+        Ok(())
     }
 
-    #[test]
-    fn parse_response_invalid_no_role() {
-        let mut f =
-            File::open("tests/fixtures/saml_response_invalid_no_role.xml").expect("file not found");
-
-        let mut saml_xml = String::new();
-        f.read_to_string(&mut saml_xml)
-            .expect("something went wrong reading the file");
-
-        let saml_base64 = encode(&saml_xml);
-
-        let response: Error = saml_base64.parse::<Response>().unwrap_err();
-
-        assert_eq!(
-            response.to_string(),
-            "Not enough elements in arn:aws:iam::123456789012:saml-provider/okta-idp"
-        );
+    pub fn get_current_session(&self) -> Result<Session, Error> {
+        let session_id = self.cookies.get("sid").ok_or(format_err!("No Session ID in client"))?;
+        self.get(&format!("api/v1/sessions/{}", session_id))
     }
 }

@@ -1,24 +1,28 @@
 use crate::okta::client::Client;
-use crate::okta::factors::{Factor, FactorVerificationRequest};
+use crate::okta::factors::Factor;
 use crate::okta::users::User;
 use crate::okta::Links;
 
 use dialoguer;
-use dialoguer::Input;
 use failure::Error;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
-    username: Option<String>,
+    audience: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    context: Option<Context>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<Options>,
     #[serde(skip_serializing_if = "Option::is_none")]
     password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    relay_state: Option<String>,
+    token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    options: Option<Options>,
+    username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     state_token: Option<String>,
 }
@@ -26,20 +30,24 @@ pub struct LoginRequest {
 impl LoginRequest {
     pub fn from_credentials(username: String, password: String) -> Self {
         Self {
-            username: Some(username),
-            password: Some(password),
-            relay_state: None,
+            audience: None,
+            context: None,
             options: None,
-            state_token: None,
+            password: Some(password),
+            token: None,
+            username: Some(username),
+            state_token: None
         }
     }
 
     pub fn from_state_token(token: String) -> Self {
         Self {
-            username: None,
-            password: None,
-            relay_state: None,
+            audience: None,
+            context: None,
             options: None,
+            password: None,
+            token: None,
+            username: None,
             state_token: Some(token),
         }
     }
@@ -52,10 +60,16 @@ struct Options {
     warn_before_password_expired: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Context {
+    device_token: String
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
-    state_token: Option<String>,
+    pub state_token: Option<String>,
     pub session_token: Option<String>,
     expires_at: String,
     status: LoginState,
@@ -112,22 +126,22 @@ impl Client {
         match response.status {
             LoginState::Success => Ok(response.session_token.unwrap()),
             LoginState::MfaRequired => {
-                info!("MFA required");
-
                 let factors = response.embedded.unwrap().factors;
 
                 let factor = match factors.len() {
-                    0 => bail!("MFA required, and no available factors"),
+                    0 => bail!("MFA is required, but the user has no enrolled factors"),
                     1 => {
-                        info!("Only one factor available, using it");
+                        info!("Only one MFA option is available ({}), using it", factors[0]);
                         &factors[0]
                     }
                     _ => {
-                        let mut menu = dialoguer::Select::new();
-                        for factor in &factors {
-                            menu.item(&factor.to_string());
-                        }
-                        &factors[menu.interact()?]
+                        let selection = dialoguer::Select::new()
+                            .with_prompt("Choose MFA Option")
+                            .items(&factors)
+                            .default(0)
+                            .interact()?;
+
+                        &factors[selection]
                     }
                 };
 
@@ -137,39 +151,14 @@ impl Client {
                     .state_token
                     .ok_or_else(|| format_err!("No state token found in response"))?;
 
-                let factor_prompt_response = self.verify(
-                    &factor,
-                    &FactorVerificationRequest::Sms {
-                        state_token,
-                        pass_code: None,
-                    },
-                )?;
-
-                trace!("Factor Prompt Response: {:?}", factor_prompt_response);
-
-                let state_token = factor_prompt_response
-                    .state_token
-                    .ok_or_else(|| format_err!("No state token found in factor prompt response"))?;
-
-                let mfa_code = Input::<String>::new()
-                    .with_prompt("MFA response")
-                    .interact_text()?;
-
-                let factor_provided_response = self.verify(
-                    &factor,
-                    &FactorVerificationRequest::Sms {
-                        state_token,
-                        pass_code: Some(mfa_code),
-                    },
-                )?;
+                let factor_provided_response = self.verify(&factor, state_token)?;
 
                 trace!("Factor Provided Response: {:?}", factor_provided_response);
 
                 Ok(factor_provided_response.session_token.unwrap())
             }
             _ => {
-                println!("Resp: {:?}", response);
-                bail!("Non MFA")
+                bail!("Unknown error encountered during login");
             }
         }
     }
