@@ -20,17 +20,14 @@ use crate::config::credentials;
 use crate::config::organization::Organization;
 use crate::config::organization::Profile;
 use crate::config::Config;
-use crate::okta::auth::LoginRequest;
 use crate::okta::client::Client as OktaClient;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::env;
 use std::sync::{Arc, Mutex};
 
 use failure::Error;
 use glob::Pattern;
-use pretty_env_logger;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rusoto_sts::Credentials;
@@ -98,18 +95,11 @@ fn main() -> Result<(), Error> {
             "Evaluating profiles in {}",
             organization.okta_organization.name
         );
-
-        let mut okta_client = OktaClient::new(organization.okta_organization.clone())?;
+        
         let username = organization.username.to_owned();
         let password =
             credentials::get_password(&organization.okta_organization, &username, opt.force_new)?;
-
-        let session_token = okta_client.get_session_token(&LoginRequest::from_credentials(
-            username.clone(),
-            password.clone(),
-        ))?;
-
-        okta_client.new_session(session_token, &HashSet::new())?;
+        let okta_client = OktaClient::new(organization.okta_organization.clone(), username.clone(), password.clone())?;
 
         let profiles = organization
             .profiles
@@ -129,29 +119,29 @@ fn main() -> Result<(), Error> {
         let credentials_folder = |mut acc: HashMap<String, Credentials>,
                                   profile: &Profile|
          -> Result<HashMap<String, Credentials>, Error> {
-            let credentials = fetch_credentials(&mut okta_client, &organization, &profile)?;
+            let credentials = fetch_credentials(&okta_client, &organization, &profile)?;
             acc.insert(profile.name.clone(), credentials);
 
             Ok(acc)
         };
 
-        let org_credentials: HashMap<_, _> = 
-        //     profiles
-        //         .par_iter()
-        //         .try_fold_with(HashMap::new(), credentials_folder)
-        //         .try_reduce_with(|mut a, b| -> Result<_, Error> {
-        //             a.extend(b.into_iter());
-        //             Ok(a)
-        //         })
-        //         .unwrap_or_else(|| {
-        //             println!("No profiles");
-        //             Ok(HashMap::new())
-        //         })?
-        // } else {
+        let org_credentials: HashMap<_, _> = if opt.asynchronous {
+            profiles
+                .par_iter()
+                .try_fold_with(HashMap::new(), credentials_folder)
+                .try_reduce_with(|mut a, b| -> Result<_, Error> {
+                    a.extend(b.into_iter());
+                    Ok(a)
+                })
+                .unwrap_or_else(|| {
+                    println!("No profiles");
+                    Ok(HashMap::new())
+                })?
+        } else {
             profiles
                 .iter()
-                .try_fold(HashMap::new(), credentials_folder)?;
-        // };
+                .try_fold(HashMap::new(), credentials_folder)?
+        };
 
         for (name, creds) in org_credentials {
             credentials_store
@@ -171,7 +161,7 @@ fn main() -> Result<(), Error> {
 }
 
 fn fetch_credentials(
-    client: &mut OktaClient,
+    client: &OktaClient,
     organization: &Organization,
     profile: &Profile,
 ) -> Result<Credentials, Error> {

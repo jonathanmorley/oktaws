@@ -12,7 +12,6 @@ use std::str;
 use std::str::FromStr;
 
 use failure::{Compat, Error};
-use kuchiki;
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -57,7 +56,7 @@ pub struct Hint {
 }
 
 impl Client {
-    pub fn get_saml_response(&mut self, app_url: Url) -> Result<SamlResponse, Error> {
+    pub fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse, Error> {
         let response = self.get_response(app_url.clone())?.text()?;
 
         trace!("SAML response doc for app {:?}: {}", &app_url, &response);
@@ -66,11 +65,11 @@ impl Client {
             debug!("No SAML found for app {:?}, will re-login", &app_url);
 
             let state_token = extract_state_token(&response)?;
-            self.cookies.insert(String::from("oktaStateToken"), state_token);
-            return self.get_saml_response(app_url)
+            self.get_session_token(&LoginRequest::from_state_token(state_token))?;
+            self.get_saml_response(app_url)
+        } else {
+            extract_saml_response(response).map_err(|e| e.into())
         }
-
-        extract_saml_response(response.clone()).map_err(|e| e.into())
     }
 }
 

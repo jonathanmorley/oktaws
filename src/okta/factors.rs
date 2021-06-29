@@ -3,9 +3,12 @@ use crate::okta::client::Client;
 use crate::okta::Links;
 use crate::okta::Links::Multi;
 use crate::okta::Links::Single;
+use crate::okta::auth::FactorResult;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::thread::sleep;
+use std::time::Duration;
 
 use dialoguer::Password;
 use failure::Error;
@@ -155,6 +158,10 @@ pub struct WebFactorProfile {
 #[serde(untagged)]
 pub enum FactorVerificationRequest {
     #[serde(rename_all = "camelCase")]
+    Push {
+        state_token: String
+    },
+    #[serde(rename_all = "camelCase")]
     Question { answer: String },
     #[serde(rename_all = "camelCase")]
     Sms {
@@ -180,7 +187,7 @@ impl fmt::Display for Factor {
             Factor::Sms { ref profile, .. } => write!(f, "Okta SMS to {}", profile.phone_number),
             Factor::Call { ref profile, .. } => write!(f, "Okta Call to {}", profile.phone_number),
             Factor::Token { .. } => write!(f, "Okta One-time Password"),
-            Factor::Totp { .. } => write!(f, "Okta Time-based One-time Password"),
+            Factor::Totp { ref provider, .. } => write!(f, "Okta Time-based One-time Password (from {:?})", provider),
             Factor::Hotp { .. } => write!(f, "Okta Hardware One-time Password"),
             Factor::Question { ref profile, .. } => write!(f, "Question: {}", profile.question),
             Factor::Web { .. } => write!(f, "Okta Web"),
@@ -195,6 +202,27 @@ impl Client {
         state_token: String,
     ) -> Result<LoginResponse, Error> {
         match factor {
+            Factor::Push { links, .. } => {
+                let url = match links.get("verify").unwrap() {
+                    Single(ref link) => link.href.clone(),
+                    Multi(ref links) => links.first().unwrap().href.clone(),
+                };
+
+                let request = FactorVerificationRequest::Push { state_token };
+
+                // Trigger sending of Push
+                let mut response: LoginResponse = self.post_absolute(url.clone(), &request)?;
+
+                while Some(FactorResult::Waiting) == response.factor_result {
+                    sleep(Duration::from_millis(100));
+                    response = self.post_absolute(url.clone(), &request)?;
+                }
+
+                match response.factor_result {
+                    None | Some(FactorResult::Success) => Ok(response),
+                    Some(result) => bail!("Failed to verify with Push MFA ({:?})", result)
+                }
+            }
             Factor::Sms { links, .. } => {
                 let url = match links.get("verify").unwrap() {
                     Single(ref link) => link.href.clone(),

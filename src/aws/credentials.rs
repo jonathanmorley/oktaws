@@ -102,7 +102,7 @@ impl TryFrom<File> for CredentialsStore {
     fn try_from(mut file: File) -> Result<Self, Self::Error> {
         let credentials = serde_ini::de::from_read(&file)?;
         file.seek(SeekFrom::Start(0))?;
-        Ok(CredentialsStore { credentials, file })
+        Ok(CredentialsStore { file, credentials })
     }
 }
 

@@ -49,9 +49,9 @@ impl Profile {
         let full_profile_config: FullProfileConfig = profile_config.to_owned().into();
         
         Ok(Profile {
-            name: name,
+            name,
             application_name: full_profile_config.application,
-            role: full_profile_config.role.or(default_role).ok_or(err_msg("No role found"))?,
+            role: full_profile_config.role.or(default_role).ok_or_else(|| err_msg("No role found"))?,
             duration_seconds: full_profile_config.duration_seconds.or(default_duration_seconds)
         })
     }
