@@ -36,7 +36,7 @@ impl LoginRequest {
             password: Some(password),
             token: None,
             username: Some(username),
-            state_token: None
+            state_token: None,
         }
     }
 
@@ -63,7 +63,7 @@ struct Options {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Context {
-    device_token: String
+    device_token: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -87,7 +87,7 @@ pub enum FactorResult {
     Waiting,
     Success,
     Rejected,
-    Timeout
+    Timeout,
 }
 
 #[derive(Deserialize, Debug)]
@@ -141,7 +141,10 @@ impl Client {
                 let factor = match factors.len() {
                     0 => bail!("MFA is required, but the user has no enrolled factors"),
                     1 => {
-                        info!("Only one MFA option is available ({}), using it", factors[0]);
+                        info!(
+                            "Only one MFA option is available ({}), using it",
+                            factors[0]
+                        );
                         &factors[0]
                     }
                     _ => {

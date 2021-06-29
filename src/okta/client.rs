@@ -1,22 +1,22 @@
-use crate::okta::Organization;
 use crate::okta::auth::LoginRequest;
+use crate::okta::Organization;
 
-use std::sync::Arc;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use failure::Error;
-use reqwest::header::{HeaderValue, ACCEPT};
 use reqwest::blocking::Client as HttpClient;
 use reqwest::blocking::Response;
 use reqwest::cookie::Jar;
-use url::Url;
+use reqwest::header::{HeaderValue, ACCEPT};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 pub struct Client {
     client: HttpClient,
     organization: Organization,
-    pub cookies: Arc<Jar>
+    pub cookies: Arc<Jar>,
 }
 
 #[derive(Deserialize, Debug, Fail, Serialize)]
@@ -27,38 +27,47 @@ pub struct ClientError {
     error_summary: String,
     error_link: String,
     error_id: String,
-    error_causes: Option<Vec<ClientErrorSummary>>
+    error_causes: Option<Vec<ClientErrorSummary>>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientErrorSummary {
-    error_summary: String
+    error_summary: String,
 }
 
 impl Client {
-    pub fn new(organization: Organization, username: String, password: String) -> Result<Client, Error> {
+    pub fn new(
+        organization: Organization,
+        username: String,
+        password: String,
+    ) -> Result<Client, Error> {
         let base_url = organization.base_url.clone();
         let jar = Arc::from(Jar::default());
 
         let mut client = Client {
-            client: HttpClient::builder().cookie_store(true).cookie_provider(jar.clone()).build()?,
+            client: HttpClient::builder()
+                .cookie_store(true)
+                .cookie_provider(jar.clone())
+                .build()?,
             organization,
-            cookies: jar
+            cookies: jar,
         };
 
         // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
         client.get_response(base_url)?;
 
         // Do the login
-        let session_token = client.get_session_token(&LoginRequest::from_credentials(username, password))?;
+        let session_token =
+            client.get_session_token(&LoginRequest::from_credentials(username, password))?;
         client.new_session(session_token, &HashSet::new())?;
 
         Ok(client)
     }
 
     pub fn set_session_id(&mut self, session_id: String) {
-        self.cookies.add_cookie_str(&format!("sid={}", session_id), &self.organization.base_url);
+        self.cookies
+            .add_cookie_str(&format!("sid={}", session_id), &self.organization.base_url);
     }
 
     pub fn get_response(&self, url: Url) -> Result<Response, Error> {
@@ -95,7 +104,8 @@ impl Client {
         I: Serialize,
         O: DeserializeOwned,
     {
-        let resp = self.client
+        let resp = self
+            .client
             .post(url)
             .json(body)
             .header(ACCEPT, HeaderValue::from_static("application/json"))

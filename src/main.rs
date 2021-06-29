@@ -95,11 +95,15 @@ fn main() -> Result<(), Error> {
             "Evaluating profiles in {}",
             organization.okta_organization.name
         );
-        
+
         let username = organization.username.to_owned();
         let password =
             credentials::get_password(&organization.okta_organization, &username, opt.force_new)?;
-        let okta_client = OktaClient::new(organization.okta_organization.clone(), username.clone(), password.clone())?;
+        let okta_client = OktaClient::new(
+            organization.okta_organization.clone(),
+            username.clone(),
+            password.clone(),
+        )?;
 
         let profiles = organization
             .profiles
