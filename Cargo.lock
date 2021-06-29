@@ -1587,7 +1587,7 @@ checksum = "a9a7ab5d64814df0fe4a4b5ead45ed6c5f181ee3ff04ba344313a6c80446c5d4"
 
 [[package]]
 name = "oktaws"
-version = "0.13.0-next.2"
+version = "0.13.0"
 dependencies = [
  "base64 0.13.0",
  "confy",
