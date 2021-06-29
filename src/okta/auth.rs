@@ -73,11 +73,21 @@ pub struct LoginResponse {
     pub session_token: Option<String>,
     expires_at: String,
     status: LoginState,
+    pub factor_result: Option<FactorResult>,
     relay_state: Option<String>,
     #[serde(rename = "_embedded")]
     embedded: Option<LoginEmbedded>,
     #[serde(rename = "_links", default)]
     links: HashMap<String, Links>,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum FactorResult {
+    Waiting,
+    Success,
+    Rejected,
+    Timeout
 }
 
 #[derive(Deserialize, Debug)]

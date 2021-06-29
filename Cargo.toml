@@ -3,7 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2018"
 name = "oktaws"
-version = "0.12.0"
+version = "0.13.0-next.2"
 
 [dependencies]
 base64 = "0.13"
@@ -29,7 +29,7 @@ structopt = "0.3"
 structopt-derive = "0.4"
 sxd-document = "0.3"
 sxd-xpath = "0.4"
-url = { version = "*", features = ["serde"] }
+url = { version = "2.1", features = ["serde"] }
 username = "0.2"
 walkdir = "2"
 

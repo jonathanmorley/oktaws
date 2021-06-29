@@ -1,12 +1,14 @@
 use crate::okta::Organization;
+use crate::okta::auth::LoginRequest;
 
-use std::collections::HashMap;
+use std::sync::Arc;
+use std::collections::HashSet;
 
 use failure::Error;
-use itertools::Itertools;
-use reqwest::header::{HeaderValue, ACCEPT, COOKIE};
+use reqwest::header::{HeaderValue, ACCEPT};
 use reqwest::blocking::Client as HttpClient;
 use reqwest::blocking::Response;
+use reqwest::cookie::Jar;
 use url::Url;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -14,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub struct Client {
     client: HttpClient,
     organization: Organization,
-    pub cookies: HashMap<String, String>
+    pub cookies: Arc<Jar>
 }
 
 #[derive(Deserialize, Debug, Fail, Serialize)]
@@ -35,37 +37,33 @@ pub struct ClientErrorSummary {
 }
 
 impl Client {
-    pub fn new(organization: Organization) -> Result<Client, Error> {
+    pub fn new(organization: Organization, username: String, password: String) -> Result<Client, Error> {
         let base_url = organization.base_url.clone();
-        
+        let jar = Arc::from(Jar::default());
+
         let mut client = Client {
-            client: HttpClient::new(),
+            client: HttpClient::builder().cookie_store(true).cookie_provider(jar.clone()).build()?,
             organization,
-            cookies: HashMap::new()
+            cookies: jar
         };
 
-        let homepage = client.get_response(base_url)?;
-        let dt = homepage.cookies().find(|cookie| cookie.name() == "DT").ok_or(format_err!("No DeviceToken cookie sent by Okta"))?;
-        client.cookies.insert(String::from("DT"), dt.value().to_string());
+        // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
+        client.get_response(base_url)?;
+
+        // Do the login
+        let session_token = client.get_session_token(&LoginRequest::from_credentials(username, password))?;
+        client.new_session(session_token, &HashSet::new())?;
 
         Ok(client)
     }
 
     pub fn set_session_id(&mut self, session_id: String) {
-        self.cookies.insert("sid".to_string(), session_id);
+        self.cookies.add_cookie_str(&format!("sid={}", session_id), &self.organization.base_url);
     }
 
-    fn cookie_header(&self) -> String {
-        self.cookies
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .join(";")
-    }
-
-    pub fn get_response(&self, url: Url) -> Result<Response, Error> {        
+    pub fn get_response(&self, url: Url) -> Result<Response, Error> {
         self.client
-            .get(url.into_string())
-            .header(COOKIE, self.cookie_header())
+            .get(url)
             .send()?
             .error_for_status()
             .map_err(|e| e.into())
@@ -76,9 +74,8 @@ impl Client {
         O: DeserializeOwned,
     {
         self.client
-            .get(self.organization.base_url.join(path)?.into_string())
+            .get(self.organization.base_url.join(path)?)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
-            .header(COOKIE, self.cookie_header())
             .send()?
             .error_for_status()?
             .json()
@@ -90,15 +87,7 @@ impl Client {
         I: Serialize,
         O: DeserializeOwned,
     {
-        self.client
-            .post(self.organization.base_url.join(path)?.into_string())
-            .json(body)
-            .header(ACCEPT, HeaderValue::from_static("application/json"))
-            .header(COOKIE, self.cookie_header())
-            .send()?
-            .error_for_status()?
-            .json()
-            .map_err(|e| e.into())
+        self.post_absolute(self.organization.base_url.join(path)?, body)
     }
 
     pub fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O, Error>
@@ -107,10 +96,9 @@ impl Client {
         O: DeserializeOwned,
     {
         let resp = self.client
-            .post(url.clone().into_string())
+            .post(url)
             .json(body)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
-            .header(COOKIE, self.cookie_header())
             .send()?;
 
         if resp.status().is_success() {

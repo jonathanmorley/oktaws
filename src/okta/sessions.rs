@@ -116,9 +116,4 @@ impl Client {
 
         Ok(())
     }
-
-    pub fn get_current_session(&self) -> Result<Session, Error> {
-        let session_id = self.cookies.get("sid").ok_or(format_err!("No Session ID in client"))?;
-        self.get(&format!("api/v1/sessions/{}", session_id))
-    }
 }
