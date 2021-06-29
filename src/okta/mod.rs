@@ -107,7 +107,7 @@ pub fn is_extra_verification(text: String) -> bool {
         if let Ok(title) = head.as_node().select_first("title") {
             let re = Regex::new(r#".* - Extra Verification$"#).unwrap();
 
-            return re.is_match(&title.text_contents())
+            return re.is_match(&title.text_contents());
         }
     }
 

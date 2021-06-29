@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use std::fmt;
 
 use failure::Error;
-use serde::{Deserialize, Serialize};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +25,7 @@ pub struct Session {
     pub last_factor_verification: Option<String>,
     pub amr: Vec<AuthenticationMethod>,
     pub idp: IdentityProvider,
-    pub mfa_active: bool
+    pub mfa_active: bool,
 }
 
 #[allow(dead_code)]
@@ -49,7 +49,7 @@ impl fmt::Display for SessionProperties {
 pub enum SessionStatus {
     Active,
     MfaRequired,
-    MfaEnroll
+    MfaEnroll,
 }
 
 #[derive(Deserialize, Debug)]
@@ -77,13 +77,13 @@ pub enum AuthenticationMethod {
     #[serde(rename = "mca")]
     MultipleChannelAuthentication,
     #[serde(rename = "sc")]
-    SmartCardAuthentication
+    SmartCardAuthentication,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct IdentityProvider {
     id: String,
-    r#type: IdentityProviderType
+    r#type: IdentityProviderType,
 }
 
 #[derive(Deserialize, Debug)]
@@ -93,7 +93,7 @@ pub enum IdentityProviderType {
     ActiveDirectory,
     Ldap,
     Federation,
-    Social
+    Social,
 }
 
 impl Client {

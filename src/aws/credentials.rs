@@ -1,4 +1,3 @@
-use std::{collections::btree_map::Entry, convert::{TryFrom, TryInto}};
 use std::collections::BTreeMap;
 use std::env::var as env_var;
 use std::fs::File;
@@ -7,13 +6,17 @@ use std::io::{Seek, SeekFrom};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str;
+use std::{
+    collections::btree_map::Entry,
+    convert::{TryFrom, TryInto},
+};
 
 use dirs;
 use failure::Error;
 use path_abs::PathFile;
 use rusoto_sts::Credentials;
-use serde_ini;
 use serde::{Deserialize, Serialize};
+use serde_ini;
 
 #[derive(Debug)]
 pub struct CredentialsStore {

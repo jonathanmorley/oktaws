@@ -1,9 +1,9 @@
+use crate::okta::auth::FactorResult;
 use crate::okta::auth::LoginResponse;
 use crate::okta::client::Client;
 use crate::okta::Links;
 use crate::okta::Links::Multi;
 use crate::okta::Links::Single;
-use crate::okta::auth::FactorResult;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -158,9 +158,7 @@ pub struct WebFactorProfile {
 #[serde(untagged)]
 pub enum FactorVerificationRequest {
     #[serde(rename_all = "camelCase")]
-    Push {
-        state_token: String
-    },
+    Push { state_token: String },
     #[serde(rename_all = "camelCase")]
     Question { answer: String },
     #[serde(rename_all = "camelCase")]
@@ -173,8 +171,8 @@ pub enum FactorVerificationRequest {
     Call { pass_code: Option<String> },
     #[serde(rename_all = "camelCase")]
     Totp {
-        state_token: String, 
-        pass_code: String
+        state_token: String,
+        pass_code: String,
     },
     #[serde(rename_all = "camelCase")]
     Token { pass_code: String },
@@ -187,7 +185,9 @@ impl fmt::Display for Factor {
             Factor::Sms { ref profile, .. } => write!(f, "Okta SMS to {}", profile.phone_number),
             Factor::Call { ref profile, .. } => write!(f, "Okta Call to {}", profile.phone_number),
             Factor::Token { .. } => write!(f, "Okta One-time Password"),
-            Factor::Totp { ref provider, .. } => write!(f, "Okta Time-based One-time Password (from {:?})", provider),
+            Factor::Totp { ref provider, .. } => {
+                write!(f, "Okta Time-based One-time Password (from {:?})", provider)
+            }
             Factor::Hotp { .. } => write!(f, "Okta Hardware One-time Password"),
             Factor::Question { ref profile, .. } => write!(f, "Question: {}", profile.question),
             Factor::Web { .. } => write!(f, "Okta Web"),
@@ -196,11 +196,7 @@ impl fmt::Display for Factor {
 }
 
 impl Client {
-    pub fn verify(
-        &self,
-        factor: &Factor,
-        state_token: String,
-    ) -> Result<LoginResponse, Error> {
+    pub fn verify(&self, factor: &Factor, state_token: String) -> Result<LoginResponse, Error> {
         match factor {
             Factor::Push { links, .. } => {
                 let url = match links.get("verify").unwrap() {
@@ -220,7 +216,7 @@ impl Client {
 
                 match response.factor_result {
                     None | Some(FactorResult::Success) => Ok(response),
-                    Some(result) => bail!("Failed to verify with Push MFA ({:?})", result)
+                    Some(result) => bail!("Failed to verify with Push MFA ({:?})", result),
                 }
             }
             Factor::Sms { links, .. } => {
@@ -243,8 +239,7 @@ impl Client {
 
                 let request = FactorVerificationRequest::Sms {
                     state_token,
-                    pass_code: Some(Password::new().with_prompt(factor.to_string())
-                        .interact()?)
+                    pass_code: Some(Password::new().with_prompt(factor.to_string()).interact()?),
                 };
 
                 self.post_absolute(url, &request)
@@ -259,8 +254,7 @@ impl Client {
 
                 let request = FactorVerificationRequest::Totp {
                     state_token,
-                    pass_code: Password::new().with_prompt(factor.to_string())
-                        .interact()?
+                    pass_code: Password::new().with_prompt(factor.to_string()).interact()?,
                 };
 
                 self.post_absolute(url, &request)

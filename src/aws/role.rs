@@ -74,9 +74,9 @@ mod tests {
     use crate::aws::role::Role;
     use crate::saml::Response;
 
+    use std::collections::HashSet;
     use std::fs::File;
     use std::io::Read;
-    use std::collections::HashSet;
 
     use base64::encode;
 
