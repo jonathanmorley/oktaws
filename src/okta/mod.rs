@@ -15,10 +15,10 @@ use failure::{Compat, Error};
 use kuchiki;
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
-use reqwest::Url;
-use serde_str;
+use serde::{Deserialize, Serialize};
+use url::Url;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Organization {
     pub name: String,
     pub base_url: Url,
@@ -46,7 +46,6 @@ pub enum Links {
 #[serde(rename_all = "camelCase")]
 pub struct Link {
     name: Option<String>,
-    #[serde(with = "serde_str")]
     pub href: Url,
     hints: Hint,
 }
@@ -58,23 +57,20 @@ pub struct Hint {
 }
 
 impl Client {
-    pub fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse, Error> {
+    pub fn get_saml_response(&mut self, app_url: Url) -> Result<SamlResponse, Error> {
         let response = self.get_response(app_url.clone())?.text()?;
 
         trace!("SAML response doc for app {:?}: {}", &app_url, &response);
 
-        match extract_saml_response(response.clone()) {
-            Err(ExtractSamlResponseError::NotFound) => {
-                debug!("No SAML found for app {:?}, will re-login", &app_url);
+        if is_extra_verification(response.clone()) {
+            debug!("No SAML found for app {:?}, will re-login", &app_url);
 
-                let state_token = extract_state_token(&response)?;
-                let _session_token =
-                    self.get_session_token(&LoginRequest::from_state_token(state_token))?;
-                self.get_saml_response(app_url)
-            }
-            Err(e) => Err(e.into()),
-            Ok(saml) => Ok(saml),
+            let state_token = extract_state_token(&response)?;
+            self.cookies.insert(String::from("oktaStateToken"), state_token);
+            return self.get_saml_response(app_url)
         }
+
+        extract_saml_response(response.clone()).map_err(|e| e.into())
     }
 }
 
@@ -103,6 +99,20 @@ pub fn extract_saml_response(text: String) -> Result<SamlResponse, ExtractSamlRe
 
     trace!("SAML: {}", saml);
     saml.parse().map_err(|e: Error| e.into())
+}
+
+pub fn is_extra_verification(text: String) -> bool {
+    let doc = kuchiki::parse_html().one(text);
+
+    if let Ok(head) = doc.select_first("head") {
+        if let Ok(title) = head.as_node().select_first("title") {
+            let re = Regex::new(r#".* - Extra Verification$"#).unwrap();
+
+            return re.is_match(&title.text_contents())
+        }
+    }
+
+    false
 }
 
 #[derive(Fail, Debug)]

@@ -10,6 +10,8 @@ use std::path::PathBuf;
 use dirs;
 use failure::Error;
 use walkdir::WalkDir;
+
+#[derive(Debug)]
 pub struct Config {
     organizations: Vec<Organization>,
 }
