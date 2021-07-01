@@ -1,5 +1,6 @@
 pub mod credentials;
 pub mod organization;
+pub mod profile;
 
 use crate::config::organization::Organization;
 
@@ -8,6 +9,7 @@ use std::path::PathBuf;
 use std::{convert::TryInto, env::var as env_var};
 
 use failure::Error;
+use glob::Pattern;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
@@ -27,8 +29,10 @@ impl Config {
         })
     }
 
-    pub fn organizations(self) -> impl Iterator<Item = Organization> {
-        self.organizations.into_iter()
+    pub fn organizations(&self, filter: Pattern) -> impl Iterator<Item = &Organization> {
+        self.organizations
+            .iter()
+            .filter(move |&o| filter.matches(&o.okta_organization.name))
     }
 }
 

@@ -1,71 +1,16 @@
-use crate::config::credentials;
+use crate::config::profile::{Profile, ProfileConfig};
 use crate::okta::Organization as OktaOrganization;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::path::Path;
 
 use confy;
-use failure::{err_msg, Error};
+use dialoguer::Input;
+use failure::Error;
+use glob::Pattern;
 use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum ProfileConfig {
-    Name(String),
-    Detailed(FullProfileConfig),
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FullProfileConfig {
-    pub application: String,
-    pub role: Option<String>,
-    pub duration_seconds: Option<i64>,
-}
-
-impl From<ProfileConfig> for FullProfileConfig {
-    fn from(profile_config: ProfileConfig) -> Self {
-        match profile_config {
-            ProfileConfig::Detailed(config) => config,
-            ProfileConfig::Name(application) => FullProfileConfig {
-                application,
-                role: None,
-                duration_seconds: None,
-            },
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Profile {
-    pub name: String,
-    pub application_name: String,
-    pub role: String,
-    pub duration_seconds: Option<i64>,
-}
-
-impl Profile {
-    fn try_from_config(
-        profile_config: &ProfileConfig,
-        name: String,
-        default_role: Option<String>,
-        default_duration_seconds: Option<i64>,
-    ) -> Result<Profile, Error> {
-        let full_profile_config: FullProfileConfig = profile_config.to_owned().into();
-
-        Ok(Profile {
-            name,
-            application_name: full_profile_config.application,
-            role: full_profile_config
-                .role
-                .or(default_role)
-                .ok_or_else(|| err_msg("No role found"))?,
-            duration_seconds: full_profile_config
-                .duration_seconds
-                .or(default_duration_seconds),
-        })
-    }
-}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OrganizationConfig {
@@ -92,11 +37,11 @@ impl TryFrom<&Path> for Organization {
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
             .ok_or_else(|| format_err!("Organization name not parseable from {:?}", path))?;
-        let okta_organization = filename.parse()?;
+        let okta_organization: OktaOrganization = filename.parse()?;
 
         let username = match cfg.clone().username {
             Some(username) => username,
-            None => credentials::get_username(&okta_organization)?,
+            None => prompt_username(&okta_organization.base_url)?,
         };
 
         let profiles = cfg
@@ -118,4 +63,23 @@ impl TryFrom<&Path> for Organization {
             profiles,
         })
     }
+}
+
+impl Organization {
+    pub fn profiles(&self, filter: Pattern) -> impl Iterator<Item = &Profile> {
+        self.profiles
+            .iter()
+            .filter(move |&p| filter.matches(&p.name))
+    }
+}
+
+pub fn prompt_username(base_url: &impl Display) -> Result<String, Error> {
+    let mut input = Input::<String>::new();
+    input.with_prompt(&format!("Username for {}", base_url));
+
+    if let Ok(system_user) = username::get_user_name() {
+        input.default(system_user);
+    }
+
+    input.interact_text().map_err(Into::into)
 }
