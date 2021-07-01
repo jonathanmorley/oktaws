@@ -3,8 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2018"
 name = "oktaws"
-version = "0.13.0"
-
+version = "0.13.1"
 [dependencies]
 base64 = "0.13"
 confy = "*"
@@ -17,36 +16,38 @@ keyring = "0.10"
 kuchiki = "0.8"
 log = "0.4"
 path_abs = "0.5"
+paw = "*"
 pretty_env_logger = "0.4"
 rayon = "1"
 regex = "1"
 rusoto_core = "0.34"
 rusoto_credential = "0.13"
 rusoto_sts = "0.34"
-serde = { version = "1", features = ["derive"] }
 serde_ini = "0.2"
-structopt = "0.3"
-structopt-derive = "0.4"
 sxd-document = "0.3"
 sxd-xpath = "0.4"
-url = { version = "2.1", features = ["serde"] }
 username = "0.2"
 walkdir = "2"
+
+[dependencies.openssl]
+features = ["vendored"]
+version = "0.10"
 
 [dependencies.reqwest]
 features = ["blocking", "cookies", "json"]
 version = "0.11"
 
+[dependencies.serde]
+features = ["derive"]
+version = "1"
+
+[dependencies.structopt]
+features = ["paw"]
+version = "0.3"
+
+[dependencies.url]
+features = ["serde"]
+version = "2.1"
+
 [dev-dependencies]
 tempfile = "3"
-
-[target]
-[target."cfg(linux)"]
-[target."cfg(linux)".dependencies]
-[target."cfg(linux)".dependencies.openssl]
-features = ["vendored"]
-version = "0.10"
-
-[target."cfg(windows)"]
-[target."cfg(windows)".dependencies]
-rpassword = "5"
