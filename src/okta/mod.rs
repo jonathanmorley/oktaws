@@ -8,6 +8,7 @@ use crate::okta::auth::LoginRequest;
 use crate::okta::client::Client;
 use crate::saml::Response as SamlResponse;
 
+use std::convert::TryFrom;
 use std::str;
 use std::str::FromStr;
 
@@ -97,7 +98,7 @@ pub fn extract_saml_response(text: String) -> Result<SamlResponse, ExtractSamlRe
         .ok_or(ExtractSamlResponseError::NotFound)?;
 
     trace!("SAML: {}", saml);
-    saml.parse().map_err(|e: Error| e.into())
+    SamlResponse::try_from(saml.to_owned()).map_err(Into::into)
 }
 
 pub fn is_extra_verification(text: String) -> bool {

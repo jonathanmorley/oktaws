@@ -75,6 +75,7 @@ mod tests {
     use crate::saml::Response;
 
     use std::collections::HashSet;
+    use std::convert::TryFrom;
     use std::fs::File;
     use std::io::Read;
 
@@ -103,7 +104,7 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response: Response = saml_base64.parse().unwrap();
+        let response: Response = Response::try_from(saml_base64).unwrap();
 
         let expected_roles = vec![
             Role {
