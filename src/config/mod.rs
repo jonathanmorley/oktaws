@@ -1,4 +1,3 @@
-pub mod credentials;
 pub mod organization;
 pub mod profile;
 
@@ -32,7 +31,7 @@ impl Config {
     pub fn organizations(&self, filter: Pattern) -> impl Iterator<Item = &Organization> {
         self.organizations
             .iter()
-            .filter(move |&o| filter.matches(&o.okta_organization.name))
+            .filter(move |&o| filter.matches(&o.name))
     }
 }
 

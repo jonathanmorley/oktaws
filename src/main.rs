@@ -10,7 +10,6 @@ mod saml;
 
 use crate::aws::credentials::CredentialsStore;
 use crate::aws::role::Role;
-use crate::config::credentials;
 use crate::config::organization::Organization;
 use crate::config::profile::Profile;
 use crate::config::Config;
@@ -86,18 +85,12 @@ fn main(args: Args) -> Result<(), Error> {
     }
 
     for organization in organizations {
-        info!(
-            "Evaluating profiles in {}",
-            organization.okta_organization.name
-        );
+        info!("Evaluating profiles in {}", organization.name);
 
-        let username = organization.username.to_owned();
-        let password =
-            credentials::get_password(&organization.okta_organization, &username, args.force_new)?;
         let okta_client = OktaClient::new(
-            organization.okta_organization.clone(),
-            username.clone(),
-            password.clone(),
+            organization.name.clone(),
+            organization.username.clone(),
+            args.force_new,
         )?;
 
         // Collect here and re-iter below in case we want to be async.
@@ -108,7 +101,7 @@ fn main(args: Args) -> Result<(), Error> {
         if profiles.is_empty() {
             warn!(
                 "No profiles found matching {} in {}",
-                args.profiles, organization.okta_organization.name
+                args.profiles, organization.name
             );
             continue;
         }
@@ -146,20 +139,10 @@ fn main(args: Args) -> Result<(), Error> {
                 .unwrap()
                 .set_profile(name.clone(), creds)?;
         }
-
-        if let Err(e) =
-            credentials::save_credentials(&organization.okta_organization, &username, &password)
-        {
-            warn!("Error while saving credentials: {}", e);
-            continue;
-        }
     }
 
-    Arc::try_unwrap(credentials_store)
-        .map_err(|_| format_err!("Failed to un-reference count the credentials store"))?
-        .into_inner()
-        .map_err(|_| format_err!("Failed to un-mutex the credentials store"))?
-        .save()
+    let store = credentials_store.lock().unwrap();
+    store.save()
 }
 
 fn fetch_credentials(
@@ -169,7 +152,7 @@ fn fetch_credentials(
 ) -> Result<Credentials, Error> {
     info!(
         "Requesting tokens for {}/{}",
-        &organization.okta_organization.name, profile.name
+        &organization.name, profile.name
     );
 
     let app_link = client
@@ -181,7 +164,7 @@ fn fetch_credentials(
         .ok_or_else(|| {
             format_err!(
                 "Could not find Okta application for profile {}/{}",
-                organization.okta_organization.name,
+                organization.name,
                 profile.name
             )
         })?;

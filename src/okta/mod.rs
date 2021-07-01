@@ -10,30 +10,12 @@ use crate::saml::Response as SamlResponse;
 
 use std::convert::TryFrom;
 use std::str;
-use std::str::FromStr;
 
 use failure::{Compat, Error};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use url::Url;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Organization {
-    pub name: String,
-    pub base_url: Url,
-}
-
-impl FromStr for Organization {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Organization {
-            name: String::from(s),
-            base_url: Url::parse(&format!("https://{}.okta.com/", s))?,
-        })
-    }
-}
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
