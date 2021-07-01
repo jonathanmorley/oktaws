@@ -4,7 +4,7 @@ use crate::okta::users::User;
 use crate::okta::Links;
 
 use dialoguer;
-use failure::Error;
+use failure::{err_msg, Error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -170,9 +170,7 @@ impl Client {
 
                 Ok(factor_provided_response.session_token.unwrap())
             }
-            _ => {
-                bail!("Unknown error encountered during login");
-            }
+            _ => Err(err_msg("Unknown error encountered during login")),
         }
     }
 }

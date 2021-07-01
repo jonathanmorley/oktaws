@@ -1,10 +1,11 @@
 use crate::okta::auth::LoginRequest;
-use crate::okta::Organization;
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use dialoguer::Password;
 use failure::Error;
+use keyring::Keyring;
 use reqwest::blocking::Client as HttpClient;
 use reqwest::blocking::Response;
 use reqwest::cookie::Jar;
@@ -15,7 +16,7 @@ use url::Url;
 
 pub struct Client {
     client: HttpClient,
-    organization: Organization,
+    base_url: Url,
     pub cookies: Arc<Jar>,
 }
 
@@ -37,37 +38,55 @@ pub struct ClientErrorSummary {
 }
 
 impl Client {
-    pub fn new(
-        organization: Organization,
-        username: String,
-        password: String,
-    ) -> Result<Client, Error> {
-        let base_url = organization.base_url.clone();
-        let jar = Arc::from(Jar::default());
+    pub fn new(organization: String, username: String, force_prompt: bool) -> Result<Self, Error> {
+        let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
+        base_url
+            .set_username(&username)
+            .map_err(|_| format_err!("Cannot set username for URL"))?;
+
+        let cookies = Arc::from(Jar::default());
+
+        let service = format!("oktaws::okta::{}", organization);
+        let keyring = Keyring::new(&service, &username);
 
         let mut client = Client {
             client: HttpClient::builder()
                 .cookie_store(true)
-                .cookie_provider(jar.clone())
+                .cookie_provider(cookies.clone())
                 .build()?,
-            organization,
-            cookies: jar,
+            base_url: base_url.clone(),
+            cookies,
         };
 
         // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
         client.get_response(base_url)?;
 
+        // get password
+        let password = if force_prompt {
+            debug!("Force new is set, prompting for password");
+            client.prompt_password()
+        } else {
+            client.get_password(&keyring)
+        }?;
+
         // Do the login
-        let session_token =
-            client.get_session_token(&LoginRequest::from_credentials(username, password))?;
+        let session_token = client.get_session_token(&LoginRequest::from_credentials(
+            username.to_owned(),
+            password.clone(),
+        ))?;
         client.new_session(session_token, &HashSet::new())?;
+
+        // Save the password. Don't treat this as a failure, as it is not a hard requirement
+        if let Err(e) = client.save_password(&keyring, &password) {
+            warn!("Error while saving credentials: {}", e);
+        }
 
         Ok(client)
     }
 
     pub fn set_session_id(&mut self, session_id: String) {
         self.cookies
-            .add_cookie_str(&format!("sid={}", session_id), &self.organization.base_url);
+            .add_cookie_str(&format!("sid={}", session_id), &self.base_url);
     }
 
     pub fn get_response(&self, url: Url) -> Result<Response, Error> {
@@ -83,7 +102,7 @@ impl Client {
         O: DeserializeOwned,
     {
         self.client
-            .get(self.organization.base_url.join(path)?)
+            .get(self.base_url.join(path)?)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
             .send()?
             .error_for_status()?
@@ -96,7 +115,7 @@ impl Client {
         I: Serialize,
         O: DeserializeOwned,
     {
-        self.post_absolute(self.organization.base_url.join(path)?, body)
+        self.post_absolute(self.base_url.join(path)?, body)
     }
 
     pub fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O, Error>
@@ -116,5 +135,29 @@ impl Client {
         } else {
             Err(resp.json::<ClientError>()?.into())
         }
+    }
+
+    fn prompt_password(&self) -> Result<String, Error> {
+        Password::new()
+            .with_prompt(&format!("Password for {}", self.base_url))
+            .interact()
+            .map_err(Into::into)
+    }
+
+    pub fn get_password(&self, keyring: &Keyring) -> Result<String, Error> {
+        keyring.get_password().or_else(|e| {
+            debug!(
+                "Retrieving cached password failed, prompting for password because of {:?}",
+                e
+            );
+            self.prompt_password()
+        })
+    }
+
+    pub fn save_password(&self, keyring: &Keyring, password: &str) -> Result<(), Error> {
+        debug!("Saving Okta credentials for {}", self.base_url);
+        keyring
+            .set_password(password)
+            .map_err(|e| format_err!("{}", e))
     }
 }

@@ -58,9 +58,9 @@ impl CredentialsStore {
         Ok(())
     }
 
-    pub fn save(self) -> Result<(), Error> {
+    pub fn save(&self) -> Result<(), Error> {
         info!("Saving AWS credentials");
-        serde_ini::ser::to_writer(self.file, &self.credentials).map_err(|e| e.into())
+        serde_ini::ser::to_writer(&self.file, &self.credentials).map_err(|e| e.into())
     }
 
     fn default_profile_location() -> Result<PathBuf, Error> {

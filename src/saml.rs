@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use std::convert::TryFrom;
 
 use failure::Error;
-use samuel::response::Response as SamlResponse;
 use samuel::assertion::{Assertions, AttributeStatement};
+use samuel::response::Response as SamlResponse;
 
 #[derive(Debug)]
 pub struct Response {
@@ -26,7 +26,7 @@ impl TryFrom<String> for Response {
         let assertions = match response.assertions {
             Assertions::Plaintexts(assertions) => assertions,
             Assertions::Encrypteds(_) => bail!("Encrypted assertions are not currently supported"),
-            Assertions::None => bail!("No roles found")
+            Assertions::None => bail!("No roles found"),
         };
 
         let role_attribute = assertions
@@ -36,16 +36,20 @@ impl TryFrom<String> for Response {
                 AttributeStatement::PlaintextAttributes(attributes) => attributes,
                 AttributeStatement::EncryptedAttributes(_) => {
                     error!("Encrypted assertions are not currently supported");
-                    vec!()
-                },
-                AttributeStatement::None => vec!()
+                    vec![]
+                }
+                AttributeStatement::None => vec![],
             })
             .find(|attribute| attribute.name == "https://aws.amazon.com/SAML/Attributes/Role");
 
         if let Some(role_attribute) = role_attribute {
             Ok(Response {
                 raw: s,
-                roles: role_attribute.values.into_iter().map(|arn| arn.parse()).collect::<Result<HashSet<Role>, Error>>()?
+                roles: role_attribute
+                    .values
+                    .into_iter()
+                    .map(|arn| arn.parse())
+                    .collect::<Result<HashSet<Role>, Error>>()?,
             })
         } else {
             bail!("No Role Attributes found")

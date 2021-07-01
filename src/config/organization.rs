@@ -1,5 +1,4 @@
 use crate::config::profile::{Profile, ProfileConfig};
-use crate::okta::Organization as OktaOrganization;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -22,7 +21,7 @@ pub struct OrganizationConfig {
 
 #[derive(Clone, Debug)]
 pub struct Organization {
-    pub okta_organization: OktaOrganization,
+    pub name: String,
     pub username: String,
     pub profiles: Vec<Profile>,
 }
@@ -37,11 +36,10 @@ impl TryFrom<&Path> for Organization {
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
             .ok_or_else(|| format_err!("Organization name not parseable from {:?}", path))?;
-        let okta_organization: OktaOrganization = filename.parse()?;
 
         let username = match cfg.clone().username {
             Some(username) => username,
-            None => prompt_username(&okta_organization.base_url)?,
+            None => prompt_username(&filename)?,
         };
 
         let profiles = cfg
@@ -58,7 +56,7 @@ impl TryFrom<&Path> for Organization {
             .collect::<Result<Vec<Profile>, Error>>()?;
 
         Ok(Organization {
-            okta_organization,
+            name: filename,
             username,
             profiles,
         })
@@ -73,9 +71,9 @@ impl Organization {
     }
 }
 
-pub fn prompt_username(base_url: &impl Display) -> Result<String, Error> {
+pub fn prompt_username(organization: &impl Display) -> Result<String, Error> {
     let mut input = Input::<String>::new();
-    input.with_prompt(&format!("Username for {}", base_url));
+    input.with_prompt(&format!("Username for {}", organization));
 
     if let Ok(system_user) = username::get_user_name() {
         input.default(system_user);
