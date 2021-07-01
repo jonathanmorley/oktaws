@@ -369,7 +369,7 @@ dependencies = [
  "serde",
  "serde_json",
  "time 0.2.27",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -1616,7 +1616,7 @@ dependencies = [
  "serde_ini",
  "structopt",
  "tempfile",
- "url 2.2.1",
+ "url 2.2.2",
  "username",
  "walkdir",
 ]
@@ -1913,7 +1913,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95b4ce31ff0a27d93c8de1849cf58162283752f065a90d508f1105fa6c9a213f"
 dependencies = [
  "idna 0.2.2",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -2152,7 +2152,7 @@ dependencies = [
  "time 0.2.27",
  "tokio 1.4.0",
  "tokio-native-tls",
- "url 2.2.1",
+ "url 2.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -3192,9 +3192,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.2.1"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ccd964113622c8e9322cfac19eb1004a07e636c545f325da085d5cdde6f1f8b"
+checksum = "a507c383b2d33b5fc35d1861e77e6b383d158b2da5e14fe51b83dfedf6fd578c"
 dependencies = [
  "form_urlencoded",
  "idna 0.2.2",

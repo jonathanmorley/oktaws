@@ -43,7 +43,7 @@ version = "0.3"
 
 [dependencies.url]
 features = ["serde"]
-version = "2.1"
+version = "2.2"
 
 [target]
 [target."cfg(linux)"]
