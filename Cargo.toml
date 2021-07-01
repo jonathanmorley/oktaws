@@ -4,6 +4,7 @@ description = "Generates temporary AWS credentials with Okta."
 edition = "2018"
 name = "oktaws"
 version = "0.13.1"
+
 [dependencies]
 base64 = "0.13"
 confy = "*"
@@ -28,10 +29,6 @@ serde_ini = "0.2"
 username = "0.2"
 walkdir = "2"
 
-[dependencies.openssl]
-features = ["vendored"]
-version = "0.10"
-
 [dependencies.reqwest]
 features = ["blocking", "cookies", "json"]
 version = "0.11"
@@ -47,6 +44,13 @@ version = "0.3"
 [dependencies.url]
 features = ["serde"]
 version = "2.1"
+
+[target]
+[target."cfg(linux)"]
+[target."cfg(linux)".dependencies]
+[target."cfg(linux)".dependencies.openssl]
+features = ["vendored"]
+version = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

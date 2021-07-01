@@ -1,6 +1,3 @@
-#[cfg(windows)]
-extern crate rpassword;
-
 #[macro_use]
 extern crate failure;
 #[macro_use]
