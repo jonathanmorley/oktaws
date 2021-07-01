@@ -69,9 +69,9 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "0.7.15"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7404febffaa47dac81aa44dba71523c9d069b1bdc50a77db41195149e17f68e5"
+checksum = "1e37cfd5e7657ada45f742d6e99ca5788580b5c529dc78faf11ece6dc702656f"
 dependencies = [
  "memchr",
 ]
@@ -321,7 +321,7 @@ dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
- "regex 1.4.5",
+ "regex 1.5.4",
  "terminal_size",
  "unicode-width",
  "winapi 0.3.9",
@@ -693,7 +693,7 @@ dependencies = [
  "atty",
  "humantime",
  "log",
- "regex 1.4.5",
+ "regex 1.5.4",
  "termcolor",
 ]
 
@@ -1343,9 +1343,9 @@ checksum = "79c56d6a0b07f9e19282511c83fc5b086364cbae4ba8c7d5f190c3d9b0425a48"
 
 [[package]]
 name = "memchr"
-version = "2.3.4"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
+checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
 name = "memoffset"
@@ -1606,7 +1606,7 @@ dependencies = [
  "paw",
  "pretty_env_logger",
  "rayon",
- "regex 1.4.5",
+ "regex 1.5.4",
  "reqwest",
  "rusoto_core",
  "rusoto_credential",
@@ -2088,13 +2088,13 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.4.5"
+version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957056ecddbeba1b26965114e191d2e8589ce74db242b6ea25fc4062427a5c19"
+checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
 dependencies = [
- "aho-corasick 0.7.15",
+ "aho-corasick 0.7.18",
  "memchr",
- "regex-syntax 0.6.23",
+ "regex-syntax 0.6.25",
 ]
 
 [[package]]
@@ -2108,9 +2108,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.23"
+version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d5f089152e60f62d28b835fbff2cd2e8dc0baf1ac13343bef92ab7eed84548"
+checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "remove_dir_all"
@@ -2621,7 +2621,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bf70433e3300a3c395d06606a700cdf4205f4f14dbae2c6833127c6bb22db77"
 dependencies = [
  "lazy_static",
- "regex 1.4.5",
+ "regex 0.2.11",
 ]
 
 [[package]]
