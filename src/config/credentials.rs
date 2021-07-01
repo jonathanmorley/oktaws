@@ -52,5 +52,5 @@ pub fn save_credentials(
     let service = format!("oktaws::okta::{}", organization.name);
     Keyring::new(&service, username)
         .set_password(password)
-        .map_err(Into::into)
+        .map_err(|e| format_err!("{}", e))
 }
