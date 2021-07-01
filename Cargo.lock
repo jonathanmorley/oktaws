@@ -1611,11 +1611,10 @@ dependencies = [
  "rusoto_core",
  "rusoto_credential",
  "rusoto_sts",
+ "samuel",
  "serde",
  "serde_ini",
  "structopt",
- "sxd-document",
- "sxd-xpath",
  "tempfile",
  "url 2.2.1",
  "username",
@@ -1753,12 +1752,6 @@ name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
-
-[[package]]
-name = "peresil"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f658886ed52e196e850cfbbfddab9eaa7f6d90dd0929e264c31e5cec07e09e57"
 
 [[package]]
 name = "phf"
@@ -2173,6 +2166,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "194d8e591e405d1eecf28819740abed6d719d1a2db87fc0bcdedee9a26d55560"
 
 [[package]]
+name = "roxmltree"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02660467d0c2da1b6276042501aee6e15ec5b8ff59423243f185b294cd53acf3"
+dependencies = [
+ "xmlparser",
+]
+
+[[package]]
 name = "rusoto_core"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2272,6 +2274,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "samuel"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d96b9395f5119ceb1c0eb9c6aa2fb0bf94d292cf3c4d51349cebc4285afcfa4b"
+dependencies = [
+ "failure",
+ "roxmltree",
+ "try_from",
 ]
 
 [[package]]
@@ -2681,27 +2694,6 @@ name = "subtle"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e81da0851ada1f3e9d4312c704aa4f8806f0f9d69faaf8df2f3464b4a9437c2"
-
-[[package]]
-name = "sxd-document"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94d82f37be9faf1b10a82c4bd492b74f698e40082f0f40de38ab275f31d42078"
-dependencies = [
- "peresil",
- "typed-arena",
-]
-
-[[package]]
-name = "sxd-xpath"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36e39da5d30887b5690e29de4c5ebb8ddff64ebd9933f98a01daaa4fd11b36ea"
-dependencies = [
- "peresil",
- "quick-error",
- "sxd-document",
-]
 
 [[package]]
 name = "syn"
@@ -3131,10 +3123,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
-name = "typed-arena"
-version = "1.7.0"
+name = "try_from"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9b2228007eba4120145f785df0f6c92ea538f5a3635a612ecf4e334c8c1446d"
+checksum = "283d3b89e1368717881a9d51dad843cc435380d8109c9e47d38780a324698d8b"
+dependencies = [
+ "cfg-if 0.1.10",
+]
 
 [[package]]
 name = "typenum"
@@ -3446,6 +3441,12 @@ checksum = "3c1cb601d29fe2c2ac60a2b2e5e293994d87a1f6fa9687a31a15270f909be9c2"
 dependencies = [
  "bitflags",
 ]
+
+[[package]]
+name = "xmlparser"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78a7f29bb57edf63321d545d84f99360df71df36929a090bc067e1bcb65e34d"
 
 [[package]]
 name = "zeroize"
