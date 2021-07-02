@@ -20,6 +20,9 @@ use std::env;
 use std::sync::{Arc, Mutex};
 
 use failure::Error;
+use futures::StreamExt;
+use futures::future::join_all;
+use futures::stream::FuturesUnordered;
 use glob::Pattern;
 use rusoto_sts::Credentials;
 use structopt::StructOpt;
@@ -51,7 +54,7 @@ pub struct Args {
     #[structopt(short = "q", long = "quiet")]
     pub quiet: bool,
 
-    /// Run in an asynchronous manner (parallel)
+    /// Fetch profiles asynchronously. Currently disabled
     #[structopt(short = "a", long = "async")]
     pub asynchronous: bool,
 }
@@ -77,7 +80,7 @@ async fn main(args: Args) -> Result<(), Error> {
     // Set up a store for AWS credentials
     let credentials_store = Arc::new(Mutex::new(CredentialsStore::new()?));
 
-    let mut organizations = config.organizations(args.organizations.clone()).peekable();
+    let mut organizations = config.into_organizations(args.organizations.clone()).peekable();
 
     if organizations.peek().is_none() {
         bail!("No organizations found called {}", args.organizations);
@@ -92,24 +95,18 @@ async fn main(args: Args) -> Result<(), Error> {
             args.force_new,
         ).await?;
 
-        // Collect here and re-iter below in case we want to be async.
-        let profiles = organization
-            .profiles(args.profiles.clone())
-            .collect::<Vec<&Profile>>();
+        // if profiles.is_empty() {
+        //     warn!(
+        //         "No profiles found matching {} in {}",
+        //         args.profiles, organization.name
+        //     );
+        //     continue;
+        // }
 
-        if profiles.is_empty() {
-            warn!(
-                "No profiles found matching {} in {}",
-                args.profiles, organization.name
-            );
-            continue;
-        }
+        //let mut futures = vec![];
+        //let mut org_credentials = HashMap::new();
 
-        let mut org_credentials = HashMap::new();
-        for profile in profiles {
-            let credentials = fetch_credentials(&okta_client, &organization, &profile).await?;
-            org_credentials.insert(profile.name.clone(), credentials);
-        }
+        let org_credentials = organization.into_credentials(&okta_client, args.profiles.clone()).await;
 
         for (name, creds) in org_credentials {
             credentials_store
@@ -123,70 +120,3 @@ async fn main(args: Args) -> Result<(), Error> {
     store.save()
 }
 
-async fn fetch_credentials(
-    client: &OktaClient,
-    organization: &Organization,
-    profile: &Profile,
-) -> Result<Credentials, Error> {
-    info!(
-        "Requesting tokens for {}/{}",
-        &organization.name, profile.name
-    );
-
-    let app_link = client
-        .app_links(None).await?
-        .into_iter()
-        .find(|app_link| {
-            app_link.app_name == "amazon_aws" && app_link.label == profile.application_name
-        })
-        .ok_or_else(|| {
-            format_err!(
-                "Could not find Okta application for profile {}/{}",
-                organization.name,
-                profile.name
-            )
-        })?;
-
-    debug!("Application Link: {:?}", &app_link);
-
-    let saml = client.get_saml_response(app_link.link_url).await.map_err(|e| {
-        format_err!(
-            "Error getting SAML response for profile {} ({})",
-            profile.name,
-            e
-        )
-    })?;
-
-    let roles = saml.roles;
-
-    debug!("SAML Roles: {:?}", &roles);
-
-    let role: Role = roles
-        .into_iter()
-        .find(|r| r.role_name().map(|r| r == profile.role).unwrap_or(false))
-        .ok_or_else(|| {
-            format_err!(
-                "No matching role ({}) found for profile {}",
-                profile.role,
-                &profile.name
-            )
-        })?;
-
-    trace!(
-        "Found role: {} for profile {}",
-        role.role_arn,
-        &profile.name
-    );
-
-    let assumption_response = aws::role::assume_role(role, saml.raw, profile.duration_seconds)
-        .await
-        .map_err(|e| format_err!("Error assuming role for profile {} ({})", profile.name, e))?;
-
-    let credentials = assumption_response
-        .credentials
-        .ok_or_else(|| format_err!("Error fetching credentials from assumed AWS role"))?;
-
-    trace!("Credentials: {:?}", credentials);
-
-    Ok(credentials)
-}
