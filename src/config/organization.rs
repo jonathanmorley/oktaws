@@ -1,4 +1,5 @@
 use crate::config::profile::{Profile, ProfileConfig};
+use crate::{aws::role::Role, okta::client::Client as OktaClient};
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -8,7 +9,9 @@ use std::path::Path;
 use confy;
 use dialoguer::Input;
 use failure::Error;
+use futures::future::join_all;
 use glob::Pattern;
+use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -68,6 +71,35 @@ impl Organization {
         self.profiles
             .iter()
             .filter(move |&p| filter.matches(&p.name))
+    }
+
+    pub fn into_profiles(self, filter: Pattern) -> impl Iterator<Item = Profile> {
+        self.profiles
+            .into_iter()
+            .filter(move |p| filter.matches(&p.name))
+    }
+
+    pub async fn into_credentials(self, client: &OktaClient, filter: Pattern) -> HashMap<String, Credentials> {
+        let org_name = self.name.clone();
+        
+        let futures = self
+            .into_profiles(filter)
+            .map(|profile| {
+                async {
+                    let name = profile.name.clone();
+
+                    info!(
+                        "Requesting tokens for {}/{}",
+                        org_name, profile.name
+                    );
+
+                    let credentials = profile.into_credentials(&client).await.unwrap();
+
+                    (name, credentials)
+                }
+            });
+
+        join_all(futures).await.into_iter().collect()
     }
 }
 

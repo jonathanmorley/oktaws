@@ -33,6 +33,12 @@ impl Config {
             .iter()
             .filter(move |&o| filter.matches(&o.name))
     }
+
+    pub fn into_organizations(self, filter: Pattern) -> impl Iterator<Item = Organization> {
+        self.organizations
+            .into_iter()
+            .filter(move |o| filter.matches(&o.name))
+    }
 }
 
 fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
