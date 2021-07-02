@@ -11,6 +11,7 @@ use crate::saml::Response as SamlResponse;
 use std::convert::TryFrom;
 use std::str;
 
+use async_recursion::async_recursion;
 use failure::{Compat, Error};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
@@ -39,8 +40,9 @@ pub struct Hint {
 }
 
 impl Client {
-    pub fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse, Error> {
-        let response = self.get_response(app_url.clone())?.text()?;
+    #[async_recursion]
+    pub async fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse, Error> {
+        let response = self.get_response(app_url.clone()).await?.text().await?;
 
         trace!("SAML response doc for app {:?}: {}", &app_url, &response);
 
@@ -48,8 +50,8 @@ impl Client {
             debug!("No SAML found for app {:?}, will re-login", &app_url);
 
             let state_token = extract_state_token(&response)?;
-            self.get_session_token(&LoginRequest::from_state_token(state_token))?;
-            self.get_saml_response(app_url)
+            self.get_session_token(&LoginRequest::from_state_token(state_token)).await?;
+            self.get_saml_response(app_url).await
         } else {
             extract_saml_response(response).map_err(|e| e.into())
         }

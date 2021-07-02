@@ -6,8 +6,8 @@ use std::sync::Arc;
 use dialoguer::Password;
 use failure::Error;
 use keyring::Keyring;
-use reqwest::blocking::Client as HttpClient;
-use reqwest::blocking::Response;
+use reqwest::Client as HttpClient;
+use reqwest::Response;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
 use serde::de::DeserializeOwned;
@@ -38,7 +38,7 @@ pub struct ClientErrorSummary {
 }
 
 impl Client {
-    pub fn new(organization: String, username: String, force_prompt: bool) -> Result<Self, Error> {
+    pub async fn new(organization: String, username: String, force_prompt: bool) -> Result<Self, Error> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
             .set_username(&username)
@@ -59,7 +59,7 @@ impl Client {
         };
 
         // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
-        client.get_response(base_url)?;
+        client.get_response(base_url).await?;
 
         // get password
         let password = if force_prompt {
@@ -73,8 +73,8 @@ impl Client {
         let session_token = client.get_session_token(&LoginRequest::from_credentials(
             username.to_owned(),
             password.clone(),
-        ))?;
-        client.new_session(session_token, &HashSet::new())?;
+        )).await?;
+        client.new_session(session_token, &HashSet::new()).await?;
 
         // Save the password. Don't treat this as a failure, as it is not a hard requirement
         if let Err(e) = client.save_password(&keyring, &password) {
@@ -89,36 +89,39 @@ impl Client {
             .add_cookie_str(&format!("sid={}", session_id), &self.base_url);
     }
 
-    pub fn get_response(&self, url: Url) -> Result<Response, Error> {
+    pub async fn get_response(&self, url: Url) -> Result<Response, Error> {
         self.client
             .get(url)
-            .send()?
+            .send()
+            .await?
             .error_for_status()
             .map_err(|e| e.into())
     }
 
-    pub fn get<O>(&self, path: &str) -> Result<O, Error>
+    pub async fn get<O>(&self, path: &str) -> Result<O, Error>
     where
         O: DeserializeOwned,
     {
         self.client
             .get(self.base_url.join(path)?)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
-            .send()?
+            .send()
+            .await?
             .error_for_status()?
             .json()
+            .await
             .map_err(|e| e.into())
     }
 
-    pub fn post<I, O>(&self, path: &str, body: &I) -> Result<O, Error>
+    pub async fn post<I, O>(&self, path: &str, body: &I) -> Result<O, Error>
     where
         I: Serialize,
         O: DeserializeOwned,
     {
-        self.post_absolute(self.base_url.join(path)?, body)
+        self.post_absolute(self.base_url.join(path)?, body).await
     }
 
-    pub fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O, Error>
+    pub async fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O, Error>
     where
         I: Serialize,
         O: DeserializeOwned,
@@ -128,12 +131,13 @@ impl Client {
             .post(url)
             .json(body)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
-            .send()?;
+            .send()
+            .await?;
 
         if resp.status().is_success() {
-            resp.json().map_err(|e| e.into())
+            resp.json().await.map_err(|e| e.into())
         } else {
-            Err(resp.json::<ClientError>()?.into())
+            Err(resp.json::<ClientError>().await?.into())
         }
     }
 

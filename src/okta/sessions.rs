@@ -97,7 +97,7 @@ pub enum IdentityProviderType {
 }
 
 impl Client {
-    pub fn new_session(
+    pub async fn new_session(
         &mut self,
         session_token: String,
         additional_fields: &HashSet<SessionProperties>,
@@ -110,7 +110,7 @@ impl Client {
             &SessionRequest {
                 session_token: Some(session_token),
             },
-        )?;
+        ).await?;
 
         self.set_session_id(session.id);
 

@@ -196,7 +196,7 @@ impl fmt::Display for Factor {
 }
 
 impl Client {
-    pub fn verify(&self, factor: &Factor, state_token: String) -> Result<LoginResponse, Error> {
+    pub async fn verify(&self, factor: &Factor, state_token: String) -> Result<LoginResponse, Error> {
         match factor {
             Factor::Push { links, .. } => {
                 let url = match links.get("verify").unwrap() {
@@ -207,11 +207,11 @@ impl Client {
                 let request = FactorVerificationRequest::Push { state_token };
 
                 // Trigger sending of Push
-                let mut response: LoginResponse = self.post_absolute(url.clone(), &request)?;
+                let mut response: LoginResponse = self.post_absolute(url.clone(), &request).await?;
 
                 while Some(FactorResult::Waiting) == response.factor_result {
                     sleep(Duration::from_millis(100));
-                    response = self.post_absolute(url.clone(), &request)?;
+                    response = self.post_absolute(url.clone(), &request).await?;
                 }
 
                 match response.factor_result {
@@ -231,7 +231,7 @@ impl Client {
                 };
 
                 // Trigger sending of SMS
-                let response: LoginResponse = self.post_absolute(url.clone(), &request)?;
+                let response: LoginResponse = self.post_absolute(url.clone(), &request).await?;
 
                 let state_token = response
                     .state_token
@@ -242,7 +242,7 @@ impl Client {
                     pass_code: Some(Password::new().with_prompt(factor.to_string()).interact()?),
                 };
 
-                self.post_absolute(url, &request)
+                self.post_absolute(url, &request).await
             }
             Factor::Totp { links, .. } => {
                 let mut url = match links.get("verify").unwrap() {
@@ -257,7 +257,7 @@ impl Client {
                     pass_code: Password::new().with_prompt(factor.to_string()).interact()?,
                 };
 
-                self.post_absolute(url, &request)
+                self.post_absolute(url, &request).await
             }
             _ => {
                 // TODO

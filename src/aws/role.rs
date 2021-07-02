@@ -42,7 +42,7 @@ impl Role {
     }
 }
 
-pub fn assume_role(
+pub async fn assume_role(
     Role {
         provider_arn,
         role_arn,
@@ -56,6 +56,7 @@ pub fn assume_role(
         principal_arn: provider_arn,
         role_arn,
         saml_assertion,
+        policy_arns: None
     };
 
     let provider = StaticProvider::new_minimal(String::from(""), String::from(""));
@@ -65,7 +66,7 @@ pub fn assume_role(
 
     client
         .assume_role_with_saml(req)
-        .sync()
+        .await
         .map_err(|e| e.into())
 }
 

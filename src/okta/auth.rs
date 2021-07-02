@@ -116,7 +116,7 @@ pub enum LoginState {
 }
 
 impl Client {
-    pub fn login(&self, req: &LoginRequest) -> Result<LoginResponse, Error> {
+    pub async fn login(&self, req: &LoginRequest) -> Result<LoginResponse, Error> {
         let login_type = if req.state_token.is_some() {
             "State Token"
         } else {
@@ -125,11 +125,11 @@ impl Client {
 
         debug!("Attempting to login with {}", login_type);
 
-        self.post("api/v1/authn", req)
+        self.post("api/v1/authn", req).await
     }
 
-    pub fn get_session_token(&self, req: &LoginRequest) -> Result<String, Error> {
-        let response = self.login(req)?;
+    pub async fn get_session_token(&self, req: &LoginRequest) -> Result<String, Error> {
+        let response = self.login(req).await?;
 
         trace!("Login response: {:?}", response);
 
@@ -164,7 +164,7 @@ impl Client {
                     .state_token
                     .ok_or_else(|| format_err!("No state token found in response"))?;
 
-                let factor_provided_response = self.verify(&factor, state_token)?;
+                let factor_provided_response = self.verify(&factor, state_token).await?;
 
                 trace!("Factor Provided Response: {:?}", factor_provided_response);
 
