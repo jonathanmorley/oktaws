@@ -31,10 +31,10 @@ pub struct UserProfile {
 }
 
 impl Client {
-    pub fn app_links(&self, user_id: Option<&str>) -> Result<Vec<AppLink>, Error> {
+    pub async fn app_links(&self, user_id: Option<&str>) -> Result<Vec<AppLink>, Error> {
         self.get(&format!(
             "api/v1/users/{}/appLinks",
             user_id.unwrap_or("me")
-        ))
+        )).await
     }
 }

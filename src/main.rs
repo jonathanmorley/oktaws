@@ -21,8 +21,6 @@ use std::sync::{Arc, Mutex};
 
 use failure::Error;
 use glob::Pattern;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use rusoto_sts::Credentials;
 use structopt::StructOpt;
 
@@ -59,7 +57,8 @@ pub struct Args {
 }
 
 #[paw::main]
-fn main(args: Args) -> Result<(), Error> {
+#[tokio::main]
+async fn main(args: Args) -> Result<(), Error> {
     debug!("Args: {:?}", args);
 
     // Set Log Level
@@ -91,7 +90,7 @@ fn main(args: Args) -> Result<(), Error> {
             organization.name.clone(),
             organization.username.clone(),
             args.force_new,
-        )?;
+        ).await?;
 
         // Collect here and re-iter below in case we want to be async.
         let profiles = organization
@@ -106,32 +105,11 @@ fn main(args: Args) -> Result<(), Error> {
             continue;
         }
 
-        let credentials_folder = |mut acc: HashMap<String, Credentials>,
-                                  profile: &Profile|
-         -> Result<HashMap<String, Credentials>, Error> {
-            let credentials = fetch_credentials(&okta_client, &organization, &profile)?;
-            acc.insert(profile.name.clone(), credentials);
-
-            Ok(acc)
-        };
-
-        let org_credentials: HashMap<_, _> = if args.asynchronous {
-            profiles
-                .into_par_iter()
-                .try_fold_with(HashMap::new(), credentials_folder)
-                .try_reduce_with(|mut a, b| -> Result<_, Error> {
-                    a.extend(b.into_iter());
-                    Ok(a)
-                })
-                .unwrap_or_else(|| {
-                    println!("No profiles");
-                    Ok(HashMap::new())
-                })?
-        } else {
-            profiles
-                .into_iter()
-                .try_fold(HashMap::new(), credentials_folder)?
-        };
+        let mut org_credentials = HashMap::new();
+        for profile in profiles {
+            let credentials = fetch_credentials(&okta_client, &organization, &profile).await?;
+            org_credentials.insert(profile.name.clone(), credentials);
+        }
 
         for (name, creds) in org_credentials {
             credentials_store
@@ -145,7 +123,7 @@ fn main(args: Args) -> Result<(), Error> {
     store.save()
 }
 
-fn fetch_credentials(
+async fn fetch_credentials(
     client: &OktaClient,
     organization: &Organization,
     profile: &Profile,
@@ -156,7 +134,7 @@ fn fetch_credentials(
     );
 
     let app_link = client
-        .app_links(None)?
+        .app_links(None).await?
         .into_iter()
         .find(|app_link| {
             app_link.app_name == "amazon_aws" && app_link.label == profile.application_name
@@ -171,7 +149,7 @@ fn fetch_credentials(
 
     debug!("Application Link: {:?}", &app_link);
 
-    let saml = client.get_saml_response(app_link.link_url).map_err(|e| {
+    let saml = client.get_saml_response(app_link.link_url).await.map_err(|e| {
         format_err!(
             "Error getting SAML response for profile {} ({})",
             profile.name,
@@ -201,6 +179,7 @@ fn fetch_credentials(
     );
 
     let assumption_response = aws::role::assume_role(role, saml.raw, profile.duration_seconds)
+        .await
         .map_err(|e| format_err!("Error assuming role for profile {} ({})", profile.name, e))?;
 
     let credentials = assumption_response
