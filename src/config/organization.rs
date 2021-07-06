@@ -1,5 +1,5 @@
 use crate::config::profile::{Profile, ProfileConfig};
-use crate::{aws::role::Role, okta::client::Client as OktaClient};
+use crate::okta::client::Client as OktaClient;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -79,27 +79,24 @@ impl Organization {
             .filter(move |p| filter.matches(&p.name))
     }
 
-    pub async fn into_credentials(self, client: &OktaClient, filter: Pattern) -> HashMap<String, Credentials> {
+    pub async fn into_credentials(
+        self,
+        client: &OktaClient,
+        filter: Pattern,
+    ) -> impl Iterator<Item = (String, Credentials)> {
         let org_name = self.name.clone();
-        
-        let futures = self
-            .into_profiles(filter)
-            .map(|profile| {
-                async {
-                    let name = profile.name.clone();
 
-                    info!(
-                        "Requesting tokens for {}/{}",
-                        org_name, profile.name
-                    );
+        let futures = self.into_profiles(filter).map(|profile| async {
+            let name = profile.name.clone();
 
-                    let credentials = profile.into_credentials(&client).await.unwrap();
+            info!("Requesting tokens for {}/{}", org_name, profile.name);
 
-                    (name, credentials)
-                }
-            });
+            let credentials = profile.into_credentials(&client).await.unwrap();
 
-        join_all(futures).await.into_iter().collect()
+            (name, credentials)
+        });
+
+        join_all(futures).await.into_iter()
     }
 }
 
@@ -112,4 +109,60 @@ pub fn prompt_username(organization: &impl Display) -> Result<String, Error> {
     }
 
     input.interact_text().map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::fs::File;
+    use std::io::Write;
+
+    use tempfile;
+
+    #[test]
+    fn parse_organization() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let filepath = tempdir.path().join("mock_org.toml");
+        let mut file = File::create(filepath.clone()).unwrap();
+
+        write!(
+            file,
+            r#"
+username = "mock_user"
+[profiles]
+"#
+        )
+        .unwrap();
+
+        let organization = Organization::try_from(filepath.as_path()).unwrap();
+
+        assert_eq!(organization.name, "mock_org");
+        assert_eq!(organization.username, "mock_user");
+        assert_eq!(organization.profiles.len(), 0);
+    }
+
+    #[test]
+    fn must_have_profiles() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let filepath = tempdir.path().join("mock_org.toml");
+        let mut file = File::create(filepath.clone()).unwrap();
+
+        write!(
+            file,
+            r#"
+username = "mock_user"
+"#
+        )
+        .unwrap();
+
+        let err = Organization::try_from(filepath.as_path()).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Bad TOML data: missing field `profiles` at line 1 column 1"
+        );
+    }
 }

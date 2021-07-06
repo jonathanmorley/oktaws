@@ -35,6 +35,7 @@ impl Client {
         self.get(&format!(
             "api/v1/users/{}/appLinks",
             user_id.unwrap_or("me")
-        )).await
+        ))
+        .await
     }
 }

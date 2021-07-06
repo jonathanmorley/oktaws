@@ -6,10 +6,10 @@ use std::sync::Arc;
 use dialoguer::Password;
 use failure::Error;
 use keyring::Keyring;
-use reqwest::Client as HttpClient;
-use reqwest::Response;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
+use reqwest::Client as HttpClient;
+use reqwest::Response;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -38,7 +38,11 @@ pub struct ClientErrorSummary {
 }
 
 impl Client {
-    pub async fn new(organization: String, username: String, force_prompt: bool) -> Result<Self, Error> {
+    pub async fn new(
+        organization: String,
+        username: String,
+        force_prompt: bool,
+    ) -> Result<Self, Error> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
             .set_username(&username)
@@ -70,10 +74,12 @@ impl Client {
         }?;
 
         // Do the login
-        let session_token = client.get_session_token(&LoginRequest::from_credentials(
-            username.to_owned(),
-            password.clone(),
-        )).await?;
+        let session_token = client
+            .get_session_token(&LoginRequest::from_credentials(
+                username.to_owned(),
+                password.clone(),
+            ))
+            .await?;
         client.new_session(session_token, &HashSet::new()).await?;
 
         // Save the password. Don't treat this as a failure, as it is not a hard requirement
