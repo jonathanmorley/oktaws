@@ -102,15 +102,17 @@ impl Client {
         session_token: String,
         additional_fields: &HashSet<SessionProperties>,
     ) -> Result<(), Error> {
-        let session: Session = self.post(
-            &format!(
-                "api/v1/sessions?additionalFields={}",
-                additional_fields.iter().join(",")
-            ),
-            &SessionRequest {
-                session_token: Some(session_token),
-            },
-        ).await?;
+        let session: Session = self
+            .post(
+                &format!(
+                    "api/v1/sessions?additionalFields={}",
+                    additional_fields.iter().join(",")
+                ),
+                &SessionRequest {
+                    session_token: Some(session_token),
+                },
+            )
+            .await?;
 
         self.set_session_id(session.id);
 

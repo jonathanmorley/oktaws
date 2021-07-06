@@ -50,7 +50,8 @@ impl Client {
             debug!("No SAML found for app {:?}, will re-login", &app_url);
 
             let state_token = extract_state_token(&response)?;
-            self.get_session_token(&LoginRequest::from_state_token(state_token)).await?;
+            self.get_session_token(&LoginRequest::from_state_token(state_token))
+                .await?;
             self.get_saml_response(app_url).await
         } else {
             extract_saml_response(response).map_err(|e| e.into())

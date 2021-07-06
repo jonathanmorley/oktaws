@@ -4,7 +4,6 @@ use failure::{err_msg, Error};
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ProfileConfig {
@@ -62,60 +61,61 @@ impl Profile {
         })
     }
 
-    pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials, Error> {  
-      let app_link = client
-          .app_links(None).await?
-          .into_iter()
-          .find(|app_link| {
-              app_link.app_name == "amazon_aws" && app_link.label == self.application_name
-          })
-          .ok_or_else(|| {
-              format_err!(
-                  "Could not find Okta application for profile {}", self.name
-              )
-          })?;
-  
-      debug!("Application Link: {:?}", &app_link);
-  
-      let saml = client.get_saml_response(app_link.link_url).await.map_err(|e| {
-          format_err!(
-              "Error getting SAML response for profile {} ({})",
-              self.name,
-              e
-          )
-      })?;
-  
-      let roles = saml.roles;
-  
-      debug!("SAML Roles: {:?}", &roles);
-  
-      let role: Role = roles
-          .into_iter()
-          .find(|r| r.role_name().map(|r| r == self.role).unwrap_or(false))
-          .ok_or_else(|| {
-              format_err!(
-                  "No matching role ({}) found for profile {}",
-                  self.role,
-                  &self.name
-              )
-          })?;
-  
-      trace!(
-          "Found role: {} for profile {}",
-          role.role_arn,
-          &self.name
-      );
-  
-      let assumption_response = crate::aws::role::assume_role(role, saml.raw, self.duration_seconds)
-          .await
-          .map_err(|e| format_err!("Error assuming role for profile {} ({})", self.name, e))?;
-  
-      let credentials = assumption_response
-          .credentials
-          .ok_or_else(|| format_err!("Error fetching credentials from assumed AWS role"))?;
-  
-      trace!("Credentials: {:?}", credentials);
-  
-      Ok(credentials)
-  }
+    pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials, Error> {
+        let app_link = client
+            .app_links(None)
+            .await?
+            .into_iter()
+            .find(|app_link| {
+                app_link.app_name == "amazon_aws" && app_link.label == self.application_name
+            })
+            .ok_or_else(|| {
+                format_err!("Could not find Okta application for profile {}", self.name)
+            })?;
+
+        debug!("Application Link: {:?}", &app_link);
+
+        let saml = client
+            .get_saml_response(app_link.link_url)
+            .await
+            .map_err(|e| {
+                format_err!(
+                    "Error getting SAML response for profile {} ({})",
+                    self.name,
+                    e
+                )
+            })?;
+
+        let roles = saml.roles;
+
+        debug!("SAML Roles: {:?}", &roles);
+
+        let role: Role = roles
+            .into_iter()
+            .find(|r| r.role_name().map(|r| r == self.role).unwrap_or(false))
+            .ok_or_else(|| {
+                format_err!(
+                    "No matching role ({}) found for profile {}",
+                    self.role,
+                    &self.name
+                )
+            })?;
+
+        trace!("Found role: {} for profile {}", role.role_arn, &self.name);
+
+        let assumption_response =
+            crate::aws::role::assume_role(role, saml.raw, self.duration_seconds)
+                .await
+                .map_err(|e| {
+                    format_err!("Error assuming role for profile {} ({})", self.name, e)
+                })?;
+
+        let credentials = assumption_response
+            .credentials
+            .ok_or_else(|| format_err!("Error fetching credentials from assumed AWS role"))?;
+
+        trace!("Credentials: {:?}", credentials);
+
+        Ok(credentials)
+    }
 }

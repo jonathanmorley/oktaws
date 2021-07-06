@@ -9,22 +9,14 @@ mod okta;
 mod saml;
 
 use crate::aws::credentials::CredentialsStore;
-use crate::aws::role::Role;
-use crate::config::organization::Organization;
-use crate::config::profile::Profile;
 use crate::config::Config;
 use crate::okta::client::Client as OktaClient;
 
-use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 
 use failure::Error;
-use futures::StreamExt;
-use futures::future::join_all;
-use futures::stream::FuturesUnordered;
 use glob::Pattern;
-use rusoto_sts::Credentials;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -80,7 +72,9 @@ async fn main(args: Args) -> Result<(), Error> {
     // Set up a store for AWS credentials
     let credentials_store = Arc::new(Mutex::new(CredentialsStore::new()?));
 
-    let mut organizations = config.into_organizations(args.organizations.clone()).peekable();
+    let mut organizations = config
+        .into_organizations(args.organizations.clone())
+        .peekable();
 
     if organizations.peek().is_none() {
         bail!("No organizations found called {}", args.organizations);
@@ -93,7 +87,8 @@ async fn main(args: Args) -> Result<(), Error> {
             organization.name.clone(),
             organization.username.clone(),
             args.force_new,
-        ).await?;
+        )
+        .await?;
 
         // if profiles.is_empty() {
         //     warn!(
@@ -106,17 +101,19 @@ async fn main(args: Args) -> Result<(), Error> {
         //let mut futures = vec![];
         //let mut org_credentials = HashMap::new();
 
-        let org_credentials = organization.into_credentials(&okta_client, args.profiles.clone()).await;
+        let org_credentials = organization
+            .into_credentials(&okta_client, args.profiles.clone())
+            .await;
 
         for (name, creds) in org_credentials {
             credentials_store
                 .lock()
                 .unwrap()
-                .set_profile(name.clone(), creds)?;
+                .profiles
+                .set_sts_credentials(name.clone(), creds.into())?;
         }
     }
 
-    let store = credentials_store.lock().unwrap();
+    let mut store = credentials_store.lock().unwrap();
     store.save()
 }
-

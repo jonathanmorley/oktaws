@@ -196,7 +196,11 @@ impl fmt::Display for Factor {
 }
 
 impl Client {
-    pub async fn verify(&self, factor: &Factor, state_token: String) -> Result<LoginResponse, Error> {
+    pub async fn verify(
+        &self,
+        factor: &Factor,
+        state_token: String,
+    ) -> Result<LoginResponse, Error> {
         match factor {
             Factor::Push { links, .. } => {
                 let url = match links.get("verify").unwrap() {
