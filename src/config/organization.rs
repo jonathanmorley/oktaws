@@ -83,7 +83,7 @@ impl Organization {
     pub async fn into_credentials(
         self,
         client: &OktaClient,
-        filter: Pattern,
+        filter: Pattern
     ) -> impl Iterator<Item = (String, Credentials)> {
         let org_name = self.name.clone();
 

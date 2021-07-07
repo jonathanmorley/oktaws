@@ -12,6 +12,7 @@ use crate::aws::credentials::CredentialsStore;
 use crate::config::Config;
 use crate::okta::client::Client as OktaClient;
 
+use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 
@@ -46,7 +47,7 @@ pub struct Args {
     #[structopt(short = "q", long = "quiet")]
     pub quiet: bool,
 
-    /// Fetch profiles asynchronously. Currently disabled
+    /// Fetch profiles asynchronously
     #[structopt(short = "a", long = "async")]
     pub asynchronous: bool,
 }
@@ -72,9 +73,7 @@ async fn main(args: Args) -> Result<(), Error> {
     // Set up a store for AWS credentials
     let credentials_store = Arc::new(Mutex::new(CredentialsStore::new()?));
 
-    let mut organizations = config
-        .into_organizations(args.organizations.clone())
-        .peekable();
+    let mut organizations = config.into_organizations(args.organizations.clone()).peekable();
 
     if organizations.peek().is_none() {
         bail!("No organizations found called {}", args.organizations);
@@ -87,33 +86,36 @@ async fn main(args: Args) -> Result<(), Error> {
             organization.name.clone(),
             organization.username.clone(),
             args.force_new,
-        )
-        .await?;
+        ).await?;
 
-        // if profiles.is_empty() {
-        //     warn!(
-        //         "No profiles found matching {} in {}",
-        //         args.profiles, organization.name
-        //     );
-        //     continue;
-        // }
+        let credentials_map = if args.asynchronous {
+            organization.into_credentials(&okta_client, args.profiles.clone()).await.collect()
+        } else {
+            let profiles = organization.into_profiles(args.profiles.clone());
 
-        //let mut futures = vec![];
-        //let mut org_credentials = HashMap::new();
+            let mut credentials_map = HashMap::new();
+            for profile in profiles {
+                let name = profile.name.clone();
+    
+                info!("Requesting tokens for {}", profile.name);
+    
+                let credentials = profile.into_credentials(&okta_client).await.unwrap();
+    
+                credentials_map.insert(name, credentials);
+            }
+    
+            credentials_map
+        };
 
-        let org_credentials = organization
-            .into_credentials(&okta_client, args.profiles.clone())
-            .await;
-
-        for (name, creds) in org_credentials {
+        for (name, creds) in credentials_map {
             credentials_store
                 .lock()
                 .unwrap()
-                .profiles
-                .set_sts_credentials(name.clone(), creds.into())?;
+                .profiles.set_sts_credentials(name.clone(), creds.into())?;
         }
     }
 
     let mut store = credentials_store.lock().unwrap();
     store.save()
 }
+
