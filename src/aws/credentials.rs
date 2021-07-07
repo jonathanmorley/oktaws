@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::env::var as env_var;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -7,12 +6,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str;
 use std::{
-    collections::btree_map::Entry,
     convert::{TryFrom, TryInto},
 };
 
 use dirs;
 use failure::{err_msg, Error};
+use indexmap::IndexMap;
+use indexmap::map::Entry;
 use path_abs::PathFile;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 // `BTreeMap`s are sorted
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 #[serde(transparent)]
-pub struct Profile(BTreeMap<String, String>);
+pub struct Profile(IndexMap<String, String>);
 
 impl Profile {
     fn is_sts_credentials(&self) -> bool {
@@ -34,7 +34,9 @@ impl Profile {
             bail!("Profile is not STS. Cannot set STS credentials");
         }
 
-        self.0.append(&mut Profile::from(creds).0);
+        for (key, value) in Profile::from(creds).0 {
+            self.0.insert(key, value);
+        }
 
         Ok(())
     }
@@ -42,7 +44,7 @@ impl Profile {
 
 impl From<StsCreds> for Profile {
     fn from(creds: StsCreds) -> Self {
-        let mut map = BTreeMap::default();
+        let mut map = IndexMap::default();
 
         map.insert("aws_access_key_id".to_string(), creds.aws_access_key_id);
         map.insert(
@@ -93,9 +95,9 @@ impl From<rusoto_sts::Credentials> for StsCreds {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(transparent)]
-pub struct Profiles(BTreeMap<String, Profile>);
+pub struct Profiles(IndexMap<String, Profile>);
 
 impl Profiles {
     pub fn set_sts_credentials(&mut self, name: String, creds: StsCreds) -> Result<(), Error> {
@@ -263,7 +265,7 @@ foo=bar";
         let mut profile: Profile = creds.into();
         profile.0.insert("foo".to_string(), "bar".to_string());
 
-        let mut map = BTreeMap::default();
+        let mut map = IndexMap::default();
         map.insert("example".to_string(), profile);
         let profiles = Profiles(map);
 
@@ -308,7 +310,7 @@ aws_session_token=SESSION_TOKEN_2";
     }
 
     #[test]
-    fn set_sts_credentials() {
+    fn update_sts_credentials() {
         let profiles_ini = "[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
@@ -317,16 +319,36 @@ foo=bar";
 
         let mut profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
 
-        profiles
-            .0
-            .get_mut("example")
-            .unwrap()
-            .set_sts_credentials(StsCreds {
+        profiles.set_sts_credentials("example".to_string(), StsCreds {
                 aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
                 aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
                 aws_session_token: "NEW_SESSION_TOKEN".to_string(),
             })
             .unwrap();
+
+        assert_eq!(
+            profiles.0["example"].0["aws_access_key_id"],
+            "NEW_ACCESS_KEY"
+        );
+        assert_eq!(
+            profiles.0["example"].0["aws_secret_access_key"],
+            "NEW_SECRET_ACCESS_KEY"
+        );
+        assert_eq!(
+            profiles.0["example"].0["aws_session_token"],
+            "NEW_SESSION_TOKEN"
+        );
+    }
+
+    #[test]
+    fn add_sts_credentials() {
+        let mut profiles = Profiles::default();
+
+        profiles.set_sts_credentials("example".to_string(), StsCreds {
+            aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
+            aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
+            aws_session_token: "NEW_SESSION_TOKEN".to_string(),
+        }).unwrap();
 
         assert_eq!(
             profiles.0["example"].0["aws_access_key_id"],
@@ -367,6 +389,8 @@ foo=bar";
         );
     }
 
+
+
     #[test]
     fn cannot_parse_bad_ini() {
         let profiles_ini = "[example]
@@ -384,16 +408,19 @@ foo";
 
     #[test]
     fn roundtrip_with_update() {
-        let profiles_ini = "[example_static]
-aws_access_key_id=ACCESS_KEY
-aws_secret_access_key=SECRET_ACCESS_KEY
-foo=bar
-
-[example_sts]
+        // This also checks that non-alphabetical ordering is preserved.
+        // Comments are not currnetly preserved
+        let profiles_ini = "[example_sts]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
+# This is important
 bar=baz
+
+[example_static]
+aws_secret_access_key=SECRET_ACCESS_KEY
+aws_access_key_id=ACCESS_KEY
+foo=bar
 ";
 
         let mut profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
@@ -413,15 +440,15 @@ bar=baz
 
         assert_eq!(
             String::from_utf8(w).unwrap(),
-            "[example_static]\r
-aws_access_key_id=ACCESS_KEY\r
-aws_secret_access_key=SECRET_ACCESS_KEY\r
-foo=bar\r
-[example_sts]\r
+            "[example_sts]\r
 aws_access_key_id=NEW_ACCESS_KEY\r
 aws_secret_access_key=NEW_SECRET_ACCESS_KEY\r
 aws_session_token=NEW_SESSION_TOKEN\r
 bar=baz\r
+[example_static]\r
+aws_secret_access_key=SECRET_ACCESS_KEY\r
+aws_access_key_id=ACCESS_KEY\r
+foo=bar\r
 "
         );
     }
@@ -474,13 +501,13 @@ aws_session_token=SESSION_TOKEN"
 
         assert_eq!(
             &buf,
-            "[example]\r
+            "[existing]\r
+aws_access_key_id=ACCESS_KEY\r
+aws_secret_access_key=SECRET_ACCESS_KEY\r
+[example]\r
 aws_access_key_id=ACCESS_KEY2\r
 aws_secret_access_key=SECRET_ACCESS_KEY2\r
 aws_session_token=SESSION_TOKEN2\r
-[existing]\r
-aws_access_key_id=ACCESS_KEY\r
-aws_secret_access_key=SECRET_ACCESS_KEY\r
 "
         );
     }

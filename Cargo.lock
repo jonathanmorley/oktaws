@@ -254,17 +254,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "confy"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2913470204e9e8498a0f31f17f90a0de801ae92c8c5ac18c49af4819e6786697"
-dependencies = [
- "directories",
- "serde",
- "toml",
-]
-
-[[package]]
 name = "console"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -455,16 +444,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "directories"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "551a778172a450d7fc12e629ca3b0428d00f6afa9a43da1b630d54604e97371c"
-dependencies = [
- "cfg-if 0.1.10",
- "dirs-sys",
 ]
 
 [[package]]
@@ -983,6 +962,7 @@ checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
 dependencies = [
  "autocfg",
  "hashbrown 0.11.2",
+ "serde",
 ]
 
 [[package]]
@@ -1300,12 +1280,12 @@ dependencies = [
  "async-recursion",
  "base64",
  "chrono",
- "confy",
  "dialoguer",
  "dirs",
  "failure",
  "futures",
  "glob",
+ "indexmap",
  "itertools",
  "keyring",
  "kuchiki",
@@ -1326,6 +1306,7 @@ dependencies = [
  "structopt",
  "tempfile",
  "tokio",
+ "toml",
  "url",
  "username",
  "walkdir",
