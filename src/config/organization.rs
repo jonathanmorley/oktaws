@@ -6,14 +6,14 @@ use std::fmt::Display;
 use std::fs::read_to_string;
 use std::path::Path;
 
-use indexmap::IndexMap;
-use toml;
 use dialoguer::Input;
 use failure::Error;
 use futures::future::join_all;
 use glob::Pattern;
+use indexmap::IndexMap;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
+use toml;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OrganizationConfig {
@@ -83,7 +83,7 @@ impl Organization {
     pub async fn into_credentials(
         self,
         client: &OktaClient,
-        filter: Pattern
+        filter: Pattern,
     ) -> impl Iterator<Item = (String, Credentials)> {
         let org_name = self.name.clone();
 
@@ -206,10 +206,7 @@ foo = "foo"
 
         let err = Organization::try_from(filepath.as_path()).unwrap_err();
 
-        assert_eq!(
-            err.to_string(),
-            "No role found"
-        );
+        assert_eq!(err.to_string(), "No role found");
     }
 
     #[test]

@@ -74,10 +74,7 @@ impl Client {
         #[cfg(target_os = "linux")]
         let password = client.prompt_password()?;
 
-        let login_request = LoginRequest::from_credentials(
-            username.to_owned(),
-            password.clone(),
-        );
+        let login_request = LoginRequest::from_credentials(username.to_owned(), password.clone());
 
         // Do the login
         let session_token = match client.get_session_token(&login_request).await {
@@ -87,17 +84,19 @@ impl Client {
                 client.set_cached_password(&keyring, &password);
 
                 Ok(session_token)
-            },
+            }
             Err(wrapped_error) => {
-                if wrapped_error.downcast_ref::<ClientError>().map(|e| e.error_summary.as_ref()) == Some("Authentication failed") {
+                if wrapped_error
+                    .downcast_ref::<ClientError>()
+                    .map(|e| e.error_summary.as_ref())
+                    == Some("Authentication failed")
+                {
                     warn!("Authentication failed, re-prompting for Okta credentials");
 
                     let password = client.prompt_password()?;
-                    let login_request = LoginRequest::from_credentials(
-                        username.to_owned(),
-                        password.clone(),
-                    );
-                    
+                    let login_request =
+                        LoginRequest::from_credentials(username.to_owned(), password.clone());
+
                     let session_token = client.get_session_token(&login_request).await?;
 
                     // Save the password.
@@ -188,22 +187,9 @@ impl Client {
         } else {
             match self.get_cached_password(keyring) {
                 Some(password) => Ok(password),
-                None => self.prompt_password()
+                None => self.prompt_password(),
             }
         }
-    }
-
-    #[cfg(linux)]
-    fn can_cache_password(&self) -> bool {
-        // We don't support caching passwords on linux,
-        // because we cannot guarantee DBus availability
-        false
-    }
-
-    #[cfg(not(linux))]
-    fn can_cache_password(&self) -> bool {
-        // Keyring says it supports MacOS and Windows without requirements
-        true
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -214,7 +200,7 @@ impl Client {
     #[cfg(not(target_os = "linux"))]
     pub fn set_cached_password(&self, keyring: &Keyring, password: &str) {
         debug!("Saving Okta credentials for {}", self.base_url);
-        
+
         // Don't treat this as a failure, as it is not a hard requirement
         if let Err(e) = keyring.set_password(password) {
             warn!("Error while saving credentials: {}", e);
