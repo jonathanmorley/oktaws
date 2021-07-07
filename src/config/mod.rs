@@ -44,6 +44,7 @@ impl Config {
 fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
     WalkDir::new(dir)
         .follow_links(true)
+        .sort_by_file_name()
         .into_iter()
         .filter_map(|r| r.ok())
         .filter(|e| e.file_type().is_file())
@@ -100,7 +101,7 @@ mod tests {
         env::set_var("OKTAWS_HOME", create_mock_config_dir());
         let config = Config::new().unwrap();
 
-        assert_eq!(config.organizations(Pattern::new("*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["foo", "bar", "baz"]);
+        assert_eq!(config.organizations(Pattern::new("*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["bar", "baz", "foo"]);
         assert_eq!(config.organizations(Pattern::new("ba*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["bar", "baz"]);
     }
 
@@ -109,7 +110,7 @@ mod tests {
         env::set_var("OKTAWS_HOME", create_mock_config_dir());
 
         let config = Config::new().unwrap();
-        assert_eq!(config.into_organizations(Pattern::new("*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["foo", "bar", "baz"]);
+        assert_eq!(config.into_organizations(Pattern::new("*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["bar", "baz", "foo"]);
 
         let config = Config::new().unwrap();
         assert_eq!(config.into_organizations(Pattern::new("ba*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["bar", "baz"]);

@@ -1,29 +1,19 @@
-FROM clux/muslrust:1.53.0 as cargo-build
+FROM rust:1.53.0 as builder
 
-RUN apt-get -y update && apt-get -y install libdbus-1-dev
+RUN rustup target add x86_64-unknown-linux-musl
+RUN apt update && apt install -y musl-tools musl-dev
 
 WORKDIR /usr/src/app
-COPY Cargo.lock .
-COPY Cargo.toml .
-#RUN mkdir .cargo src
-#RUN touch ./src/main.rs
-#RUN --mount=type=cache,target=vendor  \
-#  cargo vendor > .cargo/config
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+  cargo test
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+  cargo build --release --target x86_64-unknown-linux-musl
 
-COPY ./src src
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=target/release/build \
-    --mount=type=cache,target=target/release/deps \
-  cargo build --release
-#RUN cargo install --path . --verbose
-#RUN --mount=type=cache,target=/root/.cargo/registry \
-#    --mount=type=cache,target=target/release/build \
-#    --mount=type=cache,target=target/release/deps \
-#  cargo run --release -- --version
-#RUN target/x86_64-unknown-linux-musl/release/oktaws --version
+FROM scratch
 
-FROM alpine
 # Copy the compiled binary from the builder container
-COPY --from=cargo-build /root/.cargo/bin/oktaws /oktaws
+COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/oktaws /oktaws
+
 # Pass all arguments etc to binary
 ENTRYPOINT [ "/oktaws" ]

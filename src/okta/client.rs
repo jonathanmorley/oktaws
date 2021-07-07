@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use dialoguer::Password;
 use failure::Error;
+#[cfg(not(target_os = "linux"))]
 use keyring::Keyring;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
@@ -51,7 +52,6 @@ impl Client {
         let cookies = Arc::from(Jar::default());
 
         let service = format!("oktaws::okta::{}", organization);
-        let keyring = Keyring::new(&service, &username);
 
         let mut client = Client {
             client: HttpClient::builder()
@@ -66,12 +66,13 @@ impl Client {
         client.get_response(base_url).await?;
 
         // get password
-        let password = if force_prompt {
-            debug!("Force new is set, prompting for password");
-            client.prompt_password()
-        } else {
-            client.get_password(&keyring)
-        }?;
+        #[cfg(not(target_os = "linux"))]
+        let keyring = Keyring::new(&service, &username);
+
+        #[cfg(not(target_os = "linux"))]
+        let password = client.get_password(&keyring, force_prompt)?;
+        #[cfg(target_os = "linux")]
+        let password = client.prompt_password()?;
 
         let login_request = LoginRequest::from_credentials(
             username.to_owned(),
@@ -81,10 +82,9 @@ impl Client {
         // Do the login
         let session_token = match client.get_session_token(&login_request).await {
             Ok(session_token) => {
-                // Save the password. Don't treat this as a failure, as it is not a hard requirement
-                if let Err(e) = client.save_password(&keyring, &password) {
-                    warn!("Error while saving credentials: {}", e);
-                }
+                // Save the password.
+                #[cfg(not(target_os = "linux"))]
+                client.set_cached_password(&keyring, &password);
 
                 Ok(session_token)
             },
@@ -100,10 +100,9 @@ impl Client {
                     
                     let session_token = client.get_session_token(&login_request).await?;
 
-                    // Save the password. Don't treat this as a failure, as it is not a hard requirement
-                    if let Err(e) = client.save_password(&keyring, &password) {
-                        warn!("Error while saving credentials: {}", e);
-                    }
+                    // Save the password.
+                    #[cfg(not(target_os = "linux"))]
+                    client.set_cached_password(&keyring, &password);
 
                     Ok(session_token)
                 } else {
@@ -181,20 +180,44 @@ impl Client {
             .map_err(Into::into)
     }
 
-    pub fn get_password(&self, keyring: &Keyring) -> Result<String, Error> {
-        keyring.get_password().or_else(|e| {
-            debug!(
-                "Retrieving cached password failed, prompting for password because of {:?}",
-                e
-            );
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_password(&self, keyring: &Keyring, force_prompt: bool) -> Result<String, Error> {
+        // If the user chooses to force new creds, prompt them for them
+        if force_prompt {
             self.prompt_password()
-        })
+        } else {
+            match self.get_cached_password(keyring) {
+                Some(password) => Ok(password),
+                None => self.prompt_password()
+            }
+        }
     }
 
-    pub fn save_password(&self, keyring: &Keyring, password: &str) -> Result<(), Error> {
+    #[cfg(linux)]
+    fn can_cache_password(&self) -> bool {
+        // We don't support caching passwords on linux,
+        // because we cannot guarantee DBus availability
+        false
+    }
+
+    #[cfg(not(linux))]
+    fn can_cache_password(&self) -> bool {
+        // Keyring says it supports MacOS and Windows without requirements
+        true
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn get_cached_password(&self, keyring: &Keyring) -> Option<String> {
+        keyring.get_password().ok()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn set_cached_password(&self, keyring: &Keyring, password: &str) {
         debug!("Saving Okta credentials for {}", self.base_url);
-        keyring
-            .set_password(password)
-            .map_err(|e| format_err!("{}", e))
+        
+        // Don't treat this as a failure, as it is not a hard requirement
+        if let Err(e) = keyring.set_password(password) {
+            warn!("Error while saving credentials: {}", e);
+        }
     }
 }
