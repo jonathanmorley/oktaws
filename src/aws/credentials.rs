@@ -1,3 +1,4 @@
+use std::convert::{TryFrom, TryInto};
 use std::env::var as env_var;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -5,14 +6,11 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str;
-use std::{
-    convert::{TryFrom, TryInto},
-};
 
 use dirs;
 use failure::{err_msg, Error};
-use indexmap::IndexMap;
 use indexmap::map::Entry;
+use indexmap::IndexMap;
 use path_abs::PathFile;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
@@ -319,11 +317,15 @@ foo=bar";
 
         let mut profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
 
-        profiles.set_sts_credentials("example".to_string(), StsCreds {
-                aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
-                aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
-                aws_session_token: "NEW_SESSION_TOKEN".to_string(),
-            })
+        profiles
+            .set_sts_credentials(
+                "example".to_string(),
+                StsCreds {
+                    aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
+                    aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
+                    aws_session_token: "NEW_SESSION_TOKEN".to_string(),
+                },
+            )
             .unwrap();
 
         assert_eq!(
@@ -344,11 +346,16 @@ foo=bar";
     fn add_sts_credentials() {
         let mut profiles = Profiles::default();
 
-        profiles.set_sts_credentials("example".to_string(), StsCreds {
-            aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
-            aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
-            aws_session_token: "NEW_SESSION_TOKEN".to_string(),
-        }).unwrap();
+        profiles
+            .set_sts_credentials(
+                "example".to_string(),
+                StsCreds {
+                    aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
+                    aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
+                    aws_session_token: "NEW_SESSION_TOKEN".to_string(),
+                },
+            )
+            .unwrap();
 
         assert_eq!(
             profiles.0["example"].0["aws_access_key_id"],
@@ -388,8 +395,6 @@ foo=bar";
             "Profile is not STS. Cannot set STS credentials"
         );
     }
-
-
 
     #[test]
     fn cannot_parse_bad_ini() {

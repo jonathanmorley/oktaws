@@ -82,7 +82,12 @@ mod tests {
             let filepath = tempdir.path().join(format!("{}.toml", organization_name));
             let mut file = File::create(filepath).unwrap();
 
-            write!(file, "username = \"{}_user\"\n[profiles]", organization_name).unwrap();
+            write!(
+                file,
+                "username = \"{}_user\"\n[profiles]",
+                organization_name
+            )
+            .unwrap();
         }
 
         tempdir.into_path()
@@ -101,8 +106,20 @@ mod tests {
         env::set_var("OKTAWS_HOME", create_mock_config_dir());
         let config = Config::new().unwrap();
 
-        assert_eq!(config.organizations(Pattern::new("*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["bar", "baz", "foo"]);
-        assert_eq!(config.organizations(Pattern::new("ba*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["bar", "baz"]);
+        assert_eq!(
+            config
+                .organizations(Pattern::new("*").unwrap())
+                .map(|org| org.name.clone())
+                .collect::<Vec<_>>(),
+            vec!["bar", "baz", "foo"]
+        );
+        assert_eq!(
+            config
+                .organizations(Pattern::new("ba*").unwrap())
+                .map(|org| org.name.clone())
+                .collect::<Vec<_>>(),
+            vec!["bar", "baz"]
+        );
     }
 
     #[test]
@@ -110,9 +127,21 @@ mod tests {
         env::set_var("OKTAWS_HOME", create_mock_config_dir());
 
         let config = Config::new().unwrap();
-        assert_eq!(config.into_organizations(Pattern::new("*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["bar", "baz", "foo"]);
+        assert_eq!(
+            config
+                .into_organizations(Pattern::new("*").unwrap())
+                .map(|org| org.name)
+                .collect::<Vec<_>>(),
+            vec!["bar", "baz", "foo"]
+        );
 
         let config = Config::new().unwrap();
-        assert_eq!(config.into_organizations(Pattern::new("ba*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["bar", "baz"]);
+        assert_eq!(
+            config
+                .into_organizations(Pattern::new("ba*").unwrap())
+                .map(|org| org.name)
+                .collect::<Vec<_>>(),
+            vec!["bar", "baz"]
+        );
     }
 }

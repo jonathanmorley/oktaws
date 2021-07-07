@@ -73,7 +73,9 @@ async fn main(args: Args) -> Result<(), Error> {
     // Set up a store for AWS credentials
     let credentials_store = Arc::new(Mutex::new(CredentialsStore::new()?));
 
-    let mut organizations = config.into_organizations(args.organizations.clone()).peekable();
+    let mut organizations = config
+        .into_organizations(args.organizations.clone())
+        .peekable();
 
     if organizations.peek().is_none() {
         bail!("No organizations found called {}", args.organizations);
@@ -86,24 +88,28 @@ async fn main(args: Args) -> Result<(), Error> {
             organization.name.clone(),
             organization.username.clone(),
             args.force_new,
-        ).await?;
+        )
+        .await?;
 
         let credentials_map = if args.asynchronous {
-            organization.into_credentials(&okta_client, args.profiles.clone()).await.collect()
+            organization
+                .into_credentials(&okta_client, args.profiles.clone())
+                .await
+                .collect()
         } else {
             let profiles = organization.into_profiles(args.profiles.clone());
 
             let mut credentials_map = HashMap::new();
             for profile in profiles {
                 let name = profile.name.clone();
-    
+
                 info!("Requesting tokens for {}", profile.name);
-    
+
                 let credentials = profile.into_credentials(&okta_client).await.unwrap();
-    
+
                 credentials_map.insert(name, credentials);
             }
-    
+
             credentials_map
         };
 
@@ -111,11 +117,11 @@ async fn main(args: Args) -> Result<(), Error> {
             credentials_store
                 .lock()
                 .unwrap()
-                .profiles.set_sts_credentials(name.clone(), creds.into())?;
+                .profiles
+                .set_sts_credentials(name.clone(), creds.into())?;
         }
     }
 
     let mut store = credentials_store.lock().unwrap();
     store.save()
 }
-
