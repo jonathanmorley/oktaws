@@ -73,19 +73,46 @@ impl Client {
             client.get_password(&keyring)
         }?;
 
-        // Do the login
-        let session_token = client
-            .get_session_token(&LoginRequest::from_credentials(
-                username.to_owned(),
-                password.clone(),
-            ))
-            .await?;
-        client.new_session(session_token, &HashSet::new()).await?;
+        let login_request = LoginRequest::from_credentials(
+            username.to_owned(),
+            password.clone(),
+        );
 
-        // Save the password. Don't treat this as a failure, as it is not a hard requirement
-        if let Err(e) = client.save_password(&keyring, &password) {
-            warn!("Error while saving credentials: {}", e);
-        }
+        // Do the login
+        let session_token = match client.get_session_token(&login_request).await {
+            Ok(session_token) => {
+                // Save the password. Don't treat this as a failure, as it is not a hard requirement
+                if let Err(e) = client.save_password(&keyring, &password) {
+                    warn!("Error while saving credentials: {}", e);
+                }
+
+                Ok(session_token)
+            },
+            Err(wrapped_error) => {
+                if wrapped_error.downcast_ref::<ClientError>().map(|e| e.error_summary.as_ref()) == Some("Authentication failed") {
+                    warn!("Authentication failed, re-prompting for Okta credentials");
+
+                    let password = client.prompt_password()?;
+                    let login_request = LoginRequest::from_credentials(
+                        username.to_owned(),
+                        password.clone(),
+                    );
+                    
+                    let session_token = client.get_session_token(&login_request).await?;
+
+                    // Save the password. Don't treat this as a failure, as it is not a hard requirement
+                    if let Err(e) = client.save_password(&keyring, &password) {
+                        warn!("Error while saving credentials: {}", e);
+                    }
+
+                    Ok(session_token)
+                } else {
+                    Err(wrapped_error)
+                }
+            }
+        }?;
+
+        client.new_session(session_token, &HashSet::new()).await?;
 
         Ok(client)
     }

@@ -1,12 +1,13 @@
 use crate::config::profile::{Profile, ProfileConfig};
 use crate::okta::client::Client as OktaClient;
 
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::fs::read_to_string;
 use std::path::Path;
 
-use confy;
+use indexmap::IndexMap;
+use toml;
 use dialoguer::Input;
 use failure::Error;
 use futures::future::join_all;
@@ -19,7 +20,7 @@ pub struct OrganizationConfig {
     pub role: Option<String>,
     pub username: Option<String>,
     pub duration_seconds: Option<i64>,
-    pub profiles: HashMap<String, ProfileConfig>,
+    pub profiles: IndexMap<String, ProfileConfig>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,7 +34,7 @@ impl TryFrom<&Path> for Organization {
     type Error = Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let cfg: OrganizationConfig = confy::load_path(path)?;
+        let cfg: OrganizationConfig = toml::de::from_str(&read_to_string(path)?)?;
 
         let filename = path
             .file_stem()
@@ -131,7 +132,12 @@ mod tests {
             file,
             r#"
 username = "mock_user"
+duration_seconds = 300
+role = "my_role"
 [profiles]
+foo = "foo"
+bar = {{ application = "bar", duration_seconds = 600 }}
+baz = {{ application = "baz", role = "baz_role" }}
 "#
         )
         .unwrap();
@@ -140,7 +146,22 @@ username = "mock_user"
 
         assert_eq!(organization.name, "mock_org");
         assert_eq!(organization.username, "mock_user");
-        assert_eq!(organization.profiles.len(), 0);
+        assert_eq!(organization.profiles.len(), 3);
+
+        assert_eq!(organization.profiles[0].name, "foo");
+        assert_eq!(organization.profiles[0].application_name, "foo");
+        assert_eq!(organization.profiles[0].role, "my_role");
+        assert_eq!(organization.profiles[0].duration_seconds, Some(300));
+
+        assert_eq!(organization.profiles[1].name, "bar");
+        assert_eq!(organization.profiles[1].application_name, "bar");
+        assert_eq!(organization.profiles[1].role, "my_role");
+        assert_eq!(organization.profiles[1].duration_seconds, Some(600));
+
+        assert_eq!(organization.profiles[2].name, "baz");
+        assert_eq!(organization.profiles[2].application_name, "baz");
+        assert_eq!(organization.profiles[2].role, "baz_role");
+        assert_eq!(organization.profiles[2].duration_seconds, Some(300));
     }
 
     #[test]
@@ -162,7 +183,60 @@ username = "mock_user"
 
         assert_eq!(
             err.to_string(),
-            "Bad TOML data: missing field `profiles` at line 1 column 1"
+            "missing field `profiles` at line 1 column 1"
         );
+    }
+
+    #[test]
+    fn profile_must_have_role() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let filepath = tempdir.path().join("mock_org.toml");
+        let mut file = File::create(filepath.clone()).unwrap();
+
+        write!(
+            file,
+            r#"
+username = "mock_user"
+[profiles]
+foo = "foo"
+"#
+        )
+        .unwrap();
+
+        let err = Organization::try_from(filepath.as_path()).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "No role found"
+        );
+    }
+
+    #[test]
+    fn profile_without_duration() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let filepath = tempdir.path().join("mock_org.toml");
+        let mut file = File::create(filepath.clone()).unwrap();
+
+        write!(
+            file,
+            r#"
+username = "mock_user"
+role = "my_role"
+[profiles]
+foo = "foo"
+"#
+        )
+        .unwrap();
+
+        let organization = Organization::try_from(filepath.as_path()).unwrap();
+
+        assert_eq!(organization.profiles.len(), 1);
+
+        assert_eq!(organization.profiles[0].name, "foo");
+        assert_eq!(organization.profiles[0].application_name, "foo");
+        assert_eq!(organization.profiles[0].role, "my_role");
+        assert_eq!(organization.profiles[0].duration_seconds, None);
     }
 }

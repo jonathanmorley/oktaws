@@ -63,3 +63,55 @@ fn default_profile_location() -> Result<PathBuf, Error> {
         None => bail!("The environment variable HOME must be set."),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::env;
+    use std::fs::File;
+    use std::io::Write;
+
+    use tempfile;
+
+    fn create_mock_config_dir() -> PathBuf {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        for organization_name in ["foo", "bar", "baz"] {
+            let filepath = tempdir.path().join(format!("{}.toml", organization_name));
+            let mut file = File::create(filepath).unwrap();
+
+            write!(file, "username = \"{}_user\"\n[profiles]", organization_name).unwrap();
+        }
+
+        tempdir.into_path()
+    }
+
+    #[test]
+    fn finds_all_configs() {
+        env::set_var("OKTAWS_HOME", create_mock_config_dir());
+        let config = Config::new().unwrap();
+
+        assert_eq!(config.organizations.len(), 3);
+    }
+
+    #[test]
+    fn filters_organizations() {
+        env::set_var("OKTAWS_HOME", create_mock_config_dir());
+        let config = Config::new().unwrap();
+
+        assert_eq!(config.organizations(Pattern::new("*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["foo", "bar", "baz"]);
+        assert_eq!(config.organizations(Pattern::new("ba*").unwrap()).map(|org| org.name.clone()).collect::<Vec<_>>(), vec!["bar", "baz"]);
+    }
+
+    #[test]
+    fn filters_into_organizations() {
+        env::set_var("OKTAWS_HOME", create_mock_config_dir());
+
+        let config = Config::new().unwrap();
+        assert_eq!(config.into_organizations(Pattern::new("*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["foo", "bar", "baz"]);
+
+        let config = Config::new().unwrap();
+        assert_eq!(config.into_organizations(Pattern::new("ba*").unwrap()).map(|org| org.name).collect::<Vec<_>>(), vec!["bar", "baz"]);
+    }
+}
