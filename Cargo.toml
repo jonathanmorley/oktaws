@@ -8,33 +8,48 @@ version = "0.14.0"
 async-recursion = "*"
 base64 = "0.13"
 chrono = "*"
-toml = { version = "0.5.8" }
 dialoguer = "0.8"
 dirs = "3"
 failure = "0.1"
 futures = "*"
 glob = "0.3"
-indexmap = { version = "1.0", features = ["serde-1"] }
 itertools = "0.10"
-keyring = "0.10"
 kuchiki = "0.8"
 log = "0.4"
 path_abs = "0.5"
 paw = "*"
 pretty_env_logger = "0.4"
 regex = "1"
-rusoto_core = "0.47"
-rusoto_credential = "0.47"
-rusoto_sts = "0.47"
 rust-ini = "*"
 samuel = "*"
 serde_ini = "0.2"
 username = "0.2"
 walkdir = "2"
 
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+keyring = "0.10"
+
+[dependencies.indexmap]
+features = ["serde-1"]
+version = "1.0"
+
 [dependencies.reqwest]
-features = ["cookies", "json"]
+default_features = false
+features = ["cookies", "json", "rustls-tls"]
 version = "0.11"
+
+[dependencies.rusoto_core]
+default_features = false
+features = ["rustls", "rustls-webpki"]
+version = "0.47"
+
+[dependencies.rusoto_credential]
+version = "0.47"
+
+[dependencies.rusoto_sts]
+default_features = false
+features = ["rustls"]
+version = "0.47"
 
 [dependencies.serde]
 features = ["derive"]
@@ -48,16 +63,12 @@ version = "0.3"
 features = ["full"]
 version = "1"
 
+[dependencies.toml]
+version = "0.5.8"
+
 [dependencies.url]
 features = ["serde"]
 version = "2.1"
 
 [dev-dependencies]
 tempfile = "3"
-
-[target]
-[target."cfg(linux)"]
-[target."cfg(linux)".dependencies]
-[target."cfg(linux)".dependencies.openssl]
-features = ["vendored"]
-version = "0.10"
