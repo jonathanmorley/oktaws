@@ -108,7 +108,7 @@ mod tests {
         let config = Config::new().unwrap();
         assert_eq!(config.organizations.len(), 3);
     }
-    
+
     #[test]
     #[serial]
     fn does_not_find_nested_config() {
@@ -148,6 +148,4 @@ mod tests {
             vec!["bar", "baz"]
         );
     }
-
-
 }
