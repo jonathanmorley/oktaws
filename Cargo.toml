@@ -7,6 +7,7 @@ version = "0.14.1"
 [dependencies]
 async-recursion = "*"
 base64 = "0.13"
+clap = "3.0.0-beta.2"
 dialoguer = "0.8"
 dirs = "3"
 failure = "0.1"
@@ -24,9 +25,6 @@ serde_ini = "0.2"
 username = "0.2"
 walkdir = "2"
 
-[target.'cfg(not(target_os = "linux"))'.dependencies]
-keyring = "0.10"
-
 [dependencies.indexmap]
 features = ["serde-1"]
 version = "1.0"
@@ -42,6 +40,11 @@ features = ["rustls", "rustls-webpki"]
 version = "0.47"
 
 [dependencies.rusoto_credential]
+version = "0.47"
+
+[dependencies.rusoto_iam]
+default_features = false
+features = ["rustls"]
 version = "0.47"
 
 [dependencies.rusoto_sts]
@@ -71,3 +74,8 @@ version = "2.1"
 [dev-dependencies]
 serial_test = "0.5"
 tempfile = "3"
+
+[target]
+[target."cfg(not(target_os = \"linux\"))"]
+[target."cfg(not(target_os = \"linux\"))".dependencies]
+keyring = "0.10"
