@@ -42,7 +42,7 @@ impl Client {
     pub async fn new(
         organization: String,
         username: String,
-        force_prompt: bool,
+        #[cfg(not(target_os = "linux"))] force_prompt: bool,
     ) -> Result<Self, Error> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
@@ -50,8 +50,6 @@ impl Client {
             .map_err(|_| format_err!("Cannot set username for URL"))?;
 
         let cookies = Arc::from(Jar::default());
-
-        let service = format!("oktaws::okta::{}", organization);
 
         let mut client = Client {
             client: HttpClient::builder()
@@ -65,10 +63,13 @@ impl Client {
         // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
         client.get_response(base_url).await?;
 
-        // get password
+        #[cfg(not(target_os = "linux"))]
+        let service = format!("oktaws::okta::{}", organization);
+
         #[cfg(not(target_os = "linux"))]
         let keyring = Keyring::new(&service, &username);
 
+        // get password
         #[cfg(not(target_os = "linux"))]
         let password = client.get_password(&keyring, force_prompt)?;
         #[cfg(target_os = "linux")]
