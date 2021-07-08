@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "oktaws"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "async-recursion",
  "base64",

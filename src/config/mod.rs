@@ -29,6 +29,8 @@ impl Config {
     }
 
     pub fn organizations(&self, filter: Pattern) -> impl Iterator<Item = &Organization> {
+        dbg!(&self);
+        
         self.organizations
             .iter()
             .filter(move |&o| filter.matches(&o.name))
@@ -89,6 +91,16 @@ mod tests {
             )
             .unwrap();
         }
+
+        let bad_filepath = tempdir.path().join("bad.txt");
+        let mut bad_file = File::create(bad_filepath).unwrap();
+        write!(bad_file, "Not an oktaws config").unwrap();
+
+        std::fs::create_dir(tempdir.path().join("bad")).unwrap();
+
+        let bad_nested_filepath = tempdir.path().join("bad/nested.txt");
+        let mut bad_nested_file = File::create(bad_nested_filepath).unwrap();
+        write!(bad_nested_file, "Not an oktaws config").unwrap();
 
         tempdir.into_path()
     }
