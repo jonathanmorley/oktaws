@@ -68,12 +68,6 @@ impl TryFrom<&Path> for Organization {
 }
 
 impl Organization {
-    pub fn profiles(&self, filter: Pattern) -> impl Iterator<Item = &Profile> {
-        self.profiles
-            .iter()
-            .filter(move |&p| filter.matches(&p.name))
-    }
-
     pub fn into_profiles(self, filter: Pattern) -> impl Iterator<Item = Profile> {
         self.profiles
             .into_iter()
