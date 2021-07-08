@@ -1,6 +1,5 @@
 use crate::aws::role::Role;
 
-use std::collections::HashSet;
 use std::convert::TryFrom;
 
 use failure::Error;
@@ -10,7 +9,7 @@ use samuel::response::Response as SamlResponse;
 #[derive(Debug)]
 pub struct Response {
     pub raw: String,
-    pub roles: HashSet<Role>,
+    pub roles: Vec<Role>,
 }
 
 impl TryFrom<String> for Response {
@@ -49,7 +48,7 @@ impl TryFrom<String> for Response {
                     .values
                     .into_iter()
                     .map(|arn| arn.parse())
-                    .collect::<Result<HashSet<Role>, Error>>()?,
+                    .collect::<Result<Vec<Role>, Error>>()?,
             })
         } else {
             bail!("No Role Attributes found")
