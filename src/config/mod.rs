@@ -29,8 +29,6 @@ impl Config {
     }
 
     pub fn organizations(&self, filter: Pattern) -> impl Iterator<Item = &Organization> {
-        dbg!(&self);
-        
         self.organizations
             .iter()
             .filter(move |&o| filter.matches(&o.name))
