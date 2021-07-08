@@ -37,6 +37,7 @@ pub struct Args {
 
     /// Forces new credentials
     #[structopt(short = "f", long = "force-new")]
+    #[cfg(not(target_os = "linux"))]
     pub force_new: bool,
 
     /// Sets the level of verbosity
@@ -87,6 +88,7 @@ async fn main(args: Args) -> Result<(), Error> {
         let okta_client = OktaClient::new(
             organization.name.clone(),
             organization.username.clone(),
+            #[cfg(not(target_os = "linux"))]
             args.force_new,
         )
         .await?;
