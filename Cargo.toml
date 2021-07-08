@@ -69,4 +69,5 @@ features = ["serde"]
 version = "2.1"
 
 [dev-dependencies]
+serial_test = "0.5"
 tempfile = "3"

@@ -28,12 +28,6 @@ impl Config {
         })
     }
 
-    pub fn organizations(&self, filter: Pattern) -> impl Iterator<Item = &Organization> {
-        self.organizations
-            .iter()
-            .filter(move |&o| filter.matches(&o.name))
-    }
-
     pub fn into_organizations(self, filter: Pattern) -> impl Iterator<Item = Organization> {
         self.organizations
             .into_iter()
@@ -43,6 +37,8 @@ impl Config {
 
 fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
     WalkDir::new(dir)
+        .min_depth(1)
+        .max_depth(1)
         .follow_links(true)
         .sort_by_file_name()
         .into_iter()
@@ -73,68 +69,66 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use serial_test::serial;
     use tempfile;
+    use tempfile::TempDir;
 
-    fn create_mock_config_dir() -> PathBuf {
+    fn create_mock_toml(dir: &Path, name: &str) {
+        let filepath = dir.join(format!("{}.toml", name));
+        let mut file = File::create(filepath).unwrap();
+        write!(file, "username = \"{}_user\"\n[profiles]", name).unwrap();
+    }
+
+    fn create_mock_config_dir() -> TempDir {
         let tempdir = tempfile::tempdir().unwrap();
 
         for organization_name in ["foo", "bar", "baz"] {
-            let filepath = tempdir.path().join(format!("{}.toml", organization_name));
-            let mut file = File::create(filepath).unwrap();
-
-            write!(
-                file,
-                "username = \"{}_user\"\n[profiles]",
-                organization_name
-            )
-            .unwrap();
+            create_mock_toml(tempdir.path(), organization_name);
         }
 
         let bad_filepath = tempdir.path().join("bad.txt");
         let mut bad_file = File::create(bad_filepath).unwrap();
         write!(bad_file, "Not an oktaws config").unwrap();
 
-        std::fs::create_dir(tempdir.path().join("bad")).unwrap();
-
-        let bad_nested_filepath = tempdir.path().join("bad/nested.txt");
+        let bad_dir = tempdir.path().join("bad");
+        std::fs::create_dir(&bad_dir).unwrap();
+        let bad_nested_filepath = bad_dir.join("nested.txt");
         let mut bad_nested_file = File::create(bad_nested_filepath).unwrap();
         write!(bad_nested_file, "Not an oktaws config").unwrap();
 
-        tempdir.into_path()
+        tempdir
     }
 
     #[test]
+    #[serial]
     fn finds_all_configs() {
-        env::set_var("OKTAWS_HOME", create_mock_config_dir());
-        let config = Config::new().unwrap();
+        let tempdir = create_mock_config_dir();
+        env::set_var("OKTAWS_HOME", tempdir.path());
 
+        let config = Config::new().unwrap();
+        assert_eq!(config.organizations.len(), 3);
+    }
+    
+    #[test]
+    #[serial]
+    fn does_not_find_nested_config() {
+        let tempdir = create_mock_config_dir();
+
+        env::set_var("OKTAWS_HOME", &tempdir.path());
+
+        let mock_dir = tempdir.path().join("mock");
+        std::fs::create_dir(&mock_dir).unwrap();
+        create_mock_toml(&mock_dir, "quz");
+
+        let config = Config::new().unwrap();
         assert_eq!(config.organizations.len(), 3);
     }
 
     #[test]
-    fn filters_organizations() {
-        env::set_var("OKTAWS_HOME", create_mock_config_dir());
-        let config = Config::new().unwrap();
-
-        assert_eq!(
-            config
-                .organizations(Pattern::new("*").unwrap())
-                .map(|org| org.name.clone())
-                .collect::<Vec<_>>(),
-            vec!["bar", "baz", "foo"]
-        );
-        assert_eq!(
-            config
-                .organizations(Pattern::new("ba*").unwrap())
-                .map(|org| org.name.clone())
-                .collect::<Vec<_>>(),
-            vec!["bar", "baz"]
-        );
-    }
-
-    #[test]
+    #[serial]
     fn filters_into_organizations() {
-        env::set_var("OKTAWS_HOME", create_mock_config_dir());
+        let tempdir = create_mock_config_dir();
+        env::set_var("OKTAWS_HOME", tempdir.path());
 
         let config = Config::new().unwrap();
         assert_eq!(
@@ -154,4 +148,6 @@ mod tests {
             vec!["bar", "baz"]
         );
     }
+
+
 }
