@@ -9,11 +9,13 @@ use failure::Error;
 use keyring::Keyring;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
-use reqwest::Client as HttpClient;
+use reqwest::{Client as HttpClient, StatusCode};
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use backoff::ExponentialBackoff;
+use backoff::future::retry;
 
 pub struct Client {
     client: HttpClient,
@@ -122,27 +124,37 @@ impl Client {
     }
 
     pub async fn get_response(&self, url: Url) -> Result<Response, Error> {
-        self.client
-            .get(url)
-            .send()
-            .await?
-            .error_for_status()
-            .map_err(|e| e.into())
+        retry(ExponentialBackoff::default(), || async {
+            let resp = self.client
+                .get(url.clone())
+                .send()
+                .await?;
+
+            if resp.status() == StatusCode::TOO_MANY_REQUESTS || resp.status().is_server_error() {
+                resp.error_for_status().map_err(|e| backoff::Error::Transient(e))
+            } else if resp.status().is_client_error() {
+                resp.error_for_status().map_err(|e| backoff::Error::Permanent(e))
+            } else {
+                Ok(resp)
+            }
+        }).await.map_err(Into::into)
     }
 
     pub async fn get<O>(&self, path: &str) -> Result<O, Error>
     where
         O: DeserializeOwned,
     {
-        self.client
+        let resp = self.client
             .get(self.base_url.join(path)?)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
             .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await
-            .map_err(|e| e.into())
+            .await?;
+
+        if resp.status().is_success() {
+            resp.json().await.map_err(|e| e.into())
+        } else {
+            Err(resp.json::<ClientError>().await?.into())
+        }
     }
 
     pub async fn post<I, O>(&self, path: &str, body: &I) -> Result<O, Error>

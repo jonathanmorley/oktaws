@@ -18,13 +18,8 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> Result<Config, Error> {
-        let oktaws_home = match env_var("OKTAWS_HOME") {
-            Ok(path) => PathBuf::from(path),
-            Err(_) => default_profile_location()?,
-        };
-
         Ok(Config {
-            organizations: organizations_from_dir(&oktaws_home).collect(),
+            organizations: organizations_from_dir(&oktaws_home()?).collect(),
         })
     }
 
@@ -44,6 +39,9 @@ fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
         .into_iter()
         .filter_map(|r| r.ok())
         .filter(|e| e.file_type().is_file())
+        .inspect(|e| {
+            dbg!(e);
+        })
         .filter(|e| e.path().extension() == Some("toml".as_ref()))
         .map(|e| e.path().try_into())
         .filter_map(|r| match r {
@@ -53,6 +51,13 @@ fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
                 None
             }
         })
+}
+
+pub fn oktaws_home() -> Result<PathBuf, Error> {
+    match env_var("OKTAWS_HOME") {
+        Ok(path) => Ok(PathBuf::from(path)),
+        Err(_) => default_profile_location(),
+    }
 }
 
 fn default_profile_location() -> Result<PathBuf, Error> {
