@@ -7,7 +7,7 @@ use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{AssumeRoleWithSAMLRequest, AssumeRoleWithSAMLResponse, Sts, StsClient};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Role {
     pub provider_arn: String,
     pub role_arn: String,
@@ -41,7 +41,6 @@ impl Role {
         }
     }
 }
-
 
 pub async fn assume_role(
     Role {

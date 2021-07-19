@@ -104,19 +104,6 @@ pub fn extract_saml_response(text: &str) -> Result<SamlResponse, ExtractSamlResp
     SamlResponse::try_from(saml.to_owned()).map_err(Into::into)
 }
 
-// pub fn extract_account_name(text: &str) -> Result<String, Error> {
-//     let doc = kuchiki::parse_html().one(text);
-//     let account_str = doc
-//         .select("div.saml-account-name")
-//         .map_err(|_| format_err!("Not found"))?
-//         .next()
-//         .ok_or_else(|| format_err!("Not found"))?;
-
-//     trace!("SAML: {:?}", account_str);
-
-//     Ok(account_str.text_contents())
-// }
-
 pub fn is_extra_verification(text: String) -> bool {
     let doc = kuchiki::parse_html().one(text);
 

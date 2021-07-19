@@ -3,10 +3,13 @@ use crate::aws::role::Role;
 use std::convert::TryFrom;
 
 use failure::Error;
+use kuchiki::traits::TendrilSink;
+use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
 use samuel::response::Response as SamlResponse;
+use url::Url;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Response {
     pub raw: String,
     pub roles: Vec<Role>,
@@ -54,6 +57,60 @@ impl TryFrom<String> for Response {
             bail!("No Role Attributes found")
         }
     }
+}
+
+impl Response {
+    pub async fn post_to_aws(&self) -> Result<reqwest::Response, Error> {
+        let client = reqwest::Client::new();
+
+        client
+            .post(Url::parse("https://signin.aws.amazon.com/saml")?)
+            .form(&[
+                ("SAMLResponse", &self.raw),
+                ("RelayState", &String::from("")),
+            ])
+            .send()
+            .await
+            .map_err(Into::into)
+    }
+}
+
+pub fn extract_account_name(text: &str) -> Result<String, Error> {
+    extract_saml_account_name(text).or_else(|_| extract_dashboard_account_name(text))
+}
+
+pub fn extract_saml_account_name(text: &str) -> Result<String, Error> {
+    let doc = kuchiki::parse_html().one(text);
+    let account_str = doc
+        .select("div.saml-account-name")
+        .map_err(|_| format_err!("SAML account name Not found"))?
+        .next()
+        .ok_or_else(|| format_err!("SAML account name Not found"))?
+        .text_contents();
+
+    let re = Regex::new(r"Account: (.+) \(\d+\)").unwrap();
+    let caps = re.captures(&account_str).unwrap();
+
+    caps.get(1)
+        .map(|m| m.as_str().to_string())
+        .ok_or_else(|| format_err!("No account ID found"))
+}
+
+pub fn extract_dashboard_account_name(text: &str) -> Result<String, Error> {
+    let doc = kuchiki::parse_html().one(text);
+    let account_str = doc
+        .select("span[data-testid='awsc-nav-account-menu-button']")
+        .map_err(|_| format_err!("Dashboard Account selector not valid"))?
+        .next()
+        .ok_or_else(|| format_err!("Dashboard Account name not found in {}", text))?
+        .text_contents();
+
+    let re = Regex::new(r"Account: (.+) \(\d+\)").unwrap();
+    let caps = re.captures(&account_str).unwrap();
+
+    caps.get(1)
+        .map(|m| m.as_str().to_string())
+        .ok_or_else(|| format_err!("No account ID found"))
 }
 
 #[cfg(test)]

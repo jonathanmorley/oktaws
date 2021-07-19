@@ -1,31 +1,15 @@
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate log;
-
-mod aws;
-mod config;
-mod okta;
-mod saml;
-
-use crate::aws::credentials::CredentialsStore;
-use crate::aws::role::assume_role;
-use crate::config::Config;
-use crate::config::organization::OrganizationConfig;
-use crate::config::profile::{FullProfileConfig, ProfileConfig};
-use crate::okta::client::Client as OktaClient;
+use oktaws::aws::credentials::CredentialsStore;
+use oktaws::config::organization::OrganizationConfig;
+use oktaws::config::{oktaws_home, Config};
+use oktaws::okta::client::Client as OktaClient;
 
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 
-use failure::Error;
+use failure::{bail, Error};
 use glob::Pattern;
-use indexmap::IndexMap;
-use rusoto_core::{HttpClient, Region};
-use rusoto_credential::{ProvideAwsCredentials, StaticProvider};
-use rusoto_iam::{Iam, IamClient, ListAccountAliasesRequest};
-use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
+use log::{debug, info};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -35,14 +19,13 @@ pub struct Args {
     pub verbosity: usize,
 
     #[structopt(subcommand)]
-    cmd: Command
+    cmd: Command,
 }
 
 #[derive(StructOpt, Debug)]
 pub enum Command {
-    #[structopt(flatten)]
     Refresh(RefreshArgs),
-    Init(InitArgs)
+    Init(InitArgs),
 }
 
 #[derive(StructOpt, Debug)]
@@ -102,7 +85,7 @@ async fn main(args: Args) -> Result<(), Error> {
 
     match args.cmd {
         Command::Refresh(args) => refresh(args).await,
-        Command::Init(args) => init(args).await
+        Command::Init(args) => init(args).await,
     }
 }
 
@@ -169,7 +152,9 @@ async fn refresh(args: RefreshArgs) -> Result<(), Error> {
 }
 
 async fn init(args: InitArgs) -> Result<(), Error> {
-    let username: String = dialoguer::Input::new().with_prompt(format!("Username for {}", &args.organization)).interact()?;
+    let username: String = dialoguer::Input::new()
+        .with_prompt(format!("Username for {}", &args.organization))
+        .interact()?;
 
     let okta_client = OktaClient::new(
         args.organization.clone(),
@@ -179,59 +164,22 @@ async fn init(args: InitArgs) -> Result<(), Error> {
     )
     .await?;
 
-    let app_links = okta_client.app_links(None).await?;
-    let aws_links = app_links.into_iter().filter(|link| link.app_name == "amazon_aws");
-
-    let mut organization_config = OrganizationConfig {
-        username: Some(username),
-        duration_seconds: None,
-        role: None,
-        profiles: IndexMap::new()
-    };
-
-    for link in aws_links {
-        let mut response = okta_client.get_saml_response(link.link_url.clone()).await?;
-        let role_arns = response.roles.iter().map(|role| role.role_arn.as_str()).collect::<Vec<_>>();
-
-        let selection = dialoguer::Select::new()
-            .with_prompt(format!("Choose Role for {}. Esc/q to skip this account", link.label))
-            .items(&role_arns)
-            .default(0)
-            .interact_opt()?;
-
-        let role = match selection {
-            Some(index) => response.roles.remove(index),
-            None => continue
-        };
-
-        let role_name = role.role_name()?.to_string();
-
-        let assumption_response = assume_role(role, response.raw, None)
-                .await
-                .map_err(|e| format_err!("Error assuming role ({})", e))?;
-
-        let credentials = assumption_response.credentials.ok_or_else(|| format_err!("No creds"))?;
-        let provider = StaticProvider::new(credentials.access_key_id, credentials.secret_access_key, Some(credentials.session_token), None);
-        let client = IamClient::new_with(HttpClient::new()?, provider, Region::default());
-
-        let mut aliases = client.list_account_aliases(ListAccountAliasesRequest { marker: None, max_items: None }).await?;
-        let alias = aliases.account_aliases.remove(0);
-
-        organization_config.profiles.insert(alias, ProfileConfig::Detailed(FullProfileConfig {
-            application: link.label,
-            role: Some(role_name),
-            duration_seconds: None
-        }));
-    }
+    let organization_config = OrganizationConfig::from_organization(&okta_client, username).await?;
 
     let org_toml = toml::to_string_pretty(&organization_config)?;
 
     println!("{}", &org_toml);
 
-    let write_to_file = dialoguer::Confirm::new().with_prompt(format!("Write config to {}.toml ?", args.organization)).interact()?;
+    let oktaws_home = oktaws_home()?;
+    let oktaws_config_path = oktaws_home.join(format!("{}.toml", args.organization));
+
+    let write_to_file = dialoguer::Confirm::new()
+        .with_prompt(format!("Write config to {:?}?", oktaws_config_path))
+        .interact()?;
 
     if write_to_file {
-        dbg!(org_toml);
+        std::fs::create_dir_all(oktaws_home)?;
+        std::fs::write(oktaws_config_path, org_toml)?;
     }
 
     Ok(())
