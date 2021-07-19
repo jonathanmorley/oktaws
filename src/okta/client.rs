@@ -3,19 +3,19 @@ use crate::okta::auth::LoginRequest;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use backoff::future::retry;
+use backoff::ExponentialBackoff;
 use dialoguer::Password;
 use failure::Error;
 #[cfg(not(target_os = "linux"))]
 use keyring::Keyring;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
-use reqwest::{Client as HttpClient, StatusCode};
 use reqwest::Response;
+use reqwest::{Client as HttpClient, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use backoff::ExponentialBackoff;
-use backoff::future::retry;
 
 pub struct Client {
     client: HttpClient,
@@ -125,26 +125,28 @@ impl Client {
 
     pub async fn get_response(&self, url: Url) -> Result<Response, Error> {
         retry(ExponentialBackoff::default(), || async {
-            let resp = self.client
-                .get(url.clone())
-                .send()
-                .await?;
+            let resp = self.client.get(url.clone()).send().await?;
 
             if resp.status() == StatusCode::TOO_MANY_REQUESTS || resp.status().is_server_error() {
-                resp.error_for_status().map_err(|e| backoff::Error::Transient(e))
+                resp.error_for_status()
+                    .map_err(|e| backoff::Error::Transient(e))
             } else if resp.status().is_client_error() {
-                resp.error_for_status().map_err(|e| backoff::Error::Permanent(e))
+                resp.error_for_status()
+                    .map_err(|e| backoff::Error::Permanent(e))
             } else {
                 Ok(resp)
             }
-        }).await.map_err(Into::into)
+        })
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn get<O>(&self, path: &str) -> Result<O, Error>
     where
         O: DeserializeOwned,
     {
-        let resp = self.client
+        let resp = self
+            .client
             .get(self.base_url.join(path)?)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
             .send()
