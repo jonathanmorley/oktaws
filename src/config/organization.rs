@@ -39,13 +39,18 @@ impl OrganizationConfig {
                 link.label.clone()
             })?;
 
-        let profile_futures = selected_links.into_iter().map(|link| ProfileConfig::from_app_link(client, link));
+        let profile_futures = selected_links
+            .into_iter()
+            .map(|link| ProfileConfig::from_app_link(client, link));
 
         Ok(OrganizationConfig {
             username: Some(username),
             duration_seconds: None,
             role: None,
-            profiles: join_all(profile_futures).await.into_iter().collect::<Result<_, _>>()?
+            profiles: join_all(profile_futures)
+                .await
+                .into_iter()
+                .collect::<Result<_, _>>()?,
         })
     }
 }

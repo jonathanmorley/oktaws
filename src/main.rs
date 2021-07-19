@@ -3,7 +3,6 @@ use oktaws::config::organization::OrganizationConfig;
 use oktaws::config::{oktaws_home, Config};
 use oktaws::okta::client::Client as OktaClient;
 
-use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 
@@ -52,10 +51,6 @@ pub struct RefreshArgs {
     #[structopt(short = "f", long = "force-new")]
     #[cfg(not(target_os = "linux"))]
     pub force_new: bool,
-
-    /// Fetch profiles asynchronously
-    #[structopt(short = "a", long = "async")]
-    pub asynchronous: bool,
 }
 
 #[derive(StructOpt, Debug)]
@@ -116,27 +111,9 @@ async fn refresh(args: RefreshArgs) -> Result<(), Error> {
         )
         .await?;
 
-        let credentials_map = if args.asynchronous {
-            organization
-                .into_credentials(&okta_client, args.profiles.clone())
-                .await
-                .collect()
-        } else {
-            let profiles = organization.into_profiles(args.profiles.clone());
-
-            let mut credentials_map = HashMap::new();
-            for profile in profiles {
-                let name = profile.name.clone();
-
-                info!("Requesting tokens for {}", profile.name);
-
-                let credentials = profile.into_credentials(&okta_client).await.unwrap();
-
-                credentials_map.insert(name, credentials);
-            }
-
-            credentials_map
-        };
+        let credentials_map = organization
+            .into_credentials(&okta_client, args.profiles.clone())
+            .await;
 
         for (name, creds) in credentials_map {
             credentials_store
