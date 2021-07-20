@@ -11,8 +11,8 @@ use crate::saml::Response as SamlResponse;
 use std::convert::TryFrom;
 use std::str;
 
+use anyhow::{anyhow, Result};
 use async_recursion::async_recursion;
-use failure::{Compat, Error};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use serde::Deserialize;
@@ -59,7 +59,7 @@ impl Client {
     // }
 
     #[async_recursion]
-    pub async fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse, Error> {
+    pub async fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse> {
         let response = self.get_response(app_url.clone()).await?.text().await?;
 
         trace!("SAML response doc for app {:?}: {}", &app_url, &response);
@@ -77,13 +77,13 @@ impl Client {
     }
 }
 
-fn extract_state_token(text: &str) -> Result<String, Error> {
+fn extract_state_token(text: &str) -> Result<String> {
     let re = Regex::new(r#"var stateToken = '(.+)';"#)?;
 
     if let Some(cap) = re.captures(text) {
         Ok(cap[1].to_owned().replace("\\x2D", "-"))
     } else {
-        bail!("No state token found")
+        Err(anyhow!("No state token found"))
     }
 }
 
@@ -118,16 +118,10 @@ pub fn is_extra_verification(text: String) -> bool {
     false
 }
 
-#[derive(Fail, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ExtractSamlResponseError {
-    #[fail(display = "No SAML found")]
+    #[error("No SAML found")]
     NotFound,
-    #[fail(display = "{}", _0)]
-    Invalid(#[cause] Compat<Error>),
-}
-
-impl From<Error> for ExtractSamlResponseError {
-    fn from(e: Error) -> ExtractSamlResponseError {
-        ExtractSamlResponseError::Invalid(e.compat())
-    }
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }

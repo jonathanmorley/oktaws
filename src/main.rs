@@ -6,7 +6,7 @@ use oktaws::okta::client::Client as OktaClient;
 use std::env;
 use std::sync::{Arc, Mutex};
 
-use failure::{bail, Error};
+use anyhow::{anyhow, Result};
 use glob::Pattern;
 use log::{debug, info};
 use structopt::StructOpt;
@@ -66,7 +66,7 @@ pub struct InitArgs {
 
 #[paw::main]
 #[tokio::main]
-async fn main(args: Args) -> Result<(), Error> {
+async fn main(args: Args) -> Result<()> {
     debug!("Args: {:?}", args);
 
     // Set Log Level
@@ -84,7 +84,7 @@ async fn main(args: Args) -> Result<(), Error> {
     }
 }
 
-async fn refresh(args: RefreshArgs) -> Result<(), Error> {
+async fn refresh(args: RefreshArgs) -> Result<()> {
     // Fetch config from files
     let config = Config::new()?;
     debug!("Config: {:?}", config);
@@ -97,7 +97,10 @@ async fn refresh(args: RefreshArgs) -> Result<(), Error> {
         .peekable();
 
     if organizations.peek().is_none() {
-        bail!("No organizations found called {}", args.organizations);
+        return Err(anyhow!(
+            "No organizations found called {}",
+            args.organizations
+        ));
     }
 
     for organization in organizations {
@@ -128,7 +131,7 @@ async fn refresh(args: RefreshArgs) -> Result<(), Error> {
     store.save()
 }
 
-async fn init(args: InitArgs) -> Result<(), Error> {
+async fn init(args: InitArgs) -> Result<()> {
     let username: String = dialoguer::Input::new()
         .with_prompt(format!("Username for {}", &args.organization))
         .interact()?;

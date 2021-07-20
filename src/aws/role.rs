@@ -1,7 +1,7 @@
 use std::str;
 use std::str::FromStr;
 
-use failure::Error;
+use anyhow::{anyhow, Error, Result};
 use rusoto_core::request::HttpClient;
 use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
@@ -20,24 +20,24 @@ impl FromStr for Role {
         let splitted: Vec<&str> = s.split(',').collect();
 
         match splitted.len() {
-            0 | 1 => bail!("Not enough elements in {}", s),
+            0 | 1 => Err(anyhow!("Not enough elements in {}", s)),
             2 => Ok(Role {
                 provider_arn: String::from(splitted[0]),
                 role_arn: String::from(splitted[1]),
             }),
-            _ => bail!("Too many elements in {}", s),
+            _ => Err(anyhow!("Too many elements in {}", s)),
         }
     }
 }
 
 impl Role {
-    pub fn role_name(&self) -> Result<&str, Error> {
+    pub fn role_name(&self) -> Result<&str> {
         let splitted: Vec<&str> = self.role_arn.split('/').collect();
 
         match splitted.len() {
-            0 | 1 => bail!("Not enough elements in {}", self.role_arn),
+            0 | 1 => Err(anyhow!("Not enough elements in {}", self.role_arn)),
             2 => Ok(splitted[1]),
-            _ => bail!("Too many elements in {}", self.role_arn),
+            _ => Err(anyhow!("Too many elements in {}", self.role_arn)),
         }
     }
 }
@@ -75,7 +75,6 @@ mod tests {
     use crate::aws::role::Role;
     use crate::saml::Response;
 
-    use std::collections::HashSet;
     use std::convert::TryFrom;
     use std::fs::File;
     use std::io::Read;

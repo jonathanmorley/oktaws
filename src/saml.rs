@@ -2,7 +2,7 @@ use crate::aws::role::Role;
 
 use std::convert::TryFrom;
 
-use failure::Error;
+use anyhow::{anyhow, Error, Result};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
@@ -23,13 +23,17 @@ impl TryFrom<String> for Response {
 
         trace!("Decoded SAML: {}", decoded_saml);
 
-        let response: SamlResponse = decoded_saml.parse()?;
+        let response: SamlResponse = decoded_saml
+            .parse()
+            .map_err(|_| anyhow!("Error parsing SAML"))?;
 
         let assertions = match response.assertions {
-            Assertions::Plaintexts(assertions) => assertions,
-            Assertions::Encrypteds(_) => bail!("Encrypted assertions are not currently supported"),
-            Assertions::None => bail!("No roles found"),
-        };
+            Assertions::Plaintexts(assertions) => Ok(assertions),
+            Assertions::Encrypteds(_) => {
+                Err(anyhow!("Encrypted assertions are not currently supported"))
+            }
+            Assertions::None => Err(anyhow!("No roles found")),
+        }?;
 
         let role_attribute = assertions
             .into_iter()
@@ -50,17 +54,20 @@ impl TryFrom<String> for Response {
                 roles: role_attribute
                     .values
                     .into_iter()
-                    .map(|arn| arn.parse())
+                    .map(|arn| {
+                        arn.parse()
+                            .map_err(|_| anyhow!("Error dyring parsing Role"))
+                    })
                     .collect::<Result<Vec<Role>, Error>>()?,
             })
         } else {
-            bail!("No Role Attributes found")
+            Err(anyhow!("No Role Attributes found"))
         }
     }
 }
 
 impl Response {
-    pub async fn post_to_aws(&self) -> Result<reqwest::Response, Error> {
+    pub async fn post_to_aws(&self) -> Result<reqwest::Response> {
         let client = reqwest::Client::new();
 
         client
@@ -75,17 +82,17 @@ impl Response {
     }
 }
 
-pub fn extract_account_name(text: &str) -> Result<String, Error> {
+pub fn extract_account_name(text: &str) -> Result<String> {
     extract_saml_account_name(text).or_else(|_| extract_dashboard_account_name(text))
 }
 
-pub fn extract_saml_account_name(text: &str) -> Result<String, Error> {
+pub fn extract_saml_account_name(text: &str) -> Result<String> {
     let doc = kuchiki::parse_html().one(text);
     let account_str = doc
         .select("div.saml-account-name")
-        .map_err(|_| format_err!("SAML account name Not found"))?
+        .map_err(|_| anyhow!("SAML account name Not found"))?
         .next()
-        .ok_or_else(|| format_err!("SAML account name Not found"))?
+        .ok_or_else(|| anyhow!("SAML account name Not found"))?
         .text_contents();
 
     let re = Regex::new(r"Account: (.+) \(\d+\)").unwrap();
@@ -93,16 +100,16 @@ pub fn extract_saml_account_name(text: &str) -> Result<String, Error> {
 
     caps.get(1)
         .map(|m| m.as_str().to_string())
-        .ok_or_else(|| format_err!("No account ID found"))
+        .ok_or_else(|| anyhow!("No account ID found"))
 }
 
-pub fn extract_dashboard_account_name(text: &str) -> Result<String, Error> {
+pub fn extract_dashboard_account_name(text: &str) -> Result<String> {
     let doc = kuchiki::parse_html().one(text);
     let account_str = doc
         .select("span[data-testid='awsc-nav-account-menu-button']")
-        .map_err(|_| format_err!("Dashboard Account selector not valid"))?
+        .map_err(|_| anyhow!("Dashboard Account selector not valid"))?
         .next()
-        .ok_or_else(|| format_err!("Dashboard Account name not found in {}", text))?
+        .ok_or_else(|| anyhow!("Dashboard Account name not found in {}", text))?
         .text_contents();
 
     let re = Regex::new(r"Account: (.+) \(\d+\)").unwrap();
@@ -110,7 +117,7 @@ pub fn extract_dashboard_account_name(text: &str) -> Result<String, Error> {
 
     caps.get(1)
         .map(|m| m.as_str().to_string())
-        .ok_or_else(|| format_err!("No account ID found"))
+        .ok_or_else(|| anyhow!("No account ID found"))
 }
 
 #[cfg(test)]

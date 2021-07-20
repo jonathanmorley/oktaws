@@ -7,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::{convert::TryInto, env::var as env_var};
 
-use failure::Error;
+use anyhow::{anyhow, Result};
 use glob::Pattern;
 use walkdir::WalkDir;
 
@@ -17,7 +17,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Result<Config, Error> {
+    pub fn new() -> Result<Config> {
         Ok(Config {
             organizations: organizations_from_dir(&oktaws_home()?).collect(),
         })
@@ -53,17 +53,17 @@ fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
         })
 }
 
-pub fn oktaws_home() -> Result<PathBuf, Error> {
+pub fn oktaws_home() -> Result<PathBuf> {
     match env_var("OKTAWS_HOME") {
         Ok(path) => Ok(PathBuf::from(path)),
         Err(_) => default_profile_location(),
     }
 }
 
-fn default_profile_location() -> Result<PathBuf, Error> {
+fn default_profile_location() -> Result<PathBuf> {
     match dirs::home_dir() {
         Some(home_dir) => Ok(home_dir.join(".oktaws")),
-        None => bail!("The environment variable HOME must be set."),
+        None => Err(anyhow!("The environment variable HOME must be set.")),
     }
 }
 
