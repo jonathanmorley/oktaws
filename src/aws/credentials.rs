@@ -15,7 +15,7 @@ use path_abs::PathFile;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
 
-// `BTreeMap`s are sorted
+// `IndexMaps`s are sorted based on insert order
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Profile(IndexMap<String, String>);

@@ -17,25 +17,35 @@ pub enum ProfileConfig {
 }
 
 impl ProfileConfig {
-    pub async fn from_app_link(client: &OktaClient, link: AppLink) -> Result<(String, Self)> {
+    pub async fn from_app_link(client: &OktaClient, link: AppLink, default_role: Option<String>) -> Result<(String, Self)> {
         let response = client.get_saml_response(link.link_url.clone()).await?;
         let aws_response = response.post_to_aws().await?;
         let aws_response_text = aws_response.text().await?;
 
-        let mut roles = response.clone().roles;
+        let roles = response.clone().roles;
 
         let role = match roles.len() {
             0 => Err(anyhow!("No role found")),
-            1 => Ok(roles.remove(0)),
-            _ => select(roles, format!("Choose Role for {}", link.label), |role| {
-                role.role_arn.clone()
-            })
-            .map_err(Into::into),
+            1 => Ok(roles.get(0).unwrap()),
+            _ => {
+                if let Some(default_role) = default_role.as_ref() {
+                    match roles.iter().find(|role| role.role_name().unwrap() == default_role) {
+                        Some(role) => Ok(role),
+                        None => select(roles.iter().collect(), format!("Choose Role for {}", link.label), |role| {
+                            role.role_arn.clone()
+                        }).map_err(Into::into)
+                    }
+                } else {
+                    select(roles.iter().collect(), format!("Choose Role for {}", link.label), |role| {
+                        role.role_arn.clone()
+                    }).map_err(Into::into)
+                }
+            }
         }?;
 
         let role_name = role.role_name()?.to_string();
 
-        let account_name = get_account_alias(role, &response)
+        let account_name = get_account_alias(&role, &response)
             .await
             .or_else(|_| extract_account_name(&aws_response_text))
             .unwrap_or_else(|_| {
@@ -46,14 +56,17 @@ impl ProfileConfig {
                 link.label.clone()
             });
 
-        Ok((
-            account_name,
+        let profile_config = if Some(&role_name) == default_role.as_ref() {
+            ProfileConfig::Name(link.label)
+        } else {
             ProfileConfig::Detailed(FullProfileConfig {
                 application: link.label,
                 role: Some(role_name),
                 duration_seconds: None,
-            }),
-        ))
+            })
+        };
+
+        Ok((account_name, profile_config))
     }
 }
 
@@ -148,7 +161,7 @@ impl Profile {
         trace!("Found role: {} for profile {}", role.role_arn, &self.name);
 
         let assumption_response =
-            crate::aws::role::assume_role(role, saml.raw, self.duration_seconds)
+            crate::aws::role::assume_role(&role, saml.raw, self.duration_seconds)
                 .await
                 .map_err(|e| anyhow!("Error assuming role for profile {} ({})", self.name, e))?;
 
