@@ -7,8 +7,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str;
 
+use anyhow::{anyhow, Error, Result};
 use dirs;
-use failure::{err_msg, Error};
 use indexmap::map::Entry;
 use indexmap::IndexMap;
 use path_abs::PathFile;
@@ -27,9 +27,9 @@ impl Profile {
             && self.0.contains_key("aws_session_token")
     }
 
-    fn set_sts_credentials(&mut self, creds: StsCreds) -> Result<(), Error> {
+    fn set_sts_credentials(&mut self, creds: StsCreds) -> Result<()> {
         if !self.is_sts_credentials() {
-            bail!("Profile is not STS. Cannot set STS credentials");
+            return Err(anyhow!("Profile is not STS. Cannot set STS credentials"));
         }
 
         for (key, value) in Profile::from(creds).0 {
@@ -70,15 +70,15 @@ impl TryFrom<Profile> for StsCreds {
             aws_access_key_id: profile
                 .0
                 .remove("aws_access_key_id")
-                .ok_or_else(|| err_msg("No aws_access_key_id found"))?,
+                .ok_or_else(|| anyhow!("No aws_access_key_id found"))?,
             aws_secret_access_key: profile
                 .0
                 .remove("aws_secret_access_key")
-                .ok_or_else(|| err_msg("No aws_secret_access_key found"))?,
+                .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?,
             aws_session_token: profile
                 .0
                 .remove("aws_session_token")
-                .ok_or_else(|| err_msg("No aws_secret_access_key found"))?,
+                .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?,
         })
     }
 }
@@ -148,7 +148,7 @@ impl CredentialsStore {
     fn default_profile_location() -> Result<PathBuf, Error> {
         match dirs::home_dir() {
             Some(home_dir) => Ok(home_dir.join(".aws").join("credentials")),
-            None => bail!("The environment variable HOME must be set."),
+            None => Err(anyhow!("The environment variable HOME must be set.")),
         }
     }
 }

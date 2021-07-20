@@ -5,8 +5,8 @@ edition = "2018"
 name = "oktaws"
 version = "0.14.1"
 [dependencies]
+anyhow = "*"
 async-recursion = "*"
-backoff = { version = "*", features=["tokio"]}
 base64 = "0.13"
 clap = "3.0.0-beta.2"
 dialoguer = "0.8"
@@ -23,8 +23,13 @@ pretty_env_logger = "0.4"
 regex = "1"
 samuel = "*"
 serde_ini = "0.2"
+thiserror = "*"
 username = "0.2"
 walkdir = "2"
+
+[dependencies.backoff]
+features = ["tokio"]
+version = "*"
 
 [dependencies.indexmap]
 features = ["serde-1"]

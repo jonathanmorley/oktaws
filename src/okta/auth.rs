@@ -3,8 +3,8 @@ use crate::okta::factors::Factor;
 use crate::okta::users::User;
 use crate::okta::Links;
 
+use anyhow::{anyhow, Result};
 use dialoguer;
-use failure::{err_msg, Error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -116,7 +116,7 @@ pub enum LoginState {
 }
 
 impl Client {
-    pub async fn login(&self, req: &LoginRequest) -> Result<LoginResponse, Error> {
+    pub async fn login(&self, req: &LoginRequest) -> Result<LoginResponse> {
         let login_type = if req.state_token.is_some() {
             "State Token"
         } else {
@@ -128,7 +128,7 @@ impl Client {
         self.post("api/v1/authn", req).await
     }
 
-    pub async fn get_session_token(&self, req: &LoginRequest) -> Result<String, Error> {
+    pub async fn get_session_token(&self, req: &LoginRequest) -> Result<String> {
         let response = self.login(req).await?;
 
         trace!("Login response: {:?}", response);
@@ -139,13 +139,15 @@ impl Client {
                 let factors = response.embedded.unwrap().factors;
 
                 let factor = match factors.len() {
-                    0 => bail!("MFA is required, but the user has no enrolled factors"),
+                    0 => Err(anyhow!(
+                        "MFA is required, but the user has no enrolled factors"
+                    )),
                     1 => {
                         info!(
                             "Only one MFA option is available ({}), using it",
                             factors[0]
                         );
-                        &factors[0]
+                        Ok(&factors[0])
                     }
                     _ => {
                         let selection = dialoguer::Select::new()
@@ -154,15 +156,15 @@ impl Client {
                             .default(0)
                             .interact()?;
 
-                        &factors[selection]
+                        Ok(&factors[selection])
                     }
-                };
+                }?;
 
                 debug!("Factor: {:?}", factor);
 
                 let state_token = response
                     .state_token
-                    .ok_or_else(|| format_err!("No state token found in response"))?;
+                    .ok_or_else(|| anyhow!("No state token found in response"))?;
 
                 let factor_provided_response = self.verify(&factor, state_token).await?;
 
@@ -170,7 +172,7 @@ impl Client {
 
                 Ok(factor_provided_response.session_token.unwrap())
             }
-            _ => Err(err_msg("Unknown error encountered during login")),
+            _ => Err(anyhow!("Unknown error encountered during login")),
         }
     }
 }

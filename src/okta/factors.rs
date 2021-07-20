@@ -10,8 +10,8 @@ use std::fmt;
 use std::thread::sleep;
 use std::time::Duration;
 
+use anyhow::{anyhow, Result};
 use dialoguer::Password;
-use failure::Error;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug)]
@@ -196,11 +196,7 @@ impl fmt::Display for Factor {
 }
 
 impl Client {
-    pub async fn verify(
-        &self,
-        factor: &Factor,
-        state_token: String,
-    ) -> Result<LoginResponse, Error> {
+    pub async fn verify(&self, factor: &Factor, state_token: String) -> Result<LoginResponse> {
         match factor {
             Factor::Push { links, .. } => {
                 let url = match links.get("verify").unwrap() {
@@ -220,7 +216,7 @@ impl Client {
 
                 match response.factor_result {
                     None | Some(FactorResult::Success) => Ok(response),
-                    Some(result) => bail!("Failed to verify with Push MFA ({:?})", result),
+                    Some(result) => Err(anyhow!("Failed to verify with Push MFA ({:?})", result)),
                 }
             }
             Factor::Sms { links, .. } => {
@@ -239,7 +235,7 @@ impl Client {
 
                 let state_token = response
                     .state_token
-                    .ok_or_else(|| format_err!("No state token found in factor prompt response"))?;
+                    .ok_or_else(|| anyhow!("No state token found in factor prompt response"))?;
 
                 let request = FactorVerificationRequest::Sms {
                     state_token,
@@ -265,7 +261,7 @@ impl Client {
             }
             _ => {
                 // TODO
-                bail!("Unsupported MFA method ({})", factor)
+                Err(anyhow!("Unsupported MFA method ({})", factor))
             }
         }
     }

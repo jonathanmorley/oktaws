@@ -7,8 +7,8 @@ use std::fmt::Display;
 use std::fs::read_to_string;
 use std::path::Path;
 
+use anyhow::{anyhow, Error, Result};
 use dialoguer::Input;
-use failure::Error;
 use futures::future::join_all;
 use glob::Pattern;
 use indexmap::IndexMap;
@@ -28,18 +28,18 @@ impl OrganizationConfig {
     pub async fn from_organization(
         client: &OktaClient,
         username: String,
-    ) -> Result<OrganizationConfig, Error> {
+    ) -> Result<OrganizationConfig> {
         let app_links = client.app_links(None).await?;
         let aws_links = app_links
             .into_iter()
             .filter(|link| link.app_name == "amazon_aws");
 
-        let selected_links =
-            multi_select(aws_links.collect(), "Choose Okta Applications", |link| {
-                link.label.clone()
-            })?;
+        // let selected_links =
+        //     multi_select(aws_links.collect(), "Choose Okta Applications", |link| {
+        //         link.label.clone()
+        //     })?;
 
-        let profile_futures = selected_links
+        let profile_futures = aws_links
             .into_iter()
             .map(|link| ProfileConfig::from_app_link(client, link));
 
@@ -71,7 +71,7 @@ impl TryFrom<&Path> for Organization {
         let filename = path
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
-            .ok_or_else(|| format_err!("Organization name not parseable from {:?}", path))?;
+            .ok_or_else(|| anyhow!("Organization name not parseable from {:?}", path))?;
 
         let username = match cfg.clone().username {
             Some(username) => username,

@@ -1,6 +1,6 @@
 use crate::okta::client::Client;
 
-use failure::Error;
+use anyhow::Result;
 use serde::Deserialize;
 use url::Url;
 
@@ -31,7 +31,7 @@ pub struct UserProfile {
 }
 
 impl Client {
-    pub async fn app_links(&self, user_id: Option<&str>) -> Result<Vec<AppLink>, Error> {
+    pub async fn app_links(&self, user_id: Option<&str>) -> Result<Vec<AppLink>> {
         self.get(&format!(
             "api/v1/users/{}/appLinks",
             user_id.unwrap_or("me")

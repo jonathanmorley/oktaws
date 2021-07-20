@@ -3,10 +3,10 @@ use crate::okta::auth::LoginRequest;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use dialoguer::Password;
-use failure::Error;
 #[cfg(not(target_os = "linux"))]
 use keyring::Keyring;
 use reqwest::cookie::Jar;
@@ -23,9 +23,9 @@ pub struct Client {
     pub cookies: Arc<Jar>,
 }
 
-#[derive(Deserialize, Debug, Fail, Serialize)]
+#[derive(Deserialize, Debug, thiserror::Error, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[fail(display = "{}: {}", error_code, error_summary)]
+#[error("{error_code}: {error_summary}")]
 pub struct ClientError {
     error_code: String,
     error_summary: String,
@@ -45,11 +45,11 @@ impl Client {
         organization: String,
         username: String,
         #[cfg(not(target_os = "linux"))] force_prompt: bool,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
             .set_username(&username)
-            .map_err(|_| format_err!("Cannot set username for URL"))?;
+            .map_err(|_| anyhow!("Cannot set username for URL"))?;
 
         let cookies = Arc::from(Jar::default());
 
@@ -123,7 +123,7 @@ impl Client {
             .add_cookie_str(&format!("sid={}", session_id), &self.base_url);
     }
 
-    pub async fn get_response(&self, url: Url) -> Result<Response, Error> {
+    pub async fn get_response(&self, url: Url) -> Result<Response> {
         retry(ExponentialBackoff::default(), || async {
             let resp = self.client.get(url.clone()).send().await?;
 
@@ -141,7 +141,7 @@ impl Client {
         .map_err(Into::into)
     }
 
-    pub async fn get<O>(&self, path: &str) -> Result<O, Error>
+    pub async fn get<O>(&self, path: &str) -> Result<O>
     where
         O: DeserializeOwned,
     {
@@ -159,7 +159,7 @@ impl Client {
         }
     }
 
-    pub async fn post<I, O>(&self, path: &str, body: &I) -> Result<O, Error>
+    pub async fn post<I, O>(&self, path: &str, body: &I) -> Result<O>
     where
         I: Serialize,
         O: DeserializeOwned,
@@ -167,7 +167,7 @@ impl Client {
         self.post_absolute(self.base_url.join(path)?, body).await
     }
 
-    pub async fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O, Error>
+    pub async fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O>
     where
         I: Serialize,
         O: DeserializeOwned,
@@ -181,13 +181,13 @@ impl Client {
             .await?;
 
         if resp.status().is_success() {
-            resp.json().await.map_err(|e| e.into())
+            resp.json().await.map_err(Into::into)
         } else {
             Err(resp.json::<ClientError>().await?.into())
         }
     }
 
-    fn prompt_password(&self) -> Result<String, Error> {
+    fn prompt_password(&self) -> Result<String> {
         Password::new()
             .with_prompt(&format!("Password for {}", self.base_url))
             .interact()
@@ -195,7 +195,7 @@ impl Client {
     }
 
     #[cfg(not(target_os = "linux"))]
-    pub fn get_password(&self, keyring: &Keyring, force_prompt: bool) -> Result<String, Error> {
+    pub fn get_password(&self, keyring: &Keyring, force_prompt: bool) -> Result<String> {
         // If the user chooses to force new creds, prompt them for them
         if force_prompt {
             self.prompt_password()

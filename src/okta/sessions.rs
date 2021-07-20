@@ -3,7 +3,7 @@ use crate::okta::client::Client;
 use std::collections::HashSet;
 use std::fmt;
 
-use failure::Error;
+use anyhow::Result;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -101,7 +101,7 @@ impl Client {
         &mut self,
         session_token: String,
         additional_fields: &HashSet<SessionProperties>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let session: Session = self
             .post(
                 &format!(
