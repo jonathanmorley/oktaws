@@ -1,5 +1,4 @@
 use crate::config::profile::{Profile, ProfileConfig};
-use crate::multi_select;
 use crate::okta::client::Client as OktaClient;
 
 use std::convert::TryFrom;
@@ -21,6 +20,7 @@ pub struct OrganizationConfig {
     pub role: Option<String>,
     pub username: Option<String>,
     pub duration_seconds: Option<i64>,
+    #[serde(serialize_with = "toml::ser::tables_last")]
     pub profiles: IndexMap<String, ProfileConfig>,
 }
 
@@ -28,20 +28,16 @@ impl OrganizationConfig {
     pub async fn from_organization(
         client: &OktaClient,
         username: String,
+        default_role: Option<String>
     ) -> Result<OrganizationConfig> {
         let app_links = client.app_links(None).await?;
         let aws_links = app_links
             .into_iter()
             .filter(|link| link.app_name == "amazon_aws");
 
-        // let selected_links =
-        //     multi_select(aws_links.collect(), "Choose Okta Applications", |link| {
-        //         link.label.clone()
-        //     })?;
-
         let profile_futures = aws_links
             .into_iter()
-            .map(|link| ProfileConfig::from_app_link(client, link));
+            .map(|link| ProfileConfig::from_app_link(client, link, default_role.clone()));
 
         Ok(OrganizationConfig {
             username: Some(username),

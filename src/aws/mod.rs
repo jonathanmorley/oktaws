@@ -10,7 +10,7 @@ use self::role::Role;
 pub mod credentials;
 pub mod role;
 
-pub async fn get_account_alias(role: Role, response: &Response) -> Result<String> {
+pub async fn get_account_alias(role: &Role, response: &Response) -> Result<String> {
     let assumption_response = assume_role(role, response.raw.clone(), None)
         .await
         .map_err(|e| anyhow!("Error assuming role ({})", e))?;
