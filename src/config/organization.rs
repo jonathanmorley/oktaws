@@ -1,4 +1,5 @@
 use crate::config::profile::{Profile, ProfileConfig};
+use crate::multi_select;
 use crate::okta::client::Client as OktaClient;
 
 use std::convert::TryFrom;
@@ -35,14 +36,19 @@ impl OrganizationConfig {
             .into_iter()
             .filter(|link| link.app_name == "amazon_aws");
 
-        let profile_futures = aws_links
+        let selected_links =
+            multi_select(aws_links.collect(), "Choose Okta Applications", |link| {
+                link.label.clone()
+            })?;
+
+        let profile_futures = selected_links
             .into_iter()
             .map(|link| ProfileConfig::from_app_link(client, link, default_role.clone()));
 
         Ok(OrganizationConfig {
             username: Some(username),
             duration_seconds: None,
-            role: None,
+            role: default_role.clone(),
             profiles: join_all(profile_futures)
                 .await
                 .into_iter()
@@ -102,21 +108,17 @@ impl Organization {
             .filter(move |p| filter.matches(&p.name))
     }
 
+
     pub async fn into_credentials(
         self,
         client: &OktaClient,
         filter: Pattern,
-    ) -> impl Iterator<Item = (String, Credentials)> {
-        let org_name = self.name.clone();
-
+    ) -> impl Iterator<Item = (String, Result<Credentials>)> {
         let futures = self.into_profiles(filter).map(|profile| async {
-            let name = profile.name.clone();
-
-            info!("Requesting tokens for {}/{}", org_name, profile.name);
-
-            let credentials = profile.into_credentials(&client).await.unwrap();
-
-            (name, credentials)
+            (
+                profile.name.clone(),
+                profile.into_credentials(&client).await
+            )
         });
 
         join_all(futures).await.into_iter()

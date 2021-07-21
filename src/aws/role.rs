@@ -1,11 +1,12 @@
 use std::str;
 use std::str::FromStr;
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Context, Error, Result, anyhow};
 use rusoto_core::request::HttpClient;
 use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{AssumeRoleWithSAMLRequest, AssumeRoleWithSAMLResponse, Sts, StsClient};
+use tracing::instrument;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Role {
@@ -42,6 +43,7 @@ impl Role {
     }
 }
 
+#[instrument(level="trace", skip(saml_assertion))]
 pub async fn assume_role(
     Role {
         provider_arn,
@@ -62,12 +64,12 @@ pub async fn assume_role(
     let provider = StaticProvider::new_minimal(String::from(""), String::from(""));
     let client = StsClient::new_with(HttpClient::new()?, provider, Region::default());
 
-    trace!("Assuming role: {:?}", &req);
+    trace!("Assuming role");
 
     client
         .assume_role_with_saml(req)
         .await
-        .map_err(|e| e.into())
+        .with_context(|| anyhow!("Cannot assume role from SAML"))
 }
 
 #[cfg(test)]

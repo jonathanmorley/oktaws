@@ -8,6 +8,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -17,6 +18,7 @@ pub enum ProfileConfig {
 }
 
 impl ProfileConfig {
+    #[instrument(skip(client, link, default_role), fields(organization=%client.base_url, application=%link.label))]
     pub async fn from_app_link(client: &OktaClient, link: AppLink, default_role: Option<String>) -> Result<(String, Self)> {
         let response = client.get_saml_response(link.link_url.clone()).await?;
         let aws_response = response.post_to_aws().await?;
@@ -49,10 +51,7 @@ impl ProfileConfig {
             .await
             .or_else(|_| extract_account_name(&aws_response_text))
             .unwrap_or_else(|_| {
-                warn!(
-                    "No AWS account alias found for {}, falling back on Okta Application name",
-                    &link.label
-                );
+                warn!("No AWS account alias found. Falling back on Okta Application name");
                 link.label.clone()
             });
 
@@ -120,7 +119,10 @@ impl Profile {
         })
     }
 
+    #[instrument(skip(self, client), fields(organization=%client.base_url, profile=%self.name))]
     pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials> {
+        info!("Requesting tokens");
+        
         let app_link = client
             .app_links(None)
             .await?
