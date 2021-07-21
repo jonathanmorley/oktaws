@@ -2,7 +2,7 @@ use crate::aws::role::Role;
 
 use std::convert::TryFrom;
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Context, Error, Result, anyhow};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
@@ -54,10 +54,7 @@ impl TryFrom<String> for Response {
                 roles: role_attribute
                     .values
                     .into_iter()
-                    .map(|arn| {
-                        arn.parse()
-                            .map_err(|_| anyhow!("Error dyring parsing Role"))
-                    })
+                    .map(|arn| arn.parse())
                     .collect::<Result<Vec<Role>, Error>>()?,
             })
         } else {
@@ -68,17 +65,17 @@ impl TryFrom<String> for Response {
 
 impl Response {
     pub async fn post_to_aws(&self) -> Result<reqwest::Response> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder().pool_max_idle_per_host(0).build()?;
 
         client
             .post(Url::parse("https://signin.aws.amazon.com/saml")?)
             .form(&[
                 ("SAMLResponse", &self.raw),
-                ("RelayState", &String::from("")),
+                ("RelayState", &String::new()),
             ])
             .send()
             .await
-            .map_err(Into::into)
+            .with_context(|| anyhow!("Roles: {:?}", self.roles))
     }
 }
 

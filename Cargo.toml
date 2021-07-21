@@ -3,7 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2018"
 name = "oktaws"
-version = "0.14.1"
+version = "0.15.0"
 [dependencies]
 anyhow = "*"
 async-recursion = "*"
@@ -23,6 +23,8 @@ regex = "1"
 samuel = "*"
 serde_ini = "0.2"
 thiserror = "*"
+tracing = "*"
+tracing-subscriber = "*"
 username = "0.2"
 walkdir = "2"
 

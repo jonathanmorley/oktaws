@@ -17,9 +17,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+#[derive(Debug)]
 pub struct Client {
     client: HttpClient,
-    base_url: Url,
+    pub base_url: Url,
     pub cookies: Arc<Jar>,
 }
 
@@ -153,7 +154,7 @@ impl Client {
             .await?;
 
         if resp.status().is_success() {
-            resp.json().await.map_err(|e| e.into())
+            resp.json().await.map_err(Into::into)
         } else {
             Err(resp.json::<ClientError>().await?.into())
         }

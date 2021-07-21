@@ -39,9 +39,6 @@ fn organizations_from_dir(dir: &Path) -> impl Iterator<Item = Organization> {
         .into_iter()
         .filter_map(|r| r.ok())
         .filter(|e| e.file_type().is_file())
-        .inspect(|e| {
-            dbg!(e);
-        })
         .filter(|e| e.path().extension() == Some("toml".as_ref()))
         .map(|e| e.path().try_into())
         .filter_map(|r| match r {

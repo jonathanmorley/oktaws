@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Error, Result};
 use glob::Pattern;
-use log::{debug, info};
+use log::{debug, info, trace};
 use structopt::StructOpt;
+use tracing_subscriber::fmt::Subscriber;
 
 #[derive(StructOpt, Debug)]
 struct Args {
@@ -31,16 +32,23 @@ enum Command {
 #[paw::main]
 #[tokio::main]
 async fn main(args: Args) -> Result<()> {
-    debug!("Args: {:?}", args);
+    trace!("Args: {:?}", args);
 
     // Set Log Level
-    let log_level = match args.verbosity {
-        0 => "info",
-        1 => "debug",
-        _ => "trace",
-    };
-    env::set_var("RUST_LOG", format!("{}={}", module_path!(), log_level));
-    pretty_env_logger::init();
+    let log_env_var = env::var("RUST_LOG");
+
+    let log_filter = log_env_var.clone().unwrap_or_else(|_| match args.verbosity {
+        0 => format!("{}=warn", module_path!()),
+        1 => format!("{}=info", module_path!()),
+        2 => format!("{}=debug", module_path!()),
+        _ => format!("{}=trace", module_path!()),
+    });
+
+    Subscriber::builder()
+        .with_env_filter(log_filter)
+        .without_time()
+        .with_target(log_env_var.is_ok())
+        .init();
 
     match args.cmd {
         Command::Refresh(args) => refresh(args).await,
@@ -53,7 +61,7 @@ struct RefreshArgs {
     /// Okta organization(s) to use
     #[structopt(
         short = "o",
-        long = "organizations",
+        long = "organization",
         default_value = "*",
         parse(try_from_str)
     )]
@@ -62,7 +70,7 @@ struct RefreshArgs {
     /// Profile(s) to update
     #[structopt(
         short = "p",
-        long = "profiles",
+        long = "profile",
         default_value = "*",
         parse(try_from_str)
     )]
@@ -113,7 +121,7 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
                 .lock()
                 .unwrap()
                 .profiles
-                .set_sts_credentials(name.clone(), creds.into())?;
+                .set_sts_credentials(name.clone(), creds?.into())?;
         }
     }
 
@@ -159,16 +167,23 @@ impl TryFrom<InitArgs> for Init {
 
         let username = match args.username {
             Some(username) => Ok(username),
-            None => dialoguer::Input::new()
-                .with_prompt(format!("Username for {}", &organization))
-                .interact_text()
+            None => {
+                let mut input = dialoguer::Input::new();
+                input.with_prompt(format!("Username for {}", &organization));
+
+                if let Ok(system_user) = username::get_user_name() {
+                    input.default(system_user);
+                }
+
+                input.interact_text()
+            }
         }?;
 
         let default_role = match args.default_role {
             Some(default_role) => Ok(Some(default_role)),
             None => {
                 dialoguer::Input::new()
-                    .with_prompt(format!("Name of default role for {}", &organization))
+                    .with_prompt(format!("Name of default role for {} [no default role]", &organization))
                     .allow_empty(true)
                     .interact_text()
                     .map(|input: String| if input.is_empty() {

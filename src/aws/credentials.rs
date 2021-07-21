@@ -110,14 +110,14 @@ impl Profiles {
         Ok(())
     }
 
-    fn read_as_ini<R>(reader: R) -> Result<Self, Error>
+    fn read_as_ini<R>(reader: R) -> Result<Self>
     where
         R: Read,
     {
         serde_ini::de::from_read(reader).map_err(Into::into)
     }
 
-    fn write_as_ini<W>(&self, writer: &mut W) -> Result<(), Error>
+    fn write_as_ini<W>(&self, writer: &mut W) -> Result<()>
     where
         W: Write,
     {
@@ -132,7 +132,7 @@ pub struct CredentialsStore {
 }
 
 impl CredentialsStore {
-    pub fn new() -> Result<CredentialsStore, Error> {
+    pub fn new() -> Result<CredentialsStore> {
         match env_var("AWS_SHARED_CREDENTIALS_FILE") {
             Ok(path) => PathBuf::from(path),
             Err(_) => CredentialsStore::default_profile_location()?,
@@ -140,12 +140,12 @@ impl CredentialsStore {
         .try_into()
     }
 
-    pub fn save(&mut self) -> Result<(), Error> {
+    pub fn save(&mut self) -> Result<()> {
         info!("Saving AWS credentials");
         self.profiles.write_as_ini(&mut self.file)
     }
 
-    fn default_profile_location() -> Result<PathBuf, Error> {
+    fn default_profile_location() -> Result<PathBuf> {
         match dirs::home_dir() {
             Some(home_dir) => Ok(home_dir.join(".aws").join("credentials")),
             None => Err(anyhow!("The environment variable HOME must be set.")),
