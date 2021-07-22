@@ -20,12 +20,18 @@ struct Args {
     verbosity: usize,
 
     #[structopt(subcommand)]
-    cmd: Command,
+    cmd: Option<Command>,
+
+    #[structopt(flatten)]
+    default: RefreshArgs
 }
 
 #[derive(StructOpt, Debug)]
 enum Command {
+    /// Refresh credentials from okta
     Refresh(RefreshArgs),
+
+    /// Generate an organization.toml configuration
     Init(InitArgs),
 }
 
@@ -51,8 +57,9 @@ async fn main(args: Args) -> Result<()> {
         .init();
 
     match args.cmd {
-        Command::Refresh(args) => refresh(args).await,
-        Command::Init(args) => init(args.try_into()?).await,
+        Some(Command::Refresh(args)) => refresh(args).await,
+        Some(Command::Init(args)) => init(args.try_into()?).await,
+        None => refresh(args.default).await
     }
 }
 
@@ -69,8 +76,6 @@ struct RefreshArgs {
 
     /// Profile(s) to update
     #[structopt(
-        short = "p",
-        long = "profile",
         default_value = "*",
         parse(try_from_str)
     )]
