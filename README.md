@@ -31,17 +31,17 @@ See [Assuming a Role](https://docs.aws.amazon.com/cli/latest/userguide/cli-roles
 
 ## Usage
 
-You can run `oktaws refresh --profile profile1` to generate keys for a single profile, or just `oktaws refresh` to generate keys for all profiles.
+You can run `oktaws refresh profile1` to generate keys for a single profile, or just `oktaws refresh` to generate keys for all profiles.
 
 ```sh
-$ oktaws refresh --profile [AWS profile]
+$ oktaws refresh [AWS profile]
 $ aws --profile [AWS profile] [command]
 ```
 
 for example
 
 ```sh
-$ oktaws refresh --profile production
+$ oktaws refresh production
 $ aws --profile production ec2 describe-instances
 ```
 
@@ -50,18 +50,17 @@ $ aws --profile production ec2 describe-instances
 Login didn't work? Use the `-v` flag to emit more verbose logs. Add more `-v`s for increased verbosity:
 
 ```sh
-$ oktaws refresh --profile production -vv
+$ oktaws refresh production -vv
 ```
 
 ## Upgrading
 
 ### v0.15
 
-`oktaws v0.15` contains breaking changes to the interface.
-Because of the addition of the `init` command, you must use `oktaws refresh` to generate credentials.
-You will also need to pass profiles into the `refresh` command with `--profile`, rather than a positional argument.
+`oktaws v0.15` contains potentially breaking changes to the interface by introducing subcommands.
 
-You can approximate a pre-0.15 oktaws command with `alias oktaws=oktaws refresh --profile`
+If your profile name conflicts with a subcommand, then you must use the `oktaws refresh <profile>` syntax,
+to disambiguate the profile from subcommands.
 
 ## Contributors
 
