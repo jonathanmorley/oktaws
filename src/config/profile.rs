@@ -19,7 +19,11 @@ pub enum ProfileConfig {
 
 impl ProfileConfig {
     #[instrument(skip(client, link, default_role), fields(organization=%client.base_url, application=%link.label))]
-    pub async fn from_app_link(client: &OktaClient, link: AppLink, default_role: Option<String>) -> Result<(String, Self)> {
+    pub async fn from_app_link(
+        client: &OktaClient,
+        link: AppLink,
+        default_role: Option<String>,
+    ) -> Result<(String, Self)> {
         let response = client.get_saml_response(link.link_url.clone()).await?;
         let aws_response = response.post_to_aws().await?;
         let aws_response_text = aws_response.text().await?;
@@ -31,16 +35,25 @@ impl ProfileConfig {
             1 => Ok(roles.get(0).unwrap()),
             _ => {
                 if let Some(default_role) = default_role.as_ref() {
-                    match roles.iter().find(|role| role.role_name().unwrap() == default_role) {
+                    match roles
+                        .iter()
+                        .find(|role| role.role_name().unwrap() == default_role)
+                    {
                         Some(role) => Ok(role),
-                        None => select(roles.iter().collect(), format!("Choose Role for {}", link.label), |role| {
-                            role.role_arn.clone()
-                        }).map_err(Into::into)
+                        None => select(
+                            roles.iter().collect(),
+                            format!("Choose Role for {}", link.label),
+                            |role| role.role_arn.clone(),
+                        )
+                        .map_err(Into::into),
                     }
                 } else {
-                    select(roles.iter().collect(), format!("Choose Role for {}", link.label), |role| {
-                        role.role_arn.clone()
-                    }).map_err(Into::into)
+                    select(
+                        roles.iter().collect(),
+                        format!("Choose Role for {}", link.label),
+                        |role| role.role_arn.clone(),
+                    )
+                    .map_err(Into::into)
                 }
             }
         }?;
@@ -122,7 +135,7 @@ impl Profile {
     #[instrument(skip(self, client), fields(organization=%client.base_url, profile=%self.name))]
     pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials> {
         info!("Requesting tokens");
-        
+
         let app_link = client
             .app_links(None)
             .await?

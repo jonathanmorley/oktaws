@@ -1,7 +1,7 @@
 use std::str;
 use std::str::FromStr;
 
-use anyhow::{Context, Error, Result, anyhow};
+use anyhow::{anyhow, Context, Error, Result};
 use rusoto_core::request::HttpClient;
 use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
@@ -43,7 +43,7 @@ impl Role {
     }
 }
 
-#[instrument(level="trace", skip(saml_assertion))]
+#[instrument(level = "trace", skip(saml_assertion))]
 pub async fn assume_role(
     Role {
         provider_arn,
