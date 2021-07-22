@@ -29,7 +29,7 @@ impl OrganizationConfig {
     pub async fn from_organization(
         client: &OktaClient,
         username: String,
-        default_role: Option<String>
+        default_role: Option<String>,
     ) -> Result<OrganizationConfig> {
         let app_links = client.app_links(None).await?;
         let aws_links = app_links
@@ -108,7 +108,6 @@ impl Organization {
             .filter(move |p| filter.matches(&p.name))
     }
 
-
     pub async fn into_credentials(
         self,
         client: &OktaClient,
@@ -117,7 +116,7 @@ impl Organization {
         let futures = self.into_profiles(filter).map(|profile| async {
             (
                 profile.name.clone(),
-                profile.into_credentials(&client).await
+                profile.into_credentials(&client).await,
             )
         });
 

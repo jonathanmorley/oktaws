@@ -23,7 +23,7 @@ struct Args {
     cmd: Option<Command>,
 
     #[structopt(flatten)]
-    default: RefreshArgs
+    default: RefreshArgs,
 }
 
 #[derive(StructOpt, Debug)]
@@ -43,12 +43,14 @@ async fn main(args: Args) -> Result<()> {
     // Set Log Level
     let log_env_var = env::var("RUST_LOG");
 
-    let log_filter = log_env_var.clone().unwrap_or_else(|_| match args.verbosity {
-        0 => format!("{}=warn", module_path!()),
-        1 => format!("{}=info", module_path!()),
-        2 => format!("{}=debug", module_path!()),
-        _ => format!("{}=trace", module_path!()),
-    });
+    let log_filter = log_env_var
+        .clone()
+        .unwrap_or_else(|_| match args.verbosity {
+            0 => format!("{}=warn", module_path!()),
+            1 => format!("{}=info", module_path!()),
+            2 => format!("{}=debug", module_path!()),
+            _ => format!("{}=trace", module_path!()),
+        });
 
     Subscriber::builder()
         .with_env_filter(log_filter)
@@ -59,7 +61,7 @@ async fn main(args: Args) -> Result<()> {
     match args.cmd {
         Some(Command::Refresh(args)) => refresh(args).await,
         Some(Command::Init(args)) => init(args.try_into()?).await,
-        None => refresh(args.default).await
+        None => refresh(args.default).await,
     }
 }
 
@@ -75,10 +77,7 @@ struct RefreshArgs {
     pub organizations: Pattern,
 
     /// Profile(s) to update
-    #[structopt(
-        default_value = "*",
-        parse(try_from_str)
-    )]
+    #[structopt(default_value = "*", parse(try_from_str))]
     pub profiles: Pattern,
 
     /// Forces new credentials
@@ -167,7 +166,9 @@ impl TryFrom<InitArgs> for Init {
     fn try_from(args: InitArgs) -> Result<Self, Self::Error> {
         let organization = match args.organization {
             Some(organization) => Ok(organization),
-            None => dialoguer::Input::new().with_prompt("Okta Organization Name").interact_text()
+            None => dialoguer::Input::new()
+                .with_prompt("Okta Organization Name")
+                .interact_text(),
         }?;
 
         let username = match args.username {
@@ -186,17 +187,14 @@ impl TryFrom<InitArgs> for Init {
 
         let default_role = match args.default_role {
             Some(default_role) => Ok(Some(default_role)),
-            None => {
-                dialoguer::Input::new()
-                    .with_prompt(format!("Name of default role for {} [no default role]", &organization))
-                    .allow_empty(true)
-                    .interact_text()
-                    .map(|input: String| if input.is_empty() {
-                        None
-                    } else {
-                        Some(input)
-                    })
-            }
+            None => dialoguer::Input::new()
+                .with_prompt(format!(
+                    "Name of default role for {} [no default role]",
+                    &organization
+                ))
+                .allow_empty(true)
+                .interact_text()
+                .map(|input: String| if input.is_empty() { None } else { Some(input) }),
         }?;
 
         Ok(Init {
@@ -218,7 +216,9 @@ async fn init(options: Init) -> Result<()> {
     )
     .await?;
 
-    let organization_config = OrganizationConfig::from_organization(&okta_client, options.username, options.default_role).await?;
+    let organization_config =
+        OrganizationConfig::from_organization(&okta_client, options.username, options.default_role)
+            .await?;
 
     let org_toml = toml::to_string_pretty(&organization_config)?;
 

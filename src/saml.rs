@@ -2,7 +2,7 @@ use crate::aws::role::Role;
 
 use std::convert::TryFrom;
 
-use anyhow::{Context, Error, Result, anyhow};
+use anyhow::{anyhow, Context, Error, Result};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
@@ -65,14 +65,13 @@ impl TryFrom<String> for Response {
 
 impl Response {
     pub async fn post_to_aws(&self) -> Result<reqwest::Response> {
-        let client = reqwest::Client::builder().pool_max_idle_per_host(0).build()?;
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()?;
 
         client
             .post(Url::parse("https://signin.aws.amazon.com/saml")?)
-            .form(&[
-                ("SAMLResponse", &self.raw),
-                ("RelayState", &String::new()),
-            ])
+            .form(&[("SAMLResponse", &self.raw), ("RelayState", &String::new())])
             .send()
             .await
             .with_context(|| anyhow!("Roles: {:?}", self.roles))
