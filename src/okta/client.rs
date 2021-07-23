@@ -129,11 +129,9 @@ impl Client {
             let resp = self.client.get(url.clone()).send().await?;
 
             if resp.status() == StatusCode::TOO_MANY_REQUESTS || resp.status().is_server_error() {
-                resp.error_for_status()
-                    .map_err(|e| backoff::Error::Transient(e))
+                resp.error_for_status().map_err(backoff::Error::Transient)
             } else if resp.status().is_client_error() {
-                resp.error_for_status()
-                    .map_err(|e| backoff::Error::Permanent(e))
+                resp.error_for_status().map_err(backoff::Error::Permanent)
             } else {
                 Ok(resp)
             }
