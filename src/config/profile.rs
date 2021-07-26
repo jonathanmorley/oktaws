@@ -25,7 +25,13 @@ impl ProfileConfig {
         default_role: Option<String>,
     ) -> Result<(String, Self)> {
         let response = client.get_saml_response(link.link_url.clone()).await?;
-        let aws_response = response.post_to_aws().await?;
+        let aws_response = match response.post_to_aws().await {
+            Err(e) => {
+                warn!("Caught error trying to login to AWS: {}, trying again", e);
+                response.post_to_aws().await
+            }
+            ok => ok,
+        }?;
         let aws_response_text = aws_response.text().await?;
 
         let roles = response.clone().roles;
