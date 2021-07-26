@@ -143,10 +143,6 @@ struct InitArgs {
     username: Option<String>,
 
     /// Forces new credentials
-    #[structopt(short = "r", long = "role")]
-    default_role: Option<String>,
-
-    /// Forces new credentials
     #[structopt(short = "f", long = "force-new")]
     #[cfg(not(target_os = "linux"))]
     force_new: bool,
@@ -155,7 +151,6 @@ struct InitArgs {
 struct Init {
     organization: String,
     username: String,
-    default_role: Option<String>,
     #[cfg(not(target_os = "linux"))]
     force_new: bool,
 }
@@ -185,22 +180,9 @@ impl TryFrom<InitArgs> for Init {
             }
         }?;
 
-        let default_role = match args.default_role {
-            Some(default_role) => Ok(Some(default_role)),
-            None => dialoguer::Input::new()
-                .with_prompt(format!(
-                    "Name of default role for {} [no default role]",
-                    &organization
-                ))
-                .allow_empty(true)
-                .interact_text()
-                .map(|input: String| if input.is_empty() { None } else { Some(input) }),
-        }?;
-
         Ok(Init {
             organization,
             username,
-            default_role,
             #[cfg(not(target_os = "linux"))]
             force_new: args.force_new,
         })
@@ -217,8 +199,7 @@ async fn init(options: Init) -> Result<()> {
     .await?;
 
     let organization_config =
-        OrganizationConfig::from_organization(&okta_client, options.username, options.default_role)
-            .await?;
+        OrganizationConfig::from_organization(&okta_client, options.username).await?;
 
     let org_toml = toml::to_string_pretty(&organization_config)?;
 
