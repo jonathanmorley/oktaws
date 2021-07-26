@@ -1,8 +1,8 @@
+pub mod applications;
 pub mod auth;
 pub mod client;
 pub mod factors;
 pub mod sessions;
-pub mod users;
 
 use crate::okta::auth::LoginRequest;
 use crate::okta::client::Client;

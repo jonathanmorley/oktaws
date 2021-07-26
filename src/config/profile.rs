@@ -1,6 +1,6 @@
 use crate::{
     aws::{get_account_alias, role::Role},
-    okta::{client::Client as OktaClient, users::AppLink},
+    okta::{applications::AppLink, client::Client as OktaClient},
     saml::extract_account_name,
     select,
 };

@@ -1,6 +1,6 @@
 use crate::config::profile::{Profile, ProfileConfig};
-use crate::multi_select;
 use crate::okta::client::Client as OktaClient;
+use crate::select_opt;
 
 use std::convert::TryFrom;
 use std::fmt::Display;
@@ -12,6 +12,7 @@ use dialoguer::Input;
 use futures::future::join_all;
 use glob::Pattern;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
 use toml;
@@ -29,17 +30,33 @@ impl OrganizationConfig {
     pub async fn from_organization(
         client: &OktaClient,
         username: String,
-        default_role: Option<String>,
     ) -> Result<OrganizationConfig> {
         let app_links = client.app_links(None).await?;
         let aws_links = app_links
             .into_iter()
             .filter(|link| link.app_name == "amazon_aws");
+        let selected_links = aws_links.collect::<Vec<_>>();
 
-        let selected_links =
-            multi_select(aws_links.collect(), "Choose Okta Applications", |link| {
-                link.label.clone()
-            })?;
+        let roles = client.all_roles(&selected_links).await?;
+
+        let mut role_names = roles
+            .into_iter()
+            .map(|r| r.role_name().map(ToOwned::to_owned))
+            .collect::<Result<Vec<_>>>()?;
+        role_names.sort();
+
+        // This is to try to remove any single-items from the list, then dedup
+        let default_role_names = role_names
+            .into_iter()
+            .dedup_with_count()
+            .filter(|&(i, _)| i > 1)
+            .map(|(_, x)| x)
+            .collect::<Vec<_>>();
+        let default_role = select_opt(
+            default_role_names,
+            "Choose Default Role [None]",
+            ToOwned::to_owned,
+        )?;
 
         let profile_futures = selected_links
             .into_iter()
