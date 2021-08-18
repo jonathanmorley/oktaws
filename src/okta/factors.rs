@@ -1,4 +1,3 @@
-use crate::okta::auth::FactorResult;
 use crate::okta::auth::LoginResponse;
 use crate::okta::client::Client;
 use crate::okta::Links;
@@ -13,6 +12,21 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use dialoguer::Password;
 use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum FactorResult {
+    Cancelled,
+    Challenge,
+    Error,
+    Failed,
+    PasscodeReplayed,
+    Rejected,
+    Success,
+    Timeout,
+    TimeWindowExceeded,
+    Waiting,
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase", tag = "factorType")]

@@ -1,5 +1,5 @@
 use crate::okta::client::Client;
-use crate::okta::factors::Factor;
+use crate::okta::factors::{Factor, FactorResult};
 use crate::okta::Links;
 
 use anyhow::{anyhow, Result};
@@ -95,15 +95,6 @@ pub struct LoginResponse {
     embedded: Option<LoginEmbedded>,
     #[serde(rename = "_links", default)]
     links: HashMap<String, Links>,
-}
-
-#[derive(Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum FactorResult {
-    Waiting,
-    Success,
-    Rejected,
-    Timeout,
 }
 
 #[derive(Deserialize, Debug)]
