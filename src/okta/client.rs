@@ -24,21 +24,37 @@ pub struct Client {
     pub cookies: Arc<Jar>,
 }
 
-#[derive(Deserialize, Debug, thiserror::Error, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[error("{error_code}: {error_summary}")]
-pub struct ClientError {
-    error_code: String,
-    error_summary: String,
-    error_link: String,
-    error_id: String,
-    error_causes: Option<Vec<ClientErrorSummary>>,
+#[derive(Debug, thiserror::Error)]
+pub enum OktaError {
+    #[error("Authentication failed")]
+    AuthenticationException(String),
+    #[error("Too many requests")]
+    TooManyRequestsException(String),
+    #[error("{0}")]
+    Unknown(RawOktaError)
 }
 
-#[derive(Deserialize, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClientErrorSummary {
-    error_summary: String,
+impl From<RawOktaError> for OktaError {
+    fn from(error: RawOktaError) -> Self {
+        match &*error.code {
+            "E0000004" => Self::AuthenticationException(error.id),
+            "E0000047" => Self::TooManyRequestsException(error.id),
+            _ => Self::Unknown(error)
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, thiserror::Error)]
+#[error("{code}: {summary}")]
+pub struct RawOktaError {
+    #[serde(rename = "errorCode")]
+    code: String,
+    #[serde(rename = "errorLink")]
+    link: String,
+    #[serde(rename = "errorSummary")]
+    summary: String,
+    #[serde(rename = "errorId")]
+    id: String,
 }
 
 impl Client {
@@ -90,24 +106,24 @@ impl Client {
                 Ok(session_token)
             }
             Err(wrapped_error) => {
-                if wrapped_error
-                    .downcast_ref::<ClientError>()
-                    .map(|e| e.error_summary.as_ref())
-                    == Some("Authentication failed")
-                {
-                    warn!("Authentication failed, re-prompting for Okta credentials");
+                if let Some(OktaError::Unknown(okta_error)) = wrapped_error.downcast_ref() {
+                    if okta_error.summary == "Authentication failed" {
+                        warn!("Authentication failed, re-prompting for Okta credentials");
 
-                    let password = client.prompt_password()?;
-                    let login_request =
-                        LoginRequest::from_credentials(username.to_owned(), password.clone());
+                        let password = client.prompt_password()?;
+                        let login_request =
+                            LoginRequest::from_credentials(username.to_owned(), password.clone());
 
-                    let session_token = client.get_session_token(&login_request).await?;
+                        let session_token = client.get_session_token(&login_request).await?;
 
-                    // Save the password.
-                    #[cfg(not(target_os = "linux"))]
-                    client.set_cached_password(&keyring, &password);
+                        // Save the password.
+                        #[cfg(not(target_os = "linux"))]
+                        client.set_cached_password(&keyring, &password);
 
-                    Ok(session_token)
+                        Ok(session_token)
+                    } else {
+                        Err(wrapped_error)
+                    }
                 } else {
                     Err(wrapped_error)
                 }
@@ -154,7 +170,12 @@ impl Client {
         if resp.status().is_success() {
             resp.json().await.map_err(Into::into)
         } else {
-            Err(resp.json::<ClientError>().await?.into())
+            let error: OktaError = resp
+                .json::<RawOktaError>()
+                .await?
+                .into();
+
+            Err(error.into())
         }
     }
 
@@ -182,7 +203,7 @@ impl Client {
         if resp.status().is_success() {
             resp.json().await.map_err(Into::into)
         } else {
-            Err(resp.json::<ClientError>().await?.into())
+            Err(resp.json::<RawOktaError>().await?.into())
         }
     }
 
