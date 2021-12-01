@@ -14,6 +14,23 @@ use serde_json;
 use tracing_subscriber::prelude::*;
 use tracing::{debug, info, trace, Level};
 
+/// Oktaws
+/// 
+/// New commands:
+/// - credential-process: Returns a single credential in JSON
+/// - doctor:
+///   - Authenticates against Okta, updating cached creds if necessary
+///   - Copies config from ~/.oktaws to ~/.aws/config if present (prompts for confirmation)
+/// - init now takes a flag (aws-config). If present, will upsert creds into ~/.aws/config. 
+
+/// The prompts also change, and have 3 options:
+/// - gui: Prompts using a GUI
+/// - stderr: Prompts using the stderr (not currently supported by botocore)
+/// - tty: Prompts using /dev/tty / CON (has issues on windows)
+/// - parent: Prompts using the parent's stderr (not available on windows)
+/// If none of the options above are available, you should make sure oktaws
+/// does not need to prompt, or use the `~/.aws/credentials` approach.
+
 #[derive(Clap, Debug)]
 #[clap(
     version,
@@ -35,6 +52,8 @@ struct Args {
 enum Command {
     /// Fetch new credentials from Okta
     Refresh(RefreshArgs),
+
+    CredentialProcess(CredentialProcessArgs),
 
     /// Generate an organization.toml configuration
     Init(InitArgs),
@@ -160,6 +179,8 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
             }
 
             if let Some(credentials) = credentials.into_values().next() {
+                gag::Redirect::stderr(std::fs::File::open("/dev/tty").unwrap()).unwrap();
+
                 let json_creds: CredentialProcessCredentials = credentials.into();
                 println!("{}", serde_json::to_string_pretty(&json_creds)?);
                 Ok(())
@@ -168,6 +189,44 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
             }
         }
     }
+}
+
+#[derive(Clap, Debug)]
+struct CredentialProcessArgs {
+    /// AWS profile to use
+    profile: String,
+}
+
+async fn credential_process(args: CredentialProcessArgs) -> Result<()> {
+    // Fetch config from files
+    let config = Config::new()?;
+    debug!("Config: {:?}", config);
+
+    let mut organizations = config
+        .into_organizations(config.organization.clone())
+        .next()
+        .unwrap();
+
+    info!("Evaluating profiles in {}", organization.name);
+
+    let okta_client = OktaClient::new(
+        organization.name.clone(),
+        organization.username.clone(),
+        #[cfg(not(target_os = "linux"))]
+        args.force_new,
+    )
+    .await?;
+
+    let credential = organization
+        .into_credentials(&okta_client, args.profiles.clone())
+        .await
+        .into_values()
+        .next()
+        .unwrap();
+
+    let json_creds: CredentialProcessCredentials = credential.1.into();
+    println!("{}", serde_json::to_string_pretty(&json_creds)?);
+    Ok(())
 }
 
 #[derive(Clap, Debug)]
@@ -235,3 +294,4 @@ async fn init(args: InitArgs) -> Result<()> {
 
     Ok(())
 }
+
