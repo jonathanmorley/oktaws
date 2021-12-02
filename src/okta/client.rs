@@ -106,24 +106,20 @@ impl Client {
                 Ok(session_token)
             }
             Err(wrapped_error) => {
-                if let Some(OktaError::Unknown(okta_error)) = wrapped_error.downcast_ref() {
-                    if okta_error.summary == "Authentication failed" {
-                        warn!("Authentication failed, re-prompting for Okta credentials");
+                if let Some(OktaError::AuthenticationException(_)) = wrapped_error.downcast_ref() {
+                    warn!("Authentication failed, re-prompting for Okta credentials");
 
-                        let password = client.prompt_password()?;
-                        let login_request =
-                            LoginRequest::from_credentials(username.to_owned(), password.clone());
+                    let password = client.prompt_password()?;
+                    let login_request =
+                        LoginRequest::from_credentials(username.to_owned(), password.clone());
 
-                        let session_token = client.get_session_token(&login_request).await?;
+                    let session_token = client.get_session_token(&login_request).await?;
 
-                        // Save the password.
-                        #[cfg(not(target_os = "linux"))]
-                        client.set_cached_password(&keyring, &password);
+                    // Save the password.
+                    #[cfg(not(target_os = "linux"))]
+                    client.set_cached_password(&keyring, &password);
 
-                        Ok(session_token)
-                    } else {
-                        Err(wrapped_error)
-                    }
+                    Ok(session_token)
                 } else {
                     Err(wrapped_error)
                 }
@@ -160,23 +156,40 @@ impl Client {
     where
         O: DeserializeOwned,
     {
-        let resp = self
-            .client
-            .get(self.base_url.join(path)?)
-            .header(ACCEPT, HeaderValue::from_static("application/json"))
-            .send()
-            .await?;
+        retry(ExponentialBackoff::default(), || async {
+            let url = self
+                .base_url
+                .join(path)
+                .map_err(anyhow::Error::from)
+                .map_err(backoff::Error::Permanent)?;
+            
+            let resp = self
+                .client
+                .get(url)
+                .header(ACCEPT, HeaderValue::from_static("application/json"))
+                .send()
+                .await
+                .map_err(anyhow::Error::from)
+                .map_err(backoff::Error::Permanent)?;
 
-        if resp.status().is_success() {
-            resp.json().await.map_err(Into::into)
-        } else {
-            let error: OktaError = resp
-                .json::<RawOktaError>()
-                .await?
-                .into();
+            if resp.status().is_success() {
+                resp.json().await.map_err(anyhow::Error::from).map_err(backoff::Error::Permanent)
+            } else {
+                let error: OktaError = resp
+                    .json::<RawOktaError>()
+                    .await
+                    .map_err(anyhow::Error::from)
+                    .map_err(backoff::Error::Permanent)?
+                    .into();
 
-            Err(error.into())
-        }
+                if let OktaError::TooManyRequestsException(_) = error {
+                    Err(backoff::Error::Transient(anyhow::Error::from(error)))
+                } else {
+                    Err(backoff::Error::Permanent(anyhow::Error::from(error)))
+                }
+            }
+        })
+        .await
     }
 
     pub async fn post<I, O>(&self, path: &str, body: &I) -> Result<O>
