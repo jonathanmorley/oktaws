@@ -31,7 +31,7 @@ pub enum OktaError {
     #[error("Too many requests")]
     TooManyRequestsException(String),
     #[error("{0}")]
-    Unknown(RawOktaError)
+    Unknown(RawOktaError),
 }
 
 impl From<RawOktaError> for OktaError {
@@ -39,7 +39,7 @@ impl From<RawOktaError> for OktaError {
         match &*error.code {
             "E0000004" => Self::AuthenticationException(error.id),
             "E0000047" => Self::TooManyRequestsException(error.id),
-            _ => Self::Unknown(error)
+            _ => Self::Unknown(error),
         }
     }
 }
@@ -162,7 +162,7 @@ impl Client {
                 .join(path)
                 .map_err(anyhow::Error::from)
                 .map_err(backoff::Error::Permanent)?;
-            
+
             let resp = self
                 .client
                 .get(url)
@@ -173,7 +173,10 @@ impl Client {
                 .map_err(backoff::Error::Permanent)?;
 
             if resp.status().is_success() {
-                resp.json().await.map_err(anyhow::Error::from).map_err(backoff::Error::Permanent)
+                resp.json()
+                    .await
+                    .map_err(anyhow::Error::from)
+                    .map_err(backoff::Error::Permanent)
             } else {
                 let error: OktaError = resp
                     .json::<RawOktaError>()
