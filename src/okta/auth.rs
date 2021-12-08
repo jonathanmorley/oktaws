@@ -78,7 +78,7 @@ pub struct LoginResponse {
 #[serde(rename_all = "camelCase")]
 pub struct LoginEmbedded {
     #[serde(default)]
-    factors: Vec<Factor>
+    factors: Vec<Factor>,
 }
 
 #[derive(Deserialize, Debug)]
