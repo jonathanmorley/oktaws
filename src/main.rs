@@ -82,7 +82,6 @@ struct RefreshArgs {
 
     /// Forces new credentials
     #[structopt(short = "f", long = "force-new")]
-    #[cfg(not(target_os = "linux"))]
     pub force_new: bool,
 }
 
@@ -111,7 +110,6 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
         let okta_client = OktaClient::new(
             organization.name.clone(),
             organization.username.clone(),
-            #[cfg(not(target_os = "linux"))]
             args.force_new,
         )
         .await?;
@@ -144,14 +142,12 @@ struct InitArgs {
 
     /// Forces new credentials
     #[structopt(short = "f", long = "force-new")]
-    #[cfg(not(target_os = "linux"))]
     force_new: bool,
 }
 
 struct Init {
     organization: String,
     username: String,
-    #[cfg(not(target_os = "linux"))]
     force_new: bool,
 }
 
@@ -183,7 +179,6 @@ impl TryFrom<InitArgs> for Init {
         Ok(Init {
             organization,
             username,
-            #[cfg(not(target_os = "linux"))]
             force_new: args.force_new,
         })
     }
@@ -193,7 +188,6 @@ async fn init(options: Init) -> Result<()> {
     let okta_client = OktaClient::new(
         options.organization.clone(),
         options.username.clone(),
-        #[cfg(not(target_os = "linux"))]
         options.force_new,
     )
     .await?;
