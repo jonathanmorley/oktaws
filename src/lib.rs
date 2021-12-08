@@ -21,7 +21,6 @@ where
             .with_prompt(prompt)
             .items(&items.iter().map(displayer).collect::<Vec<_>>())
             .default(0)
-            .paged(true)
             .interact()
             .map_err(Into::into),
     }?;
@@ -41,7 +40,6 @@ where
             .with_prompt(prompt)
             .items(&items.iter().map(displayer).collect::<Vec<_>>())
             .default(0)
-            .paged(true)
             .interact_opt()
             .map_err(Into::into),
     }?;

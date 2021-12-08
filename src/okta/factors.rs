@@ -62,17 +62,14 @@ pub enum Factor {
         id: String,
         provider: FactorProvider,
         status: Option<FactorStatus>,
-        profile: TokenFactorProfile,
         #[serde(rename = "_links")]
-        links: HashMap<String, Links>,
-        verify: Option<FactorVerification>,
+        links: HashMap<String, Links>
     },
     #[serde(rename = "token:software:totp", rename_all = "camelCase")]
     Totp {
         id: String,
         provider: FactorProvider,
         status: Option<FactorStatus>,
-        profile: TokenFactorProfile,
         #[serde(rename = "_links")]
         links: HashMap<String, Links>,
     },
@@ -81,10 +78,8 @@ pub enum Factor {
         id: String,
         provider: FactorProvider,
         status: Option<FactorStatus>,
-        profile: TokenFactorProfile,
         #[serde(rename = "_links")]
-        links: HashMap<String, Links>,
-        verify: Option<FactorVerification>,
+        links: HashMap<String, Links>
     },
     #[serde(rename_all = "camelCase")]
     Question {
@@ -100,7 +95,6 @@ pub enum Factor {
         id: String,
         provider: FactorProvider,
         status: Option<FactorStatus>,
-        profile: WebFactorProfile,
         #[serde(rename = "_links")]
         links: HashMap<String, Links>,
     },
@@ -130,13 +124,6 @@ pub enum FactorStatus {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct FactorVerification {
-    pass_code: String,
-    next_pass_code: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct SmsFactorProfile {
     phone_number: String,
 }
@@ -144,28 +131,13 @@ pub struct SmsFactorProfile {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CallFactorProfile {
-    phone_number: String,
-    phone_extension: Option<String>,
+    phone_number: String
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionFactorProfile {
-    question: String,
-    question_text: String,
-    answer: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenFactorProfile {
-    credential_id: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct WebFactorProfile {
-    credential_id: String,
+    question: String
 }
 
 #[derive(Deserialize, Debug, Serialize)]

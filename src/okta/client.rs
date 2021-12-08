@@ -7,8 +7,6 @@ use anyhow::{anyhow, Result};
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use dialoguer::Password;
-#[cfg(not(target_os = "linux"))]
-use keyring::Keyring;
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
 use reqwest::Response;
@@ -61,7 +59,7 @@ impl Client {
     pub async fn new(
         organization: String,
         username: String,
-        #[cfg(not(target_os = "linux"))] force_prompt: bool,
+        force_prompt: bool,
     ) -> Result<Self> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
@@ -82,25 +80,17 @@ impl Client {
         // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
         client.get_response(base_url).await?;
 
-        #[cfg(not(target_os = "linux"))]
         let service = format!("oktaws::okta::{}", organization);
-
-        #[cfg(not(target_os = "linux"))]
-        let keyring = Keyring::new(&service, &username);
+        let keyring = keyring::Entry::new(&service, &username);
 
         // get password
-        #[cfg(not(target_os = "linux"))]
         let password = client.get_password(&keyring, force_prompt)?;
-        #[cfg(target_os = "linux")]
-        let password = client.prompt_password()?;
-
         let login_request = LoginRequest::from_credentials(username.to_owned(), password.clone());
 
         // Do the login
         let session_token = match client.get_session_token(&login_request).await {
             Ok(session_token) => {
                 // Save the password.
-                #[cfg(not(target_os = "linux"))]
                 client.set_cached_password(&keyring, &password);
 
                 Ok(session_token)
@@ -116,7 +106,6 @@ impl Client {
                     let session_token = client.get_session_token(&login_request).await?;
 
                     // Save the password.
-                    #[cfg(not(target_os = "linux"))]
                     client.set_cached_password(&keyring, &password);
 
                     Ok(session_token)
@@ -230,8 +219,7 @@ impl Client {
             .map_err(Into::into)
     }
 
-    #[cfg(not(target_os = "linux"))]
-    pub fn get_password(&self, keyring: &Keyring, force_prompt: bool) -> Result<String> {
+    pub fn get_password(&self, keyring: &keyring::Entry, force_prompt: bool) -> Result<String> {
         // If the user chooses to force new creds, prompt them for them
         if force_prompt {
             self.prompt_password()
@@ -243,13 +231,11 @@ impl Client {
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
-    fn get_cached_password(&self, keyring: &Keyring) -> Option<String> {
+    fn get_cached_password(&self, keyring: &keyring::Entry) -> Option<String> {
         keyring.get_password().ok()
     }
 
-    #[cfg(not(target_os = "linux"))]
-    pub fn set_cached_password(&self, keyring: &Keyring, password: &str) {
+    pub fn set_cached_password(&self, keyring: &keyring::Entry, password: &str) {
         debug!("Saving Okta credentials for {}", self.base_url);
 
         // Don't treat this as a failure, as it is not a hard requirement

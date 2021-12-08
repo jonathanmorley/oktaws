@@ -8,7 +8,6 @@ use url::Url;
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AppLink {
-    id: String,
     pub label: String,
     pub link_url: Url,
     pub app_name: String,

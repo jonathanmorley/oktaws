@@ -1,28 +1,9 @@
 use crate::okta::client::Client;
 use crate::okta::factors::{Factor, FactorResult};
-use crate::okta::Links;
 
 use anyhow::{anyhow, Result};
 use dialoguer;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct User {
-    id: String,
-    profile: UserProfile,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct UserProfile {
-    login: String,
-    first_name: String,
-    last_name: String,
-    locale: String,
-    time_zone: String,
-}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,22 +68,17 @@ struct Context {
 pub struct LoginResponse {
     pub state_token: Option<String>,
     pub session_token: Option<String>,
-    expires_at: String,
     status: LoginState,
     pub factor_result: Option<FactorResult>,
-    relay_state: Option<String>,
     #[serde(rename = "_embedded")]
     embedded: Option<LoginEmbedded>,
-    #[serde(rename = "_links", default)]
-    links: HashMap<String, Links>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginEmbedded {
     #[serde(default)]
-    factors: Vec<Factor>,
-    user: User,
+    factors: Vec<Factor>
 }
 
 #[derive(Deserialize, Debug)]
