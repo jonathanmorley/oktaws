@@ -1,84 +1,131 @@
 name: Continuous Integration
 
+env:
+  RUST_LOG: info
+  RUST_BACKTRACE: 1
+
 on:
   pull_request:
+    branches: [main]
   push:
-    branches:
-    - master
-  schedule:
-  - cron: '00 01 * * *'
+    branches: [main]
 
 jobs:
-  # Ensure that the project could be successfully compiled
-  cargo_check:
-    name: Compile
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2.3.4
-      - uses: actions-rs/toolchain@v1.0.7
-        with:
-          profile: minimal
-          toolchain: 1.53.0
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-
   test:
     name: Test
-    needs: cargo_check # First check then run expansive tests
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
+        target:
+          # Rustc's Tier 1 platforms
+          # https://doc.rust-lang.org/nightly/rustc/platform-support.html#tier-1-with-host-tools
+          - aarch64-unknown-linux-gnu
+          # Windows gnu is not currently working
+          # - i686-pc-windows-gnu
+          - i686-pc-windows-msvc
+          - i686-unknown-linux-gnu
+          - x86_64-apple-darwin
+          # Windows gnu is not currently working
+          # - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
+          - x86_64-unknown-linux-gnu
+          # Select tier 2 platforms
+          # https://doc.rust-lang.org/nightly/rustc/platform-support.html#tier-2-with-host-tools
+          - aarch64-apple-darwin
+          - aarch64-pc-windows-msvc
+          - aarch64-unknown-linux-musl
+          - x86_64-unknown-linux-musl
+        toolchain:
+          - stable
+        # Testability according to cross
+        # https://github.com/rust-embedded/cross#supported-targets
+        include:
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            testable: true
+          # - target: i686-pc-windows-gnu
+          #   os: windows-latest
+          #   testable: true
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            testable: true
+          - target: i686-unknown-linux-gnu
+            os: ubuntu-latest
+            testable: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            testable: true
+          # - target: x86_64-pc-windows-gnu
+          #   os: windows-latest
+          #   testable: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            testable: true
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            testable: true
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            testable: false
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            testable: false
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            testable: true
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            testable: true
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
+          toolchain: ${{ matrix.toolchain }}
+          target: ${{ matrix.target }}
           profile: minimal
-          toolchain: 1.53.0
-          override: true
-      - uses: actions-rs/cargo@v1
+          components: clippy
+      - name: Install Cross
+        uses: actions-rs/install@v0.1
+        with:
+          crate: cross
+          use-tool-cache: true
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: clippy
+          args: --target ${{ matrix.target }} -- -D warnings
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          use-cross: true
+          args: --target ${{ matrix.target }}
+      - name: Test
+        uses: actions-rs/cargo@v1
+        if: matrix.testable
         with:
           command: test
+          use-cross: true
+          args: --target ${{ matrix.target }}
 
   fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
+          toolchain: stable
+          default: true
           profile: minimal
-          toolchain: 1.53.0
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
+          components: rustfmt
+      - name: Format
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-
-  clippy:
-    name: Clippy
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.53.0
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
