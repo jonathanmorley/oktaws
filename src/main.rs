@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Error, Result};
 use glob::Pattern;
 use log::{debug, info, trace};
-use structopt::{StructOpt, paw};
+use structopt::{paw, StructOpt};
 use tracing_subscriber::fmt::Subscriber;
 
 #[derive(StructOpt, Debug)]

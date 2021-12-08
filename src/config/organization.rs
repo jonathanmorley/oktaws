@@ -131,10 +131,7 @@ impl Organization {
         filter: Pattern,
     ) -> impl Iterator<Item = (String, Result<Credentials>)> {
         let futures = self.into_profiles(filter).map(|profile| async {
-            (
-                profile.name.clone(),
-                profile.into_credentials(client).await,
-            )
+            (profile.name.clone(), profile.into_credentials(client).await)
         });
 
         join_all(futures).await.into_iter()

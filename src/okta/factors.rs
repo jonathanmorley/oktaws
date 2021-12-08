@@ -63,7 +63,7 @@ pub enum Factor {
         provider: FactorProvider,
         status: Option<FactorStatus>,
         #[serde(rename = "_links")]
-        links: HashMap<String, Links>
+        links: HashMap<String, Links>,
     },
     #[serde(rename = "token:software:totp", rename_all = "camelCase")]
     Totp {
@@ -79,7 +79,7 @@ pub enum Factor {
         provider: FactorProvider,
         status: Option<FactorStatus>,
         #[serde(rename = "_links")]
-        links: HashMap<String, Links>
+        links: HashMap<String, Links>,
     },
     #[serde(rename_all = "camelCase")]
     Question {
@@ -131,13 +131,13 @@ pub struct SmsFactorProfile {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CallFactorProfile {
-    phone_number: String
+    phone_number: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionFactorProfile {
-    question: String
+    question: String,
 }
 
 #[derive(Deserialize, Debug, Serialize)]

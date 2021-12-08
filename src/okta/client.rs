@@ -56,11 +56,7 @@ pub struct RawOktaError {
 }
 
 impl Client {
-    pub async fn new(
-        organization: String,
-        username: String,
-        force_prompt: bool,
-    ) -> Result<Self> {
+    pub async fn new(organization: String, username: String, force_prompt: bool) -> Result<Self> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
             .set_username(&username)
