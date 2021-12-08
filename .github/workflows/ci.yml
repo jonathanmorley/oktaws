@@ -97,20 +97,20 @@ jobs:
         with:
           use-cross: true
           command: clippy
-          args: +{{ matrix.toolchain }} --target ${{ matrix.target }} -- -D warnings
+          args: +${{ matrix.toolchain }} --target ${{ matrix.target }} -- -D warnings
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           use-cross: true
-          args: +{{ matrix.toolchain }} --target ${{ matrix.target }}
+          args: +${{ matrix.toolchain }} --target ${{ matrix.target }}
       - name: Test
         uses: actions-rs/cargo@v1
         if: matrix.testable
         with:
           command: test
           use-cross: true
-          args: +{{ matrix.toolchain }} --target ${{ matrix.target }}
+          args: +${{ matrix.toolchain }} --target ${{ matrix.target }}
 
   fmt:
     name: Format
