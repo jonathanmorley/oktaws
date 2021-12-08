@@ -24,7 +24,6 @@ pub struct Session {
     pub last_password_verification: Option<String>,
     pub last_factor_verification: Option<String>,
     pub amr: Vec<AuthenticationMethod>,
-    pub idp: IdentityProvider,
     pub mfa_active: bool,
 }
 
@@ -78,12 +77,6 @@ pub enum AuthenticationMethod {
     MultipleChannelAuthentication,
     #[serde(rename = "sc")]
     SmartCardAuthentication,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct IdentityProvider {
-    id: String,
-    r#type: IdentityProviderType,
 }
 
 #[derive(Deserialize, Debug)]

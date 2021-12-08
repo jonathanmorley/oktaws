@@ -1,29 +1,29 @@
 [package]
 authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
-edition = "2018"
+edition = "2021"
 name = "oktaws"
 version = "0.15.3"
 
 [dependencies]
-anyhow = "*"
+anyhow = "1"
 async-recursion = "*"
 base64 = "0.13"
-dialoguer = "0.8"
-dirs = "3"
-futures = "*"
+dialoguer = "0.9"
+dirs = "4"
+futures = "0.3"
 glob = "0.3"
 itertools = "0.10"
+keyring = "1"
 kuchiki = "0.8"
 log = "0.4"
 path_abs = "0.5"
-paw = "*"
 regex = "1"
-samuel = "*"
+samuel = "0.1"
 serde_ini = "0.2"
 thiserror = "*"
-tracing = "*"
-tracing-subscriber = "*"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 username = "0.2"
 walkdir = "2"
 
@@ -80,8 +80,3 @@ version = "2.1"
 [dev-dependencies]
 serial_test = "0.5"
 tempfile = "3"
-
-[target]
-[target."cfg(not(target_os = \"linux\"))"]
-[target."cfg(not(target_os = \"linux\"))".dependencies]
-keyring = "0.10"

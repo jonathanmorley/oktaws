@@ -28,15 +28,7 @@ pub enum Links {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Link {
-    name: Option<String>,
     pub href: Url,
-    hints: Hint,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Hint {
-    allow: Vec<String>,
 }
 
 impl Client {
