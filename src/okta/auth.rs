@@ -149,7 +149,7 @@ impl Client {
                     .state_token
                     .ok_or_else(|| anyhow!("No state token found in response"))?;
 
-                let factor_provided_response = self.verify(&factor, state_token).await?;
+                let factor_provided_response = self.verify(factor, state_token).await?;
 
                 trace!("Factor Provided Response: {:?}", factor_provided_response);
 
