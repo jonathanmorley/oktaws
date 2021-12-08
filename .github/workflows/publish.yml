@@ -72,7 +72,7 @@ jobs:
       - name: Archive Release
         uses: taiki-e/upload-rust-binary-action@v1
         with:
-          bin: sample-rust-cli
+          bin: oktaws
           target: ${{ matrix.target }}
         env:
           # (required) GitHub token for creating GitHub Releases.
