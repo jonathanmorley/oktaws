@@ -66,7 +66,7 @@ impl ProfileConfig {
 
         let role_name = role.role_name()?.to_string();
 
-        let account_name = get_account_alias(&role, &response)
+        let account_name = get_account_alias(role, &response)
             .await
             .or_else(|_| extract_account_name(&aws_response_text))
             .unwrap_or_else(|_| {

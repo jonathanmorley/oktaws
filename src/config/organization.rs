@@ -133,7 +133,7 @@ impl Organization {
         let futures = self.into_profiles(filter).map(|profile| async {
             (
                 profile.name.clone(),
-                profile.into_credentials(&client).await,
+                profile.into_credentials(client).await,
             )
         });
 
