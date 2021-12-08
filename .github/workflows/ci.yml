@@ -6,9 +6,9 @@ env:
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   test:
@@ -36,6 +36,7 @@ jobs:
           - x86_64-unknown-linux-musl
         toolchain:
           - stable
+          - beta
         # Testability according to cross
         # https://github.com/rust-embedded/cross#supported-targets
         include:
