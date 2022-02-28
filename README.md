@@ -62,6 +62,10 @@ $ oktaws refresh production -vv
 If your profile name conflicts with a subcommand, then you must use the `oktaws refresh <profile>` syntax,
 to disambiguate the profile from subcommands.
 
+## M1 Issues
+
+There are currently publish issues related to M1 macos artifacts. I recommend using x86_64 artifacts through rosetta until this is resolved
+
 ## Contributors
 
 - Jonathan Morley [@jonathanmorley]
