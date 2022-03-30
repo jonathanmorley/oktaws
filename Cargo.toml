@@ -33,7 +33,7 @@ version = "*"
 
 [dependencies.indexmap]
 features = ["serde-1"]
-version = "1.0"
+version = "1.8"
 
 [dependencies.reqwest]
 default_features = false
