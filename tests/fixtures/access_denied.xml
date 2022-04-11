@@ -1,0 +1,8 @@
+<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+  <Error>
+    <Type>Sender</Type>
+    <Code>AccessDenied</Code>
+    <Message>User: null is not authorized to perform: sts:AssumeRoleWithSAML on resource: arn:aws:iam::123456789012:role/mock-role</Message>
+  </Error>
+  <RequestId>b9e07db1-e745-4d0f-be1f-123456789012</RequestId>
+</ErrorResponse>

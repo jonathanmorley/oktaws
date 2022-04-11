@@ -1,4 +1,4 @@
-use crate::aws::role::Role;
+use crate::aws::role::SamlRole;
 
 use std::convert::TryFrom;
 
@@ -13,7 +13,7 @@ use url::Url;
 #[derive(Clone, Debug)]
 pub struct Response {
     pub raw: String,
-    pub roles: Vec<Role>,
+    pub roles: Vec<SamlRole>,
 }
 
 impl TryFrom<String> for Response {
@@ -56,7 +56,7 @@ impl TryFrom<String> for Response {
                     .values
                     .into_iter()
                     .map(|arn| arn.parse())
-                    .collect::<Result<Vec<Role>, Error>>()?,
+                    .collect::<Result<Vec<SamlRole>, Error>>()?,
             })
         } else {
             Err(anyhow!("No Role Attributes found"))

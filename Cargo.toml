@@ -30,6 +30,11 @@ clap-verbosity-flag = "1.0.0"
 clap = { version = "3.1.8", features = ["derive"] }
 tracing-log = "0.1.2"
 derive_more = "0.99.17"
+aws-sdk-sts = "0.9.0"
+aws-config = "0.9.0"
+aws-sdk-iam = "0.9.0"
+aws-types = { version = "0.9.0", features = ["hardcoded-credentials"] }
+aws-arn = "0.2.0"
 
 [dependencies.backoff]
 features = ["tokio"]
@@ -43,24 +48,6 @@ version = "1.0"
 default_features = false
 features = ["cookies", "json", "rustls-tls"]
 version = "0.11"
-
-[dependencies.rusoto_core]
-default_features = false
-features = ["rustls", "rustls-webpki"]
-version = "0.47"
-
-[dependencies.rusoto_credential]
-version = "0.47"
-
-[dependencies.rusoto_iam]
-default_features = false
-features = ["rustls"]
-version = "0.47"
-
-[dependencies.rusoto_sts]
-default_features = false
-features = ["rustls"]
-version = "0.47"
 
 [dependencies.serde]
 features = ["derive"]
@@ -78,5 +65,9 @@ features = ["serde"]
 version = "2.1"
 
 [dev-dependencies]
+aws-smithy-client = { version = "0.39.0", features = ["test-util"] }
+aws-smithy-http = "0.39.0"
+http = "0.2.6"
 serial_test = "0.5"
 tempfile = "3"
+tokio-test = "0.4.2"

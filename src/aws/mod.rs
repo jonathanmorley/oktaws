@@ -1,41 +1,29 @@
-use anyhow::{anyhow, Result};
-use rusoto_core::{HttpClient, Region};
-use rusoto_credential::StaticProvider;
-use rusoto_iam::{Iam, IamClient, ListAccountAliasesRequest};
-
 use crate::{aws::role::assume_role, saml::Response};
+use crate::aws::role::SamlRole;
 
-use self::role::Role;
+use anyhow::{anyhow, Result};
+use aws_sdk_iam::{Client as IamClient, Config as IamConfig};
 
 pub mod credentials;
 pub mod role;
 
-pub async fn get_account_alias(role: &Role, response: &Response) -> Result<String> {
-    let assumption_response = assume_role(role, response.raw.clone(), None)
+pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<String> {
+    let credentials = assume_role(role, response.raw.clone(), None)
         .await
         .map_err(|e| anyhow!("Error assuming role ({})", e))?;
 
-    let credentials = assumption_response
-        .credentials
-        .ok_or_else(|| anyhow!("No creds"))?;
-    let provider = StaticProvider::new(
-        credentials.access_key_id,
-        credentials.secret_access_key,
-        Some(credentials.session_token),
-        None,
-    );
-    let client = IamClient::new_with(HttpClient::new()?, provider, Region::default());
+    let config = IamConfig::builder()
+        .credentials_provider(credentials)
+        .build();
+
+    let client = IamClient::from_conf(config);
 
     let mut aliases = client
-        .list_account_aliases(ListAccountAliasesRequest {
-            marker: None,
-            max_items: None,
-        })
-        .await?;
+        .list_account_aliases().send().await?.account_aliases.unwrap();
 
-    match aliases.account_aliases.len() {
+    match aliases.len() {
         0 => Err(anyhow!("No AWS account alias found")),
-        1 => Ok(aliases.account_aliases.remove(0)),
+        1 => Ok(aliases.remove(0)),
         _ => Err(anyhow!("More than 1 AWS account alias found")),
     }
 }
