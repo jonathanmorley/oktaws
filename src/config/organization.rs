@@ -5,17 +5,22 @@ use crate::select_opt;
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::fs::read_to_string;
-use std::path::Path;
+use std::path::{Path};
+use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
+use derive_more::Display;
 use dialoguer::Input;
 use futures::future::join_all;
-use glob::Pattern;
+use glob::{glob, Pattern};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
 use toml;
+use tracing::{debug, instrument};
+
+use super::oktaws_home;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OrganizationConfig {
@@ -125,6 +130,7 @@ impl Organization {
             .filter(move |p| filter.matches(&p.name))
     }
 
+    #[instrument(skip_all, fields(organization=%self.name, profiles=%filter))]
     pub async fn into_credentials(
         self,
         client: &OktaClient,
@@ -149,14 +155,66 @@ pub fn prompt_username(organization: &impl Display) -> Result<String, Error> {
     input.interact_text().map_err(Into::into)
 }
 
+#[derive(Debug, Display)]
+pub struct OrganizationPattern(Pattern);
+
+impl FromStr for OrganizationPattern {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let path_pattern = oktaws_home()?.join(format!("{s}.toml"));
+        let pattern = path_pattern.as_os_str().to_string_lossy();
+
+        Ok(OrganizationPattern(Pattern::new(&pattern)?))
+    }
+}
+
+impl OrganizationPattern {
+    pub fn organizations(&self) -> Result<Vec<Organization>> {
+        let paths = glob(self.0.as_str())?.map(|r| r.map_err(Into::into)).collect::<Result<Vec<_>>>()?;
+
+        debug!("Found organization paths: {paths:?}");
+
+        paths.iter().map(|p| p.as_path().try_into()).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use std::env;
     use std::fs::File;
     use std::io::Write;
 
-    use tempfile;
+    use serial_test::serial;
+    use tempfile::{self, TempDir};
+
+    fn create_mock_toml(dir: &Path, name: &str) {
+        let filepath = dir.join(format!("{}.toml", name));
+        let mut file = File::create(filepath).unwrap();
+        write!(file, "username = \"{}_user\"\n[profiles]", name).unwrap();
+    }
+
+    fn create_mock_config_dir() -> TempDir {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        for organization_name in ["foo", "bar", "baz"] {
+            create_mock_toml(tempdir.path(), organization_name);
+        }
+
+        let bad_filepath = tempdir.path().join("bad.txt");
+        let mut bad_file = File::create(bad_filepath).unwrap();
+        write!(bad_file, "Not an oktaws config").unwrap();
+
+        let bad_dir = tempdir.path().join("bad");
+        std::fs::create_dir(&bad_dir).unwrap();
+        let bad_nested_filepath = bad_dir.join("nested.txt");
+        let mut bad_nested_file = File::create(bad_nested_filepath).unwrap();
+        write!(bad_nested_file, "Not an oktaws config").unwrap();
+
+        tempdir
+    }
 
     #[test]
     fn parse_organization() {
@@ -272,5 +330,46 @@ foo = "foo"
         assert_eq!(organization.profiles[0].application_name, "foo");
         assert_eq!(organization.profiles[0].role, "my_role");
         assert_eq!(organization.profiles[0].duration_seconds, None);
+    }
+
+    #[test]
+    #[serial]
+    fn finds_all_organizations() {
+        let tempdir = create_mock_config_dir();
+        env::set_var("OKTAWS_HOME", tempdir.path());
+
+        let org_pattern: OrganizationPattern = "*".parse().unwrap();
+        let organizations = org_pattern.organizations().unwrap();
+
+        assert_eq!(organizations.len(), 3);
+    }
+
+    #[test]
+    #[serial]
+    fn does_not_find_nested_config() {
+        let tempdir = create_mock_config_dir();
+
+        env::set_var("OKTAWS_HOME", &tempdir.path());
+
+        let mock_dir = tempdir.path().join("mock");
+        std::fs::create_dir(&mock_dir).unwrap();
+        create_mock_toml(&mock_dir, "quz");
+
+        let org_pattern: OrganizationPattern = "*".parse().unwrap();
+        let organizations = org_pattern.organizations().unwrap();
+
+        assert_eq!(organizations.len(), 3);
+    }
+
+    #[test]
+    #[serial]
+    fn filters_into_organizations() {
+        let tempdir = create_mock_config_dir();
+        env::set_var("OKTAWS_HOME", tempdir.path());
+
+        let org_pattern: OrganizationPattern = "ba*".parse().unwrap();
+        let organizations = org_pattern.organizations().unwrap();
+
+        assert_eq!(organizations.len(), 2);
     }
 }

@@ -1,32 +1,35 @@
+use clap_verbosity_flag::Verbosity;
 use oktaws::aws::credentials::CredentialsStore;
-use oktaws::config::organization::OrganizationConfig;
-use oktaws::config::{oktaws_home, Config};
+use oktaws::config::oktaws_home;
+use oktaws::config::organization::{OrganizationConfig, OrganizationPattern};
 use oktaws::okta::client::Client as OktaClient;
+use tracing::instrument;
+use tracing_log::AsTrace;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::{prelude::*, Registry};
+use tracing_tree::HierarchicalLayer;
 
 use std::convert::{TryFrom, TryInto};
-use std::env;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Error, Result};
+use clap::Parser;
 use glob::Pattern;
-use log::{debug, info, trace};
-use structopt::{paw, StructOpt};
-use tracing_subscriber::fmt::Subscriber;
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 struct Args {
-    /// Sets the level of verbosity
-    #[structopt(short = "v", long = "verbose", global = true, parse(from_occurrences))]
-    verbosity: usize,
+    #[clap(flatten)]
+    verbosity: Verbosity,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     cmd: Option<Command>,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     default: RefreshArgs,
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 enum Command {
     /// Refresh credentials from okta
     Refresh(RefreshArgs),
@@ -35,28 +38,31 @@ enum Command {
     Init(InitArgs),
 }
 
-#[paw::main]
 #[tokio::main]
-async fn main(args: Args) -> Result<()> {
-    trace!("Args: {:?}", args);
+async fn main() -> Result<()> {
+    let args = Args::parse();
 
-    // Set Log Level
-    let log_env_var = env::var("RUST_LOG");
+    let filter = Targets::new()
+        .with_target(module_path!(), args.verbosity.log_level_filter().as_trace());
 
-    let log_filter = log_env_var
-        .clone()
-        .unwrap_or_else(|_| match args.verbosity {
-            0 => format!("{}=warn", module_path!()),
-            1 => format!("{}=info", module_path!()),
-            2 => format!("{}=debug", module_path!()),
-            _ => format!("{}=trace", module_path!()),
-        });
+    // Tree formatter
+    let formatter = HierarchicalLayer::new(2).with_targets(true);
 
-    Subscriber::builder()
-        .with_env_filter(log_filter)
-        .without_time()
-        .with_target(log_env_var.is_ok())
-        .init();
+    // Custom Tree formatter
+    // let formatter = tracing::HierarchicalLayer::new(2)
+    //     .with_targets(true)
+    //     .with_verbose_exit(false)
+    //     .with_verbose_entry(false);
+
+    // Default formatter
+    // let formatter = tracing_subscriber::fmt::Layer::default()
+    //     .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+    //     .without_time();
+
+    let subscriber = Registry::default()
+        .with(filter)
+        .with(formatter);
+    tracing::subscriber::set_global_default(subscriber).unwrap();
 
     match args.cmd {
         Some(Command::Refresh(args)) => refresh(args).await,
@@ -65,48 +71,41 @@ async fn main(args: Args) -> Result<()> {
     }
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 struct RefreshArgs {
-    /// Okta organization(s) to use
-    #[structopt(
-        short = "o",
-        long = "organization",
+    /// Okta organizations to use
+    #[clap(
+        short,
+        long,
         default_value = "*",
         parse(try_from_str)
     )]
-    pub organizations: Pattern,
+    pub organizations: OrganizationPattern,
 
-    /// Profile(s) to update
-    #[structopt(default_value = "*", parse(try_from_str))]
+    /// Profiles to update
+    #[clap(default_value = "*", parse(try_from_str))]
     pub profiles: Pattern,
 
     /// Forces new credentials
-    #[structopt(short = "f", long = "force-new")]
+    #[clap(short, long = "force-new")]
     pub force_new: bool,
 }
 
+#[instrument(skip_all, fields(organizations=%args.organizations,profiles=%args.profiles))]
 async fn refresh(args: RefreshArgs) -> Result<()> {
-    // Fetch config from files
-    let config = Config::new()?;
-    debug!("Config: {:?}", config);
-
     // Set up a store for AWS credentials
-    let credentials_store = Arc::new(Mutex::new(CredentialsStore::new()?));
+    let aws_credentials = Arc::new(Mutex::new(CredentialsStore::new()?));
 
-    let mut organizations = config
-        .into_organizations(args.organizations.clone())
-        .peekable();
+    let organizations = args.organizations.organizations()?;
 
-    if organizations.peek().is_none() {
+    if organizations.is_empty() {
         return Err(anyhow!(
-            "No organizations found called {}",
+            "No organizations found matching {}",
             args.organizations
         ));
     }
 
     for organization in organizations {
-        info!("Evaluating profiles in {}", organization.name);
-
         let okta_client = OktaClient::new(
             organization.name.clone(),
             organization.username.clone(),
@@ -119,7 +118,7 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
             .await;
 
         for (name, creds) in credentials_map {
-            credentials_store
+            aws_credentials
                 .lock()
                 .unwrap()
                 .profiles
@@ -127,21 +126,21 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
         }
     }
 
-    let mut store = credentials_store.lock().unwrap();
+    let mut store = aws_credentials.lock().unwrap();
     store.save()
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 struct InitArgs {
     /// Okta organization to use
     organization: Option<String>,
 
     /// Okta username
-    #[structopt(short = "u")]
+    #[structopt(short)]
     username: Option<String>,
 
     /// Forces new credentials
-    #[structopt(short = "f", long = "force-new")]
+    #[structopt(short, long = "force-new")]
     force_new: bool,
 }
 

@@ -7,6 +7,7 @@ use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
 use samuel::response::Response as SamlResponse;
+use tracing::error;
 use url::Url;
 
 #[derive(Clone, Debug)]
@@ -21,7 +22,7 @@ impl TryFrom<String> for Response {
     fn try_from(s: String) -> Result<Self, Self::Error> {
         let decoded_saml = String::from_utf8(base64::decode(&s)?)?;
 
-        trace!("Decoded SAML: {}", decoded_saml);
+        //trace!("Decoded SAML: {}", decoded_saml);
 
         let response: SamlResponse = decoded_saml
             .parse()

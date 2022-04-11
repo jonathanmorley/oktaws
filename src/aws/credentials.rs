@@ -14,6 +14,7 @@ use indexmap::IndexMap;
 use path_abs::PathFile;
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
+use tracing::{trace, info, instrument};
 
 // `IndexMaps`s are sorted based on insert order
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -114,14 +115,30 @@ impl Profiles {
     where
         R: Read,
     {
-        serde_ini::de::from_read(reader).map_err(Into::into)
+        let mut content = String::new();
+        let mut reader = reader;
+        reader.read_to_string(&mut content)?;
+
+        trace!("Creds content: {:?}", content);
+
+        serde_ini::de::from_str(&content).map_err(Into::into)
+
+        //serde_ini::de::from_read(reader)
     }
 
     fn write_as_ini<W>(&self, writer: &mut W) -> Result<()>
     where
         W: Write,
     {
-        serde_ini::to_writer(writer, self).map_err(Into::into)
+        let serialized = serde_ini::ser::to_string(self)?;
+
+        let valid = serialized.lines().all(|line| line.contains('=') || line.starts_with("["));
+        if valid {
+            writer.write_all(serialized.as_bytes()).map_err(Into::into)
+        } else {
+            trace!("{}", &serialized);
+            Err(anyhow!("Invalid credentials detected: {:?}", self))
+        }
     }
 }
 
@@ -133,15 +150,19 @@ pub struct CredentialsStore {
 
 impl CredentialsStore {
     pub fn new() -> Result<CredentialsStore> {
-        match env_var("AWS_SHARED_CREDENTIALS_FILE") {
+        let creds = match env_var("AWS_SHARED_CREDENTIALS_FILE") {
             Ok(path) => PathBuf::from(path),
             Err(_) => CredentialsStore::default_profile_location()?,
         }
-        .try_into()
+        .try_into();
+
+        trace!("Credentials Store: {:?}", &creds);
+
+        creds
     }
 
+    #[instrument(skip_all)]
     pub fn save(&mut self) -> Result<()> {
-        info!("Saving AWS credentials");
         self.profiles.write_as_ini(&mut self.file)
     }
 
@@ -186,6 +207,9 @@ impl TryFrom<File> for CredentialsStore {
 
     fn try_from(mut file: File) -> Result<Self, Self::Error> {
         let profiles = Profiles::read_as_ini(&file)?;
+
+        trace!("Profiles: {:?}", &profiles);
+
         file.seek(SeekFrom::Start(0))?;
         Ok(CredentialsStore { file, profiles })
     }

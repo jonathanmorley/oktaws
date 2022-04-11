@@ -16,16 +16,20 @@ glob = "0.3"
 itertools = "0.10"
 keyring = "1"
 kuchiki = "0.8"
-log = "0.4"
 path_abs = "0.5"
 regex = "1"
 samuel = "0.1"
 serde_ini = "0.2"
 thiserror = "*"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = "0.3"
 username = "0.2"
 walkdir = "2"
+tracing-tree = { git = "https://github.com/jonathanmorley/tracing-tree", branch = "remove-newlines" }
+clap-verbosity-flag = "1.0.0"
+clap = { version = "3.1.8", features = ["derive"] }
+tracing-log = "0.1.2"
+derive_more = "0.99.17"
 
 [dependencies.backoff]
 features = ["tokio"]
@@ -61,10 +65,6 @@ version = "0.47"
 [dependencies.serde]
 features = ["derive"]
 version = "1"
-
-[dependencies.structopt]
-features = ["paw"]
-version = "0.3"
 
 [dependencies.tokio]
 features = ["full"]

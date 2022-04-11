@@ -4,6 +4,7 @@ use crate::okta::factors::{Factor, FactorResult};
 use anyhow::{anyhow, Result};
 use dialoguer;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info, trace};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,7 +107,7 @@ impl Client {
             "Credentials"
         };
 
-        debug!("Attempting to login with {}", login_type);
+        debug!("Attempting to login to {} with {login_type}", self.base_url);
 
         self.post("api/v1/authn", req).await
     }

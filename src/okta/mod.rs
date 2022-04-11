@@ -16,6 +16,7 @@ use async_recursion::async_recursion;
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use serde::Deserialize;
+use tracing::debug;
 use url::Url;
 
 #[derive(Deserialize, Debug)]
@@ -54,7 +55,7 @@ impl Client {
     pub async fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse> {
         let response = self.get_response(app_url.clone()).await?.text().await?;
 
-        trace!("SAML response doc for app {:?}: {}", &app_url, &response);
+        // trace!("SAML response doc for app {:?}: {}", &app_url, &response);
 
         if is_extra_verification(response.clone()) {
             debug!("No SAML found for app {:?}, will re-login", &app_url);
@@ -92,7 +93,7 @@ pub fn extract_saml_response(text: &str) -> Result<SamlResponse, ExtractSamlResp
         .get("value")
         .ok_or(ExtractSamlResponseError::NotFound)?;
 
-    trace!("SAML: {}", saml);
+    // trace!("SAML: {}", saml);
     SamlResponse::try_from(saml.to_owned()).map_err(Into::into)
 }
 
