@@ -13,6 +13,7 @@ use reqwest::Response;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tracing::{warn, debug};
 use url::Url;
 
 #[derive(Debug)]
@@ -126,9 +127,9 @@ impl Client {
             let resp = self.client.get(url.clone()).send().await?;
 
             if resp.status() == StatusCode::TOO_MANY_REQUESTS || resp.status().is_server_error() {
-                resp.error_for_status().map_err(backoff::Error::Transient)
+                resp.error_for_status().map_err(backoff::Error::transient)
             } else if resp.status().is_client_error() {
-                resp.error_for_status().map_err(backoff::Error::Permanent)
+                resp.error_for_status().map_err(backoff::Error::permanent)
             } else {
                 Ok(resp)
             }
@@ -171,9 +172,9 @@ impl Client {
                     .into();
 
                 if let OktaError::TooManyRequestsException(_) = error {
-                    Err(backoff::Error::Transient(anyhow::Error::from(error)))
+                    Err(backoff::Error::transient(anyhow::Error::from(error)))
                 } else {
-                    Err(backoff::Error::Permanent(anyhow::Error::from(error)))
+                    Err(backoff::Error::permanent(anyhow::Error::from(error)))
                 }
             }
         })

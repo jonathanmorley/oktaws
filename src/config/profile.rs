@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use rusoto_sts::Credentials;
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{instrument, warn, info, debug, trace};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -140,8 +140,6 @@ impl Profile {
 
     #[instrument(skip(self, client), fields(organization=%client.base_url, profile=%self.name))]
     pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials> {
-        info!("Requesting tokens");
-
         let app_link = client
             .app_links(None)
             .await?
@@ -150,8 +148,6 @@ impl Profile {
                 app_link.app_name == "amazon_aws" && app_link.label == self.application_name
             })
             .ok_or_else(|| anyhow!("Could not find Okta application for profile {}", self.name))?;
-
-        debug!("Application Link: {:?}", &app_link);
 
         let saml = client
             .get_saml_response(app_link.link_url)
