@@ -1,4 +1,4 @@
-use crate::{aws::role::Role, okta::client::Client};
+use crate::{aws::role::SamlRole, okta::client::Client};
 
 use anyhow::Result;
 use futures::future::join_all;
@@ -22,18 +22,18 @@ impl Client {
         .await
     }
 
-    pub async fn roles(&self, link: &AppLink) -> Result<Vec<Role>> {
+    pub async fn roles(&self, link: &AppLink) -> Result<Vec<SamlRole>> {
         self.get_saml_response(link.link_url.clone())
             .await
             .map(|response| response.roles)
     }
 
-    pub async fn all_roles(&self, links: &[AppLink]) -> Result<Vec<Role>> {
+    pub async fn all_roles(&self, links: &[AppLink]) -> Result<Vec<SamlRole>> {
         let role_futures = links.iter().map(|link| self.roles(link));
         let roles = join_all(role_futures)
             .await
             .into_iter()
-            .collect::<Result<Vec<Vec<Role>>, _>>()?;
+            .collect::<Result<Vec<Vec<SamlRole>>, _>>()?;
 
         Ok(roles.into_iter().flatten().collect())
     }

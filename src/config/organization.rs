@@ -3,19 +3,17 @@ use crate::okta::client::Client as OktaClient;
 use crate::select_opt;
 
 use std::convert::TryFrom;
-use std::fmt::Display;
 use std::fs::read_to_string;
 use std::path::{Path};
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
 use derive_more::Display;
-use dialoguer::Input;
 use futures::future::join_all;
 use glob::{glob, Pattern};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use rusoto_sts::Credentials;
+use aws_types::Credentials;
 use serde::{Deserialize, Serialize};
 use toml;
 use tracing::{debug, instrument};
@@ -24,9 +22,9 @@ use super::oktaws_home;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OrganizationConfig {
+    pub username: String,
     pub role: Option<String>,
-    pub username: Option<String>,
-    pub duration_seconds: Option<i64>,
+    pub duration_seconds: Option<i32>,
     #[serde(serialize_with = "toml::ser::tables_last")]
     pub profiles: IndexMap<String, ProfileConfig>,
 }
@@ -46,7 +44,7 @@ impl OrganizationConfig {
 
         let mut role_names = roles
             .into_iter()
-            .map(|r| r.role_name().map(ToOwned::to_owned))
+            .map(|r| r.role_name())
             .collect::<Result<Vec<_>>>()?;
         role_names.sort();
 
@@ -68,7 +66,7 @@ impl OrganizationConfig {
             .map(|link| ProfileConfig::from_app_link(client, link, default_role.clone()));
 
         Ok(OrganizationConfig {
-            username: Some(username),
+            username,
             duration_seconds: None,
             role: default_role.clone(),
             profiles: join_all(profile_futures)
@@ -97,11 +95,6 @@ impl TryFrom<&Path> for Organization {
             .map(|stem| stem.to_string_lossy().into_owned())
             .ok_or_else(|| anyhow!("Organization name not parseable from {:?}", path))?;
 
-        let username = match cfg.clone().username {
-            Some(username) => username,
-            None => prompt_username(&filename)?,
-        };
-
         let profiles = cfg
             .profiles
             .iter()
@@ -117,7 +110,7 @@ impl TryFrom<&Path> for Organization {
 
         Ok(Organization {
             name: filename,
-            username,
+            username: cfg.username,
             profiles,
         })
     }
@@ -142,17 +135,6 @@ impl Organization {
 
         join_all(futures).await.into_iter()
     }
-}
-
-pub fn prompt_username(organization: &impl Display) -> Result<String, Error> {
-    let mut input = Input::<String>::new();
-    input.with_prompt(&format!("Username for {}", organization));
-
-    if let Ok(system_user) = username::get_user_name() {
-        input.default(system_user);
-    }
-
-    input.interact_text().map_err(Into::into)
 }
 
 #[derive(Debug, Display)]

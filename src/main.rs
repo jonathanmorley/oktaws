@@ -6,7 +6,6 @@ use oktaws::okta::client::Client as OktaClient;
 use tracing::instrument;
 use tracing_log::AsTrace;
 use tracing_subscriber::filter::Targets;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{prelude::*, Registry};
 use tracing_tree::HierarchicalLayer;
 
@@ -45,24 +44,10 @@ async fn main() -> Result<()> {
     let filter = Targets::new()
         .with_target(module_path!(), args.verbosity.log_level_filter().as_trace());
 
-    // Tree formatter
-    let formatter = HierarchicalLayer::new(2).with_targets(true);
-
-    // Custom Tree formatter
-    // let formatter = tracing::HierarchicalLayer::new(2)
-    //     .with_targets(true)
-    //     .with_verbose_exit(false)
-    //     .with_verbose_entry(false);
-
-    // Default formatter
-    // let formatter = tracing_subscriber::fmt::Layer::default()
-    //     .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-    //     .without_time();
-
     let subscriber = Registry::default()
         .with(filter)
-        .with(formatter);
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+        .with(HierarchicalLayer::new(2).with_targets(true));
+    tracing::subscriber::set_global_default(subscriber)?;
 
     match args.cmd {
         Some(Command::Refresh(args)) => refresh(args).await,

@@ -5,16 +5,15 @@ use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::path::PathBuf;
-use std::str;
 
 use anyhow::{anyhow, Error, Result};
 use dirs;
 use indexmap::map::Entry;
 use indexmap::IndexMap;
 use path_abs::PathFile;
-use rusoto_sts::Credentials;
+use aws_types::Credentials;
 use serde::{Deserialize, Serialize};
-use tracing::{trace, info, instrument};
+use tracing::{trace, instrument};
 
 // `IndexMaps`s are sorted based on insert order
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -28,7 +27,7 @@ impl Profile {
             && self.0.contains_key("aws_session_token")
     }
 
-    fn set_sts_credentials(&mut self, creds: StsCreds) -> Result<()> {
+    fn set_sts_credentials(&mut self, creds: Credentials) -> Result<()> {
         if !self.is_sts_credentials() {
             return Err(anyhow!("Profile is not STS. Cannot set STS credentials"));
         }
@@ -41,56 +40,44 @@ impl Profile {
     }
 }
 
-impl From<StsCreds> for Profile {
-    fn from(creds: StsCreds) -> Self {
+impl From<Credentials> for Profile {
+    fn from(creds: Credentials) -> Self {
         let mut map = IndexMap::default();
 
-        map.insert("aws_access_key_id".to_string(), creds.aws_access_key_id);
+        map.insert("aws_access_key_id".to_string(), creds.access_key_id().to_string());
         map.insert(
             "aws_secret_access_key".to_string(),
-            creds.aws_secret_access_key,
+            creds.secret_access_key().to_string(),
         );
-        map.insert("aws_session_token".to_string(), creds.aws_session_token);
+        if let Some(session_token) = creds.session_token() {
+            map.insert("aws_session_token".to_string(), session_token.to_string());
+        }
+        
 
         Profile(map)
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
-pub struct StsCreds {
-    aws_access_key_id: String,
-    aws_secret_access_key: String,
-    aws_session_token: String,
-}
-
-impl TryFrom<Profile> for StsCreds {
+impl TryFrom<Profile> for Credentials {
     type Error = Error;
 
     fn try_from(mut profile: Profile) -> Result<Self, Self::Error> {
-        Ok(StsCreds {
-            aws_access_key_id: profile
-                .0
-                .remove("aws_access_key_id")
-                .ok_or_else(|| anyhow!("No aws_access_key_id found"))?,
-            aws_secret_access_key: profile
-                .0
-                .remove("aws_secret_access_key")
-                .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?,
-            aws_session_token: profile
-                .0
-                .remove("aws_session_token")
-                .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?,
-        })
-    }
-}
+        let access_key = profile
+            .0
+            .remove("aws_access_key_id")
+            .ok_or_else(|| anyhow!("No aws_access_key_id found"))?;
 
-impl From<rusoto_sts::Credentials> for StsCreds {
-    fn from(creds: rusoto_sts::Credentials) -> Self {
-        StsCreds {
-            aws_access_key_id: creds.access_key_id,
-            aws_secret_access_key: creds.secret_access_key,
-            aws_session_token: creds.session_token,
-        }
+        let secret_access_key = profile
+            .0
+            .remove("aws_secret_access_key")
+            .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?;
+
+        let session_token = profile
+            .0
+            .remove("aws_session_token")
+            .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?;
+        
+        Ok(Credentials::from_keys(access_key, secret_access_key, Some(session_token)))
     }
 }
 
@@ -99,7 +86,7 @@ impl From<rusoto_sts::Credentials> for StsCreds {
 pub struct Profiles(IndexMap<String, Profile>);
 
 impl Profiles {
-    pub fn set_sts_credentials(&mut self, name: String, creds: StsCreds) -> Result<(), Error> {
+    pub fn set_sts_credentials(&mut self, name: String, creds: Credentials) -> Result<(), Error> {
         match self.0.entry(name) {
             Entry::Occupied(mut entry) => {
                 entry.get_mut().set_sts_credentials(creds)?;
@@ -215,35 +202,6 @@ impl TryFrom<File> for CredentialsStore {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[serde(untagged)]
-pub enum ProfileCredentials {
-    Sts {
-        #[serde(rename = "aws_access_key_id")]
-        access_key_id: String,
-        #[serde(rename = "aws_secret_access_key")]
-        secret_access_key: String,
-        #[serde(rename = "aws_session_token")]
-        session_token: String,
-    },
-    Iam {
-        #[serde(rename = "aws_access_key_id")]
-        access_key_id: String,
-        #[serde(rename = "aws_secret_access_key")]
-        secret_access_key: String,
-    },
-}
-
-impl From<Credentials> for ProfileCredentials {
-    fn from(creds: Credentials) -> Self {
-        ProfileCredentials::Sts {
-            access_key_id: creds.access_key_id,
-            secret_access_key: creds.secret_access_key,
-            session_token: creds.session_token,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,11 +236,11 @@ foo=bar";
 
     #[test]
     fn write_profiles_with_extra_fields() {
-        let creds = StsCreds {
-            aws_access_key_id: "ACCESS_KEY".to_string(),
-            aws_secret_access_key: "SECRET_ACCESS_KEY".to_string(),
-            aws_session_token: "SESSION_TOKEN".to_string(),
-        };
+        let creds = Credentials::from_keys(
+            "ACCESS_KEY",
+            "SECRET_ACCESS_KEY",
+            Some("SESSION_TOKEN".to_string())
+        );
 
         let mut profile: Profile = creds.into();
         profile.0.insert("foo".to_string(), "bar".to_string());
@@ -344,11 +302,11 @@ foo=bar";
         profiles
             .set_sts_credentials(
                 "example".to_string(),
-                StsCreds {
-                    aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
-                    aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
-                    aws_session_token: "NEW_SESSION_TOKEN".to_string(),
-                },
+                Credentials::from_keys(
+                    "NEW_ACCESS_KEY",
+                    "NEW_SECRET_ACCESS_KEY",
+                    Some("NEW_SESSION_TOKEN".to_string())
+                )
             )
             .unwrap();
 
@@ -373,11 +331,11 @@ foo=bar";
         profiles
             .set_sts_credentials(
                 "example".to_string(),
-                StsCreds {
-                    aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
-                    aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
-                    aws_session_token: "NEW_SESSION_TOKEN".to_string(),
-                },
+                Credentials::from_keys(
+                    "NEW_ACCESS_KEY".to_string(),
+                    "NEW_SECRET_ACCESS_KEY".to_string(),
+                    Some("NEW_SESSION_TOKEN".to_string())
+                )
             )
             .unwrap();
 
@@ -407,11 +365,11 @@ foo=bar";
         let profile = profiles.0.get_mut("example").unwrap();
 
         let err = profile
-            .set_sts_credentials(StsCreds {
-                aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
-                aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
-                aws_session_token: "NEW_SESSION_TOKEN".to_string(),
-            })
+            .set_sts_credentials(Credentials::from_keys(
+                "NEW_ACCESS_KEY".to_string(),
+                "NEW_SECRET_ACCESS_KEY".to_string(),
+                Some("NEW_SESSION_TOKEN".to_string())
+            ))
             .unwrap_err();
 
         assert_eq!(
@@ -457,11 +415,11 @@ foo=bar
         let profile = profiles.0.get_mut("example_sts").unwrap();
 
         profile
-            .set_sts_credentials(StsCreds {
-                aws_access_key_id: "NEW_ACCESS_KEY".to_string(),
-                aws_secret_access_key: "NEW_SECRET_ACCESS_KEY".to_string(),
-                aws_session_token: "NEW_SESSION_TOKEN".to_string(),
-            })
+            .set_sts_credentials(Credentials::from_keys(
+                "NEW_ACCESS_KEY".to_string(),
+                "NEW_SECRET_ACCESS_KEY".to_string(),
+                Some("NEW_SESSION_TOKEN".to_string())
+            ))
             .unwrap();
 
         let mut w = Vec::new();
@@ -512,11 +470,11 @@ aws_session_token=SESSION_TOKEN"
             .profiles
             .set_sts_credentials(
                 String::from("example"),
-                StsCreds {
-                    aws_access_key_id: String::from("ACCESS_KEY2"),
-                    aws_secret_access_key: String::from("SECRET_ACCESS_KEY2"),
-                    aws_session_token: String::from("SESSION_TOKEN2"),
-                },
+                Credentials::from_keys(
+                    String::from("ACCESS_KEY2"),
+                    String::from("SECRET_ACCESS_KEY2"),
+                    Some(String::from("SESSION_TOKEN2"))
+                )
             )
             .unwrap();
 

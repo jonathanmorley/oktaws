@@ -1,14 +1,14 @@
 use crate::{
-    aws::{get_account_alias, role::Role},
+    aws::{get_account_alias, role::SamlRole},
     okta::{applications::AppLink, client::Client as OktaClient},
     saml::extract_account_name,
     select,
 };
 
 use anyhow::{anyhow, Result};
-use rusoto_sts::Credentials;
+use aws_types::Credentials;
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, warn, info, debug, trace};
+use tracing::{instrument, warn, debug, trace};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -36,11 +36,11 @@ impl ProfileConfig {
 
         let roles = response.clone().roles;
 
-        let role = match roles.len() {
+        let saml_role = match roles.len() {
             0 => Err(anyhow!("No role found")),
             1 => Ok(roles.get(0).unwrap()),
             _ => {
-                if let Some(default_role) = default_role.as_ref() {
+                if let Some(default_role) = default_role.clone() {
                     match roles
                         .iter()
                         .find(|role| role.role_name().unwrap() == default_role)
@@ -49,7 +49,7 @@ impl ProfileConfig {
                         None => select(
                             roles.iter().collect(),
                             format!("Choose Role for {}", link.label),
-                            |role| role.role_arn.clone(),
+                            |role| role.role.clone(),
                         )
                         .map_err(Into::into),
                     }
@@ -57,16 +57,16 @@ impl ProfileConfig {
                     select(
                         roles.iter().collect(),
                         format!("Choose Role for {}", link.label),
-                        |role| role.role_arn.clone(),
+                        |role| role.role.clone(),
                     )
                     .map_err(Into::into)
                 }
             }
         }?;
 
-        let role_name = role.role_name()?.to_string();
+        let role_name = saml_role.role_name()?.to_string();
 
-        let account_name = get_account_alias(role, &response)
+        let account_name = get_account_alias(saml_role, &response)
             .await
             .or_else(|_| extract_account_name(&aws_response_text))
             .unwrap_or_else(|_| {
@@ -74,7 +74,7 @@ impl ProfileConfig {
                 link.label.clone()
             });
 
-        let profile_config = if Some(&role_name) == default_role.as_ref() {
+        let profile_config = if Some(role_name.clone()) == default_role {
             ProfileConfig::Name(link.label)
         } else {
             ProfileConfig::Detailed(FullProfileConfig {
@@ -92,7 +92,7 @@ impl ProfileConfig {
 pub struct FullProfileConfig {
     pub application: String,
     pub role: Option<String>,
-    pub duration_seconds: Option<i64>,
+    pub duration_seconds: Option<i32>,
 }
 
 impl From<ProfileConfig> for FullProfileConfig {
@@ -113,7 +113,7 @@ pub struct Profile {
     pub name: String,
     pub application_name: String,
     pub role: String,
-    pub duration_seconds: Option<i64>,
+    pub duration_seconds: Option<i32>,
 }
 
 impl Profile {
@@ -121,7 +121,7 @@ impl Profile {
         profile_config: &ProfileConfig,
         name: String,
         default_role: Option<String>,
-        default_duration_seconds: Option<i64>,
+        default_duration_seconds: Option<i32>,
     ) -> Result<Profile> {
         let full_profile_config: FullProfileConfig = profile_config.to_owned().into();
 
@@ -164,7 +164,7 @@ impl Profile {
 
         debug!("SAML Roles: {:?}", &roles);
 
-        let role: Role = roles
+        let saml_role: SamlRole = roles
             .into_iter()
             .find(|r| r.role_name().map(|r| r == self.role).unwrap_or(false))
             .ok_or_else(|| {
@@ -175,16 +175,12 @@ impl Profile {
                 )
             })?;
 
-        trace!("Found role: {} for profile {}", role.role_arn, &self.name);
+        trace!("Found role: {} for profile {}", saml_role.role, &self.name);
 
-        let assumption_response =
-            crate::aws::role::assume_role(&role, saml.raw, self.duration_seconds)
+        let credentials =
+            crate::aws::role::assume_role(&saml_role, saml.raw, self.duration_seconds)
                 .await
                 .map_err(|e| anyhow!("Error assuming role for profile {} ({})", self.name, e))?;
-
-        let credentials = assumption_response
-            .credentials
-            .ok_or_else(|| anyhow!("Error fetching credentials from assumed AWS role"))?;
 
         trace!("Credentials: {:?}", credentials);
 
