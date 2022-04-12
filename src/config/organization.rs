@@ -39,7 +39,7 @@ impl OrganizationConfig {
             .filter(|link| link.app_name == "amazon_aws");
         let selected_links = aws_links.collect::<Vec<_>>();
 
-        let roles = client.all_roles(&selected_links).await?;
+        let roles = client.all_roles(selected_links.clone()).await?;
 
         let mut role_names = roles
             .into_iter()

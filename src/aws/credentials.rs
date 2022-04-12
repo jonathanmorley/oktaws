@@ -68,7 +68,7 @@ impl CredentialsStore {
         for section in self.profiles.sections() {
             if let Some(props) = self.profiles.section(section) {
                 for (key, _) in props.iter() {
-                    if key.contains("\n") {
+                    if key.contains('\n') {
                         return Err(anyhow!(
                             "Key {key:?} in Section {section:?} must not contain '\\n'"
                         ));
