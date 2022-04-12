@@ -16,7 +16,7 @@ use async_recursion::async_recursion;
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use serde::Deserialize;
-use tracing::debug;
+use tracing::{debug, instrument};
 use url::Url;
 
 #[derive(Deserialize, Debug)]
@@ -33,29 +33,10 @@ pub struct Link {
 }
 
 impl Client {
-    // #[async_recursion]
-    // pub async fn get_account_name(&self, app_url: Url) -> Result<String, Error> {
-    //     let response = self.get_response(app_url.clone()).await?.text().await?;
-
-    //     trace!("SAML response doc for app {:?}: {}", &app_url, &response);
-
-    //     if is_extra_verification(response.clone()) {
-    //         debug!("No SAML found for app {:?}, will re-login", &app_url);
-
-    //         let state_token = extract_state_token(&response)?;
-    //         self.get_session_token(&LoginRequest::from_state_token(state_token))
-    //             .await?;
-    //         self.get_account_name(app_url).await
-    //     } else {
-    //         extract_account_name(&response).map_err(|e| e.into())
-    //     }
-    // }
-
     #[async_recursion]
+    #[instrument(level = "debug", skip_all, fields(path=app_url.path()))]
     pub async fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse> {
         let response = self.get_response(app_url.clone()).await?.text().await?;
-
-        // trace!("SAML response doc for app {:?}: {}", &app_url, &response);
 
         if is_extra_verification(response.clone()) {
             debug!("No SAML found for app {:?}, will re-login", &app_url);

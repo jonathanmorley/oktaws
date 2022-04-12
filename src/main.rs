@@ -1,20 +1,19 @@
-use clap_verbosity_flag::Verbosity;
 use oktaws::aws::credentials::CredentialsStore;
 use oktaws::config::oktaws_home;
 use oktaws::config::organization::{OrganizationConfig, OrganizationPattern};
 use oktaws::okta::client::Client as OktaClient;
+
+use std::convert::{TryFrom, TryInto};
+
+use anyhow::{anyhow, Error, Result};
+use clap::Parser;
+use clap_verbosity_flag::Verbosity;
+use glob::Pattern;
 use tracing::instrument;
 use tracing_log::AsTrace;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::{prelude::*, Registry};
 use tracing_tree::HierarchicalLayer;
-
-use std::convert::{TryFrom, TryInto};
-use std::sync::{Arc, Mutex};
-
-use anyhow::{anyhow, Error, Result};
-use clap::Parser;
-use glob::Pattern;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -41,8 +40,8 @@ enum Command {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let filter = Targets::new()
-        .with_target(module_path!(), args.verbosity.log_level_filter().as_trace());
+    let filter =
+        Targets::new().with_target(module_path!(), args.verbosity.log_level_filter().as_trace());
 
     let subscriber = Registry::default()
         .with(filter)
@@ -59,12 +58,7 @@ async fn main() -> Result<()> {
 #[derive(Parser, Debug)]
 struct RefreshArgs {
     /// Okta organizations to use
-    #[clap(
-        short,
-        long,
-        default_value = "*",
-        parse(try_from_str)
-    )]
+    #[clap(short, long, default_value = "*", parse(try_from_str))]
     pub organizations: OrganizationPattern,
 
     /// Profiles to update
@@ -79,7 +73,7 @@ struct RefreshArgs {
 #[instrument(skip_all, fields(organizations=%args.organizations,profiles=%args.profiles))]
 async fn refresh(args: RefreshArgs) -> Result<()> {
     // Set up a store for AWS credentials
-    let aws_credentials = Arc::new(Mutex::new(CredentialsStore::new()?));
+    let mut aws_credentials = CredentialsStore::load(None)?;
 
     let organizations = args.organizations.organizations()?;
 
@@ -103,16 +97,11 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
             .await;
 
         for (name, creds) in credentials_map {
-            aws_credentials
-                .lock()
-                .unwrap()
-                .profiles
-                .set_sts_credentials(name.clone(), creds?.into())?;
+            aws_credentials.upsert_credential(&name, creds);
         }
     }
 
-    let mut store = aws_credentials.lock().unwrap();
-    store.save()
+    aws_credentials.save()
 }
 
 #[derive(Parser, Debug)]

@@ -1,24 +1,23 @@
+use crate::config::oktaws_home;
 use crate::config::profile::{Profile, ProfileConfig};
 use crate::okta::client::Client as OktaClient;
 use crate::select_opt;
 
 use std::convert::TryFrom;
 use std::fs::read_to_string;
-use std::path::{Path};
+use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
+use aws_types::Credentials;
 use derive_more::Display;
 use futures::future::join_all;
 use glob::{glob, Pattern};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use aws_types::Credentials;
 use serde::{Deserialize, Serialize};
 use toml;
-use tracing::{debug, instrument};
-
-use super::oktaws_home;
+use tracing::{debug, error, instrument};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct OrganizationConfig {
@@ -128,12 +127,21 @@ impl Organization {
         self,
         client: &OktaClient,
         filter: Pattern,
-    ) -> impl Iterator<Item = (String, Result<Credentials>)> {
+    ) -> impl Iterator<Item = (String, Credentials)> {
         let futures = self.into_profiles(filter).map(|profile| async {
             (profile.name.clone(), profile.into_credentials(client).await)
         });
 
-        join_all(futures).await.into_iter()
+        join_all(futures)
+            .await
+            .into_iter()
+            .filter_map(|cred_result| match cred_result {
+                (profile, Ok(creds)) => Some((profile, creds)),
+                (_, Err(e)) => {
+                    error!("{e}");
+                    None
+                }
+            })
     }
 }
 
@@ -153,7 +161,9 @@ impl FromStr for OrganizationPattern {
 
 impl OrganizationPattern {
     pub fn organizations(&self) -> Result<Vec<Organization>> {
-        let paths = glob(self.0.as_str())?.map(|r| r.map_err(Into::into)).collect::<Result<Vec<_>>>()?;
+        let paths = glob(self.0.as_str())?
+            .map(|r| r.map_err(Into::into))
+            .collect::<Result<Vec<_>>>()?;
 
         debug!("Found organization paths: {paths:?}");
 

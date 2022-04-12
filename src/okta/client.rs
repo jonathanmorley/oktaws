@@ -13,7 +13,7 @@ use reqwest::Response;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tracing::{warn, debug};
+use tracing::{debug, warn};
 use url::Url;
 
 #[derive(Debug)]
