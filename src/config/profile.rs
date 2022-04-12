@@ -112,7 +112,7 @@ impl From<ProfileConfig> for FullProfileConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Profile {
     pub name: String,
     pub application_name: String,

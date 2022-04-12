@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use aws_types::Credentials;
 use dirs;
-use ini::{Ini, Properties, SectionEntry};
+use ini::{Ini, Properties};
 use path_abs::PathFile;
 use tracing::instrument;
 
