@@ -1,9 +1,8 @@
 use crate::okta::client::Client;
-use crate::okta::factors::Factor;
+use crate::okta::factors::{Factor, FactorResult};
 
 use anyhow::{anyhow, Result};
 use dialoguer;
-use okta::types::FactorResultType;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace};
 
@@ -71,7 +70,7 @@ pub struct LoginResponse {
     pub state_token: Option<String>,
     pub session_token: Option<String>,
     status: LoginState,
-    pub factor_result: Option<FactorResultType>,
+    pub factor_result: Option<FactorResult>,
     #[serde(rename = "_embedded")]
     embedded: Option<LoginEmbedded>,
 }

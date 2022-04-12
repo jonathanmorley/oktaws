@@ -5,8 +5,13 @@ use std::fmt;
 
 use anyhow::Result;
 use itertools::Itertools;
-use okta::types::{CreateSessionRequest, SessionAuthenticationMethod, SessionStatus};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRequest {
+    session_token: Option<String>,
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -18,7 +23,7 @@ pub struct Session {
     pub status: SessionStatus,
     pub last_password_verification: Option<String>,
     pub last_factor_verification: Option<String>,
-    pub amr: Vec<SessionAuthenticationMethod>,
+    pub amr: Vec<AuthenticationMethod>,
     pub mfa_active: bool,
 }
 
@@ -38,6 +43,52 @@ impl fmt::Display for SessionProperties {
     }
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SessionStatus {
+    Active,
+    MfaRequired,
+    MfaEnroll,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum AuthenticationMethod {
+    #[serde(rename = "pwd")]
+    PasswordAuthentication,
+    #[serde(rename = "swk")]
+    ProofOfPossessionOfSoftwareKey,
+    #[serde(rename = "hwk")]
+    ProofOfPossessionOfHardwareKey,
+    #[serde(rename = "otp")]
+    OneTimePassword,
+    Sms,
+    #[serde(rename = "tel")]
+    TelephoneCall,
+    #[serde(rename = "sms")]
+    Geolocation,
+    #[serde(rename = "fpt")]
+    Fingerprint,
+    #[serde(rename = "kba")]
+    KnowledgeBasedAuthentication,
+    #[serde(rename = "mfa")]
+    MultipleFactorAuthentication,
+    #[serde(rename = "mca")]
+    MultipleChannelAuthentication,
+    #[serde(rename = "sc")]
+    SmartCardAuthentication,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum IdentityProviderType {
+    Okta,
+    ActiveDirectory,
+    Ldap,
+    Federation,
+    Social,
+}
+
 impl Client {
     pub async fn new_session(
         &mut self,
@@ -50,7 +101,9 @@ impl Client {
                     "api/v1/sessions?additionalFields={}",
                     additional_fields.iter().join(",")
                 ),
-                &CreateSessionRequest { session_token },
+                &SessionRequest {
+                    session_token: Some(session_token),
+                },
             )
             .await?;
 
