@@ -26,7 +26,8 @@ pub struct LoginRequest {
 }
 
 impl LoginRequest {
-    pub fn from_credentials(username: String, password: String) -> Self {
+    #[must_use]
+    pub const fn from_credentials(username: String, password: String) -> Self {
         Self {
             audience: None,
             context: None,
@@ -38,7 +39,8 @@ impl LoginRequest {
         }
     }
 
-    pub fn from_state_token(token: String) -> Self {
+    #[must_use]
+    pub const fn from_state_token(token: String) -> Self {
         Self {
             audience: None,
             context: None,
@@ -100,6 +102,11 @@ pub enum LoginState {
 }
 
 impl Client {
+    /// Send the login request to Okta.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any issues sending the request
     pub async fn login(&self, req: &LoginRequest) -> Result<LoginResponse> {
         let login_type = if req.state_token.is_some() {
             "State Token"
@@ -112,15 +119,28 @@ impl Client {
         self.post("api/v1/authn", req).await
     }
 
+    /// Get a session token
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any unrecoverable issues during login,
+    /// if there are IO problems while prompting for MFA,
+    /// if a state token cannot be found in the response,
+    /// or if there are MFA verification errors.
     pub async fn get_session_token(&self, req: &LoginRequest) -> Result<String> {
         let response = self.login(req).await?;
 
         trace!("Login response: {:?}", response);
 
         match response.status {
-            LoginState::Success => Ok(response.session_token.unwrap()),
+            LoginState::Success => response
+                .session_token
+                .ok_or_else(|| anyhow!("Session token not found")),
             LoginState::MfaRequired => {
-                let factors = response.embedded.unwrap().factors;
+                let factors = response
+                    .embedded
+                    .map(|e| e.factors)
+                    .ok_or_else(|| anyhow!("MFA required, but no factors found"))?;
 
                 let factor = match factors.len() {
                     0 => Err(anyhow!(
@@ -154,7 +174,9 @@ impl Client {
 
                 trace!("Factor Provided Response: {:?}", factor_provided_response);
 
-                Ok(factor_provided_response.session_token.unwrap())
+                factor_provided_response
+                    .session_token
+                    .ok_or_else(|| anyhow!("Session token not found"))
             }
             _ => Err(anyhow!("Unknown error encountered during login")),
         }

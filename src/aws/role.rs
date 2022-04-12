@@ -1,10 +1,12 @@
+#![allow(clippy::module_name_repetitions)]
+
 use std::str;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
 use aws_arn::ARN;
 use aws_sdk_iam::Credentials;
-use aws_sdk_sts::{Client as StsClient, Config as StsConfig, Region as StsRegion};
+use aws_sdk_sts::Client as StsClient;
 use tracing::instrument;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -21,7 +23,7 @@ impl FromStr for SamlRole {
 
         match splitted.len() {
             0 | 1 => Err(anyhow!("Not enough elements in {}", s)),
-            2 => Ok(SamlRole {
+            2 => Ok(Self {
                 provider: splitted[0].parse()?,
                 role: splitted[1].parse()?,
             }),
@@ -31,6 +33,11 @@ impl FromStr for SamlRole {
 }
 
 impl SamlRole {
+    /// Parse the role name from the role ARN
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if the ARN does not have a resource name
     pub fn role_name(&self) -> Result<String> {
         self.role
             .resource
@@ -41,7 +48,7 @@ impl SamlRole {
     }
 
     #[instrument(level = "trace", skip(client))]
-    async fn assume(
+    pub async fn assume(
         &self,
         client: StsClient,
         saml_assertion: String,
@@ -72,38 +79,21 @@ impl SamlRole {
     }
 }
 
-// Separate function for mockability
-pub async fn sts_client() -> StsClient {
-    let region = StsRegion::new("us-east-1");
-    let config = StsConfig::builder().region(region).build();
-    StsClient::from_conf(config)
-}
-
-pub async fn assume_role(
-    role: &SamlRole,
-    saml_assertion: String,
-    duration_seconds: Option<i32>,
-) -> Result<Credentials, Error> {
-    role.assume(sts_client().await, saml_assertion, duration_seconds)
-        .await
-}
-
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use crate::saml::Response;
 
     use std::convert::TryFrom;
     use std::fs::File;
     use std::io::Read;
 
+    use aws_sdk_sts::{Config as StsConfig, Region as StsRegion};
+    use aws_smithy_client::test_connection::TestConnection;
     use aws_smithy_http::body::SdkBody;
     use base64::encode;
-
-    use aws_smithy_client::test_connection::TestConnection;
-
     use tokio_test::block_on;
-
-    use super::*;
 
     #[test]
     fn parse_attribute() {

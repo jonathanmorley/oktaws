@@ -90,6 +90,12 @@ pub enum IdentityProviderType {
 }
 
 impl Client {
+    /// Create a new Okta session,
+    /// and store the session ID on the client
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors during session creation
     pub async fn new_session(
         &mut self,
         session_token: String,
@@ -107,7 +113,7 @@ impl Client {
             )
             .await?;
 
-        self.set_session_id(session.id);
+        self.set_session_id(&session.id);
 
         Ok(())
     }

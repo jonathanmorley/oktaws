@@ -8,25 +8,25 @@ use ini::{Ini, Properties};
 use path_abs::PathFile;
 use tracing::instrument;
 
-pub struct CredentialsStore {
+pub struct Store {
     path: PathFile,
     profiles: Ini,
 }
 
-impl CredentialsStore {
+impl Store {
     #[instrument]
-    pub fn load(path: Option<&Path>) -> Result<CredentialsStore> {
+    pub fn load(path: Option<&Path>) -> Result<Self> {
         let path = match (path, env_var("AWS_SHARED_CREDENTIALS_FILE")) {
             (Some(path), _) => PathBuf::from(path),
             (None, Ok(path)) => PathBuf::from(path),
-            (None, Err(_)) => CredentialsStore::default_location()?,
+            (None, Err(_)) => Self::default_location()?,
         };
 
         let path = PathFile::create(path)?;
         let profiles =
             Ini::load_from_file(&path).with_context(|| format!("Unable to parse {path:?}"))?;
 
-        let store = CredentialsStore { path, profiles };
+        let store = Self { path, profiles };
         store
             .validate()
             .with_context(|| format!("Unable to validate {:?}", store.path))?;
@@ -34,7 +34,7 @@ impl CredentialsStore {
         Ok(store)
     }
 
-    pub fn upsert_credential(&mut self, profile: &str, creds: Credentials) {
+    pub fn upsert_credential(&mut self, profile: &str, creds: &Credentials) {
         self.profiles.set_to(
             Some(profile),
             "aws_access_key_id".into(),
@@ -55,6 +55,7 @@ impl CredentialsStore {
         }
     }
 
+    #[must_use]
     pub fn read_profile(&self, profile: &str) -> Option<&Properties> {
         self.profiles.section(Some(profile))
     }
@@ -111,7 +112,7 @@ aws_session_token=SESSION_TOKEN
 foo=bar"
         )?;
 
-        let credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let credentials = Store::load(Some(tempfile.path()))?;
         let profile = credentials.read_profile("example").unwrap();
 
         assert_eq!(&profile["aws_access_key_id"], "ACCESS_KEY");
@@ -135,7 +136,7 @@ aws_secret_access_key="SECRET_ACCESS_KEY_1"
 aws_session_token='SESSION_TOKEN_1'"#
         )?;
 
-        let credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let credentials = Store::load(Some(tempfile.path()))?;
         let profile = credentials.read_profile("example").unwrap();
 
         assert_eq!(&profile["aws_access_key_id"], "ACCESS_KEY_1");
@@ -158,11 +159,11 @@ aws_session_token=SESSION_TOKEN
 foo=bar"#
         )?;
 
-        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let mut credentials = Store::load(Some(tempfile.path()))?;
 
         credentials.upsert_credential(
             "example",
-            Credentials::from_keys(
+            &Credentials::from_keys(
                 "NEW_ACCESS_KEY",
                 "NEW_SECRET_ACCESS_KEY",
                 Some("NEW_SESSION_TOKEN".to_string()),
@@ -183,11 +184,11 @@ foo=bar"#
         // This also tests file not existing
         let tempfile = NamedTempFile::new()?;
 
-        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let mut credentials = Store::load(Some(tempfile.path()))?;
 
         credentials.upsert_credential(
             "example",
-            Credentials::from_keys(
+            &Credentials::from_keys(
                 "NEW_ACCESS_KEY".to_string(),
                 "NEW_SECRET_ACCESS_KEY".to_string(),
                 Some("NEW_SESSION_TOKEN".to_string()),
@@ -215,11 +216,11 @@ aws_secret_access_key=SECRET_ACCESS_KEY
 foo=bar"#
         )?;
 
-        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let mut credentials = Store::load(Some(tempfile.path()))?;
 
         credentials.upsert_credential(
             "example",
-            Credentials::from_keys(
+            &Credentials::from_keys(
                 "NEW_ACCESS_KEY".to_string(),
                 "NEW_SECRET_ACCESS_KEY".to_string(),
                 Some("NEW_SESSION_TOKEN".to_string()),
@@ -248,7 +249,7 @@ aws_secret_access_key=SECRET_ACCESS_KEY
 foo"#
         )?;
 
-        let err = CredentialsStore::load(Some(tempfile.path())).err().unwrap();
+        let err = Store::load(Some(tempfile.path())).err().unwrap();
 
         assert_eq!(
             format!("{err:?}"),
@@ -280,7 +281,7 @@ aws_access_key_id=ACCESS_KEY2
 aws_secret_access_key=SECRET_ACCESS_KEY2"#
         )?;
 
-        let err = CredentialsStore::load(Some(tempfile.path())).err().unwrap();
+        let err = Store::load(Some(tempfile.path())).err().unwrap();
 
         assert_eq!(
             format!("{err:?}"),
@@ -316,11 +317,11 @@ aws_access_key_id=ACCESS_KEY
 foo=bar"#
         )?;
 
-        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let mut credentials = Store::load(Some(tempfile.path()))?;
 
         credentials.upsert_credential(
             "example_sts",
-            Credentials::from_keys(
+            &Credentials::from_keys(
                 "NEW_ACCESS_KEY".to_string(),
                 "NEW_SECRET_ACCESS_KEY".to_string(),
                 Some("NEW_SESSION_TOKEN".to_string()),

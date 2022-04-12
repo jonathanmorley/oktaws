@@ -1,5 +1,5 @@
 use crate::{
-    aws::{get_account_alias, role::SamlRole},
+    aws::{get_account_alias, role::SamlRole, sts_client},
     okta::applications::AppLink,
     okta::client::Client as OktaClient,
     saml::extract_account_name,
@@ -13,12 +13,12 @@ use tracing::{instrument, trace, warn};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum ProfileConfig {
+pub enum Spec {
     Name(String),
-    Detailed(FullProfileConfig),
+    Detailed(FullSpec),
 }
 
-impl ProfileConfig {
+impl Spec {
     #[instrument(skip(client, link, default_role), fields(organization=%client.base_url, application=%link.label))]
     pub async fn from_app_link(
         client: &OktaClient,
@@ -76,9 +76,9 @@ impl ProfileConfig {
             });
 
         let profile_config = if Some(role_name.clone()) == default_role {
-            ProfileConfig::Name(link.label)
+            Self::Name(link.label)
         } else {
-            ProfileConfig::Detailed(FullProfileConfig {
+            Self::Detailed(FullSpec {
                 application: link.label,
                 role: Some(role_name),
                 duration_seconds: None,
@@ -90,17 +90,17 @@ impl ProfileConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FullProfileConfig {
+pub struct FullSpec {
     pub application: String,
     pub role: Option<String>,
     pub duration_seconds: Option<i32>,
 }
 
-impl From<ProfileConfig> for FullProfileConfig {
-    fn from(profile_config: ProfileConfig) -> Self {
+impl From<Spec> for FullSpec {
+    fn from(profile_config: Spec) -> Self {
         match profile_config {
-            ProfileConfig::Detailed(config) => config,
-            ProfileConfig::Name(application) => FullProfileConfig {
+            Spec::Detailed(config) => config,
+            Spec::Name(application) => Self {
                 application,
                 role: None,
                 duration_seconds: None,
@@ -118,15 +118,20 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub fn try_from_config(
-        profile_config: &ProfileConfig,
+    /// Parse profiles from an organization config section
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if a role for the profile cannot be found
+    pub fn try_from_spec(
+        profile_config: &Spec,
         name: String,
         default_role: Option<String>,
         default_duration_seconds: Option<i32>,
-    ) -> Result<Profile> {
-        let full_profile_config: FullProfileConfig = profile_config.to_owned().into();
+    ) -> Result<Self> {
+        let full_profile_config: FullSpec = profile_config.clone().into();
 
-        Ok(Profile {
+        Ok(Self {
             name,
             application_name: full_profile_config.application,
             role: full_profile_config
@@ -176,10 +181,10 @@ impl Profile {
 
         trace!("Found role: {} for profile {}", saml_role.role, &self.name);
 
-        let credentials =
-            crate::aws::role::assume_role(&saml_role, saml.raw, self.duration_seconds)
-                .await
-                .map_err(|e| anyhow!("Error assuming role for profile {} ({})", self.name, e))?;
+        let credentials = saml_role
+            .assume(sts_client(), saml.raw, self.duration_seconds)
+            .await
+            .map_err(|e| anyhow!("Error assuming role for profile {} ({})", self.name, e))?;
 
         trace!("Credentials: {:?}", credentials);
 

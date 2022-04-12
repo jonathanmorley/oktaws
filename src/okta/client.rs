@@ -1,6 +1,7 @@
 use crate::okta::auth::LoginRequest;
 
 use std::collections::HashSet;
+use std::io;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -57,6 +58,12 @@ pub struct RawOktaError {
 }
 
 impl Client {
+    /// Create a new client for an Okta organization
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if a URL cannot be constructed for the organization,
+    /// or if there are underlying HTTP client creation issues.
     pub async fn new(organization: String, username: String, force_prompt: bool) -> Result<Self> {
         let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
         base_url
@@ -65,7 +72,7 @@ impl Client {
 
         let cookies = Arc::from(Jar::default());
 
-        let mut client = Client {
+        let mut client = Self {
             client: HttpClient::builder()
                 .cookie_store(true)
                 .cookie_provider(cookies.clone())
@@ -82,7 +89,7 @@ impl Client {
 
         // get password
         let password = client.get_password(&keyring, force_prompt)?;
-        let login_request = LoginRequest::from_credentials(username.to_owned(), password.clone());
+        let login_request = LoginRequest::from_credentials(username.clone(), password.clone());
 
         // Do the login
         let session_token = match client.get_session_token(&login_request).await {
@@ -98,7 +105,7 @@ impl Client {
 
                     let password = client.prompt_password()?;
                     let login_request =
-                        LoginRequest::from_credentials(username.to_owned(), password.clone());
+                        LoginRequest::from_credentials(username.clone(), password.clone());
 
                     let session_token = client.get_session_token(&login_request).await?;
 
@@ -117,11 +124,17 @@ impl Client {
         Ok(client)
     }
 
-    pub fn set_session_id(&mut self, session_id: String) {
+    pub fn set_session_id(&mut self, session_id: &str) {
         self.cookies
             .add_cookie_str(&format!("sid={}", session_id), &self.base_url);
     }
 
+    /// Given an absolute URL (not just a path), perform a GET request against it
+    /// This method attempts to retry if the response indicates rate-limiting.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors performing the GET operation.
     pub async fn get_response(&self, url: Url) -> Result<Response> {
         retry(ExponentialBackoff::default(), || async {
             let resp = self.client.get(url.clone()).send().await?;
@@ -138,6 +151,13 @@ impl Client {
         .map_err(Into::into)
     }
 
+    /// Given a relative path, perform a GET request against it (using the client's base url)
+    /// This method attempts to retry if the response indicates rate-limiting.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors performing the GET operation,
+    /// or if the output is not JSON-deserializable as type `O`.
     pub async fn get<O>(&self, path: &str) -> Result<O>
     where
         O: DeserializeOwned,
@@ -181,17 +201,29 @@ impl Client {
         .await
     }
 
+    /// Given a relative path, POST the body to it (using the client's base url)
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors performing the POST operation,
+    /// or if the output is not JSON-deserializable as type `O`.
     pub async fn post<I, O>(&self, path: &str, body: &I) -> Result<O>
     where
-        I: Serialize,
+        I: Serialize + Sync,
         O: DeserializeOwned,
     {
         self.post_absolute(self.base_url.join(path)?, body).await
     }
 
+    /// Given an absolute URL (not just a path), POST the body to it.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors performing the POST operation,
+    /// or if the output is not JSON-deserializable as type `O`.
     pub async fn post_absolute<I, O>(&self, url: Url, body: &I) -> Result<O>
     where
-        I: Serialize,
+        I: Serialize + Sync,
         O: DeserializeOwned,
     {
         let resp = self
@@ -209,27 +241,32 @@ impl Client {
         }
     }
 
-    fn prompt_password(&self) -> Result<String> {
+    fn prompt_password(&self) -> Result<String, io::Error> {
         Password::new()
             .with_prompt(&format!("Password for {}", self.base_url))
             .interact()
-            .map_err(Into::into)
     }
 
+    /// Return the password for authenticating with this client
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any IO errors during password prompting,
+    /// or if there were errors encountered while retrieving the password from the cache.
     pub fn get_password(&self, keyring: &keyring::Entry, force_prompt: bool) -> Result<String> {
         // If the user chooses to force new creds, prompt them for them
         if force_prompt {
-            self.prompt_password()
+            self.prompt_password().map_err(Into::into)
         } else {
-            match self.get_cached_password(keyring) {
-                Some(password) => Ok(password),
-                None => self.prompt_password(),
+            match Self::get_cached_password(keyring) {
+                Ok(password) => Ok(password),
+                Err(_) => self.prompt_password().map_err(Into::into),
             }
         }
     }
 
-    fn get_cached_password(&self, keyring: &keyring::Entry) -> Option<String> {
-        keyring.get_password().ok()
+    fn get_cached_password(keyring: &keyring::Entry) -> Result<String> {
+        keyring.get_password().map_err(Into::into)
     }
 
     pub fn set_cached_password(&self, keyring: &keyring::Entry, password: &str) {

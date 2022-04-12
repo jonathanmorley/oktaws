@@ -4,6 +4,13 @@ description = "Generates temporary AWS credentials with Okta."
 edition = "2021"
 name = "oktaws"
 version = "0.16.0"
+license = "Apache-2.0"
+repository = "https://github.com/jonathanmorley/oktaws"
+keywords = ["okta", "aws", "saml"]
+categories = [
+  "command-line-utilities",
+  "authentication"
+]
 
 [dependencies]
 anyhow = "1"

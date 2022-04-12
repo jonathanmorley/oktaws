@@ -1,5 +1,5 @@
 use crate::config::oktaws_home;
-use crate::config::profile::{Profile, ProfileConfig};
+use crate::config::profile::{self, Profile};
 use crate::okta::client::Client as OktaClient;
 use crate::select_opt;
 
@@ -13,26 +13,29 @@ use std::str::FromStr;
 use anyhow::{anyhow, Error, Result};
 use aws_types::Credentials;
 use futures::future::join_all;
-use glob::{glob, Pattern};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml;
 use tracing::{debug, error, instrument};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct OrganizationConfig {
+pub struct Config {
     pub username: String,
     pub role: Option<String>,
     pub duration_seconds: Option<i32>,
     #[serde(serialize_with = "toml::ser::tables_last")]
-    pub profiles: HashMap<String, ProfileConfig>,
+    pub profiles: HashMap<String, profile::Spec>,
 }
 
-impl OrganizationConfig {
-    pub async fn from_organization(
-        client: &OktaClient,
-        username: String,
-    ) -> Result<OrganizationConfig> {
+impl Config {
+    /// Create a config object from an Okta organization
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors fetching the information
+    /// from Okta to form the config,
+    /// or if there are errors during prompting of a default role.
+    pub async fn from_organization(client: &OktaClient, username: String) -> Result<Self> {
         let app_links = client.app_links(None).await?;
         let aws_links = app_links
             .into_iter()
@@ -62,9 +65,9 @@ impl OrganizationConfig {
 
         let profile_futures = selected_links
             .into_iter()
-            .map(|link| ProfileConfig::from_app_link(client, link, default_role.clone()));
+            .map(|link| profile::Spec::from_app_link(client, link, default_role.clone()));
 
-        Ok(OrganizationConfig {
+        Ok(Self {
             username,
             duration_seconds: None,
             role: default_role.clone(),
@@ -87,7 +90,7 @@ impl TryFrom<&Path> for Organization {
     type Error = Error;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let cfg: OrganizationConfig = toml::de::from_str(&read_to_string(path)?)?;
+        let cfg: Config = toml::de::from_str(&read_to_string(path)?)?;
 
         let filename = path
             .file_stem()
@@ -98,7 +101,7 @@ impl TryFrom<&Path> for Organization {
             .profiles
             .iter()
             .map(|(name, profile_config)| {
-                Profile::try_from_config(
+                Profile::try_from_spec(
                     profile_config,
                     name.to_string(),
                     cfg.role.clone(),
@@ -107,7 +110,7 @@ impl TryFrom<&Path> for Organization {
             })
             .collect::<Result<Vec<Profile>, Error>>()?;
 
-        Ok(Organization {
+        Ok(Self {
             name: filename,
             username: cfg.username,
             profiles,
@@ -116,7 +119,7 @@ impl TryFrom<&Path> for Organization {
 }
 
 impl Organization {
-    pub fn into_profiles(self, filter: Pattern) -> impl Iterator<Item = Profile> {
+    pub fn into_profiles(self, filter: glob::Pattern) -> impl Iterator<Item = Profile> {
         self.profiles
             .into_iter()
             .filter(move |p| filter.matches(&p.name))
@@ -126,7 +129,7 @@ impl Organization {
     pub async fn into_credentials(
         self,
         client: &OktaClient,
-        filter: Pattern,
+        filter: glob::Pattern,
     ) -> impl Iterator<Item = (String, Credentials)> {
         let futures = self.into_profiles(filter).map(|profile| async {
             (profile.name.clone(), profile.into_credentials(client).await)
@@ -146,28 +149,34 @@ impl Organization {
 }
 
 #[derive(Debug)]
-pub struct OrganizationPattern(Pattern);
+pub struct Pattern(glob::Pattern);
 
-impl FromStr for OrganizationPattern {
+impl FromStr for Pattern {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
         let path_pattern = oktaws_home()?.join(format!("{s}.toml"));
         let pattern = path_pattern.as_os_str().to_string_lossy();
 
-        Ok(OrganizationPattern(Pattern::new(&pattern)?))
+        Ok(Self(glob::Pattern::new(&pattern)?))
     }
 }
 
-impl fmt::Display for OrganizationPattern {
+impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl OrganizationPattern {
+impl Pattern {
+    /// Find and parse all the organization configs
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors globbing the paths,
+    /// or reading and parsing the config files.
     pub fn organizations(&self) -> Result<Vec<Organization>> {
-        let paths = glob(self.0.as_str())?
+        let paths = glob::glob(self.0.as_str())?
             .map(|r| r.map_err(Into::into))
             .collect::<Result<Vec<_>>>()?;
 
@@ -342,7 +351,7 @@ foo = "foo"
         let tempdir = create_mock_config_dir();
         env::set_var("OKTAWS_HOME", tempdir.path());
 
-        let org_pattern: OrganizationPattern = "*".parse().unwrap();
+        let org_pattern: Pattern = "*".parse().unwrap();
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 3);
@@ -359,7 +368,7 @@ foo = "foo"
         std::fs::create_dir(&mock_dir).unwrap();
         create_mock_toml(&mock_dir, "quz");
 
-        let org_pattern: OrganizationPattern = "*".parse().unwrap();
+        let org_pattern: Pattern = "*".parse().unwrap();
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 3);
@@ -371,7 +380,7 @@ foo = "foo"
         let tempdir = create_mock_config_dir();
         env::set_var("OKTAWS_HOME", tempdir.path());
 
-        let org_pattern: OrganizationPattern = "ba*".parse().unwrap();
+        let org_pattern: Pattern = "ba*".parse().unwrap();
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 2);

@@ -8,7 +8,6 @@ use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
 use samuel::response::Response as SamlResponse;
 use tracing::error;
-use url::Url;
 
 #[derive(Clone, Debug)]
 pub struct Response {
@@ -50,7 +49,7 @@ impl TryFrom<String> for Response {
             .find(|attribute| attribute.name == "https://aws.amazon.com/SAML/Attributes/Role");
 
         if let Some(role_attribute) = role_attribute {
-            Ok(Response {
+            Ok(Self {
                 raw: s,
                 roles: role_attribute
                     .values
@@ -65,13 +64,14 @@ impl TryFrom<String> for Response {
 }
 
 impl Response {
+    /// Post the SAML document to AWS, imitating the browser-based login flow
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors encountered while sending the request
     pub async fn post_to_aws(&self) -> Result<reqwest::Response> {
-        let client = reqwest::Client::builder()
-            .pool_max_idle_per_host(0)
-            .build()?;
-
-        client
-            .post(Url::parse("https://signin.aws.amazon.com/saml")?)
+        reqwest::Client::new()
+            .post("https://signin.aws.amazon.com/saml")
             .form(&[("SAMLResponse", &self.raw), ("RelayState", &String::new())])
             .send()
             .await
@@ -79,10 +79,26 @@ impl Response {
     }
 }
 
+/// Try to parse `text` and extract the AWS account name from it
+/// `text` is either:
+/// 1. A SAML login screen (if there are multiple roles that the user could choose from)
+/// 2. The AWS dashboard (if the user only has a single role to use)
+///
+/// # Errors
+///
+/// Will return `Err` if `text` is not valid HTML,
+/// or if the AWS account name cannot be found
 pub fn extract_account_name(text: &str) -> Result<String> {
     extract_saml_account_name(text).or_else(|_| extract_dashboard_account_name(text))
 }
 
+/// Try to parse `text` as a SAML login screen
+/// and extract the AWS account name from it
+///
+/// # Errors
+///
+/// Will return `Err` if `text` is not valid HTML,
+/// or if the AWS account name cannot be found
 pub fn extract_saml_account_name(text: &str) -> Result<String> {
     let doc = kuchiki::parse_html().one(text);
     let account_str = doc
@@ -92,14 +108,21 @@ pub fn extract_saml_account_name(text: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("SAML account name Not found"))?
         .text_contents();
 
-    let re = Regex::new(r"Account: (.+) \(\d+\)").unwrap();
-    let caps = re.captures(&account_str).unwrap();
-
-    caps.get(1)
+    Regex::new(r"Account: (.+) \(\d+\)")?
+        .captures(&account_str)
+        .ok_or_else(|| anyhow!("No account name found"))?
+        .get(1)
         .map(|m| m.as_str().to_string())
-        .ok_or_else(|| anyhow!("No account ID found"))
+        .ok_or_else(|| anyhow!("No account name found"))
 }
 
+/// Try to parse `text` as HTML for the AWS dashboard,
+/// and extract the AWS account name from it
+///
+/// # Errors
+///
+/// Will return `Err` if `text` is not valid HTML,
+/// or if the AWS account name cannot be found
 pub fn extract_dashboard_account_name(text: &str) -> Result<String> {
     let doc = kuchiki::parse_html().one(text);
     let account_str = doc
@@ -109,12 +132,12 @@ pub fn extract_dashboard_account_name(text: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("Dashboard Account name not found in {}", text))?
         .text_contents();
 
-    let re = Regex::new(r"Account: (.+) \(\d+\)").unwrap();
-    let caps = re.captures(&account_str).unwrap();
-
-    caps.get(1)
+    Regex::new(r"Account: (.+) \(\d+\)")?
+        .captures(&account_str)
+        .ok_or_else(|| anyhow!("No account name found"))?
+        .get(1)
         .map(|m| m.as_str().to_string())
-        .ok_or_else(|| anyhow!("No account ID found"))
+        .ok_or_else(|| anyhow!("No account name found"))
 }
 
 #[cfg(test)]
