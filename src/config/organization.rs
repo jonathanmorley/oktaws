@@ -5,13 +5,13 @@ use crate::select_opt;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
 use aws_types::Credentials;
-use derive_more::Display;
 use futures::future::join_all;
 use glob::{glob, Pattern};
 use itertools::Itertools;
@@ -145,7 +145,7 @@ impl Organization {
     }
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub struct OrganizationPattern(Pattern);
 
 impl FromStr for OrganizationPattern {
@@ -156,6 +156,12 @@ impl FromStr for OrganizationPattern {
         let pattern = path_pattern.as_os_str().to_string_lossy();
 
         Ok(OrganizationPattern(Pattern::new(&pattern)?))
+    }
+}
+
+impl fmt::Display for OrganizationPattern {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
