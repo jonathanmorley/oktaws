@@ -3,6 +3,7 @@ use crate::config::profile::{Profile, ProfileConfig};
 use crate::okta::client::Client as OktaClient;
 use crate::select_opt;
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -13,7 +14,6 @@ use aws_types::Credentials;
 use derive_more::Display;
 use futures::future::join_all;
 use glob::{glob, Pattern};
-use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml;
@@ -25,7 +25,7 @@ pub struct OrganizationConfig {
     pub role: Option<String>,
     pub duration_seconds: Option<i32>,
     #[serde(serialize_with = "toml::ser::tables_last")]
-    pub profiles: IndexMap<String, ProfileConfig>,
+    pub profiles: HashMap<String, ProfileConfig>,
 }
 
 impl OrganizationConfig {
@@ -235,20 +235,26 @@ baz = {{ application = "baz", role = "baz_role" }}
         assert_eq!(organization.username, "mock_user");
         assert_eq!(organization.profiles.len(), 3);
 
-        assert_eq!(organization.profiles[0].name, "foo");
-        assert_eq!(organization.profiles[0].application_name, "foo");
-        assert_eq!(organization.profiles[0].role, "my_role");
-        assert_eq!(organization.profiles[0].duration_seconds, Some(300));
+        assert!(organization.profiles.contains(&Profile {
+            name: String::from("foo"),
+            application_name: String::from("foo"),
+            role: String::from("my_role"),
+            duration_seconds: Some(300)
+        }));
 
-        assert_eq!(organization.profiles[1].name, "bar");
-        assert_eq!(organization.profiles[1].application_name, "bar");
-        assert_eq!(organization.profiles[1].role, "my_role");
-        assert_eq!(organization.profiles[1].duration_seconds, Some(600));
+        assert!(organization.profiles.contains(&Profile {
+            name: String::from("bar"),
+            application_name: String::from("bar"),
+            role: String::from("my_role"),
+            duration_seconds: Some(600)
+        }));
 
-        assert_eq!(organization.profiles[2].name, "baz");
-        assert_eq!(organization.profiles[2].application_name, "baz");
-        assert_eq!(organization.profiles[2].role, "baz_role");
-        assert_eq!(organization.profiles[2].duration_seconds, Some(300));
+        assert!(organization.profiles.contains(&Profile {
+            name: String::from("baz"),
+            application_name: String::from("baz"),
+            role: String::from("baz_role"),
+            duration_seconds: Some(300)
+        }));
     }
 
     #[test]
