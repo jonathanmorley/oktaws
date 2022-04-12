@@ -253,11 +253,11 @@ foo"#
         assert_eq!(
             format!("{err:?}"),
             format!(
-                "Unable to parse \"{}\"
+                "Unable to parse {:?}
 
 Caused by:
     3:3 expecting \"[Some('='), Some(':')]\" but found EOF.",
-                tempfile.path().to_string_lossy()
+                tempfile.path()
             )
         );
 
@@ -282,10 +282,15 @@ aws_secret_access_key=SECRET_ACCESS_KEY2"#
 
         let err = CredentialsStore::load(Some(tempfile.path())).err().unwrap();
 
-        assert_eq!(format!("{err:?}"), format!("Unable to validate \"{}\"
+        assert_eq!(
+            format!("{err:?}"),
+            format!("Unable to validate {:?}
 
 Caused by:
-    Key \"foo\\n\\n[example2]\\naws_access_key_id\" in Section Some(\"example\") must not contain '\\n'", tempfile.path().to_string_lossy()));
+    Key \"foo\\n\\n[example2]\\naws_access_key_id\" in Section Some(\"example\") must not contain '\\n'",
+                tempfile.path()
+            )
+        );
 
         Ok(())
     }
@@ -302,7 +307,7 @@ Caused by:
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
-# This is important
+# This comment is important
 bar=baz
 
 [example_static]
@@ -326,20 +331,24 @@ foo=bar"#
 
         let credentials = fs::read_to_string(tempfile)?;
 
+        let mut lines = credentials.lines();
+        assert_eq!(lines.next(), Some("[example_sts]"));
+        assert_eq!(lines.next(), Some("bar=baz"));
+        assert_eq!(lines.next(), Some("aws_access_key_id=NEW_ACCESS_KEY"));
         assert_eq!(
-            credentials,
-            "[example_sts]
-bar=baz
-aws_access_key_id=NEW_ACCESS_KEY
-aws_secret_access_key=NEW_SECRET_ACCESS_KEY
-aws_session_token=NEW_SESSION_TOKEN
-
-[example_static]
-aws_secret_access_key=SECRET_ACCESS_KEY
-aws_access_key_id=ACCESS_KEY
-foo=bar
-"
+            lines.next(),
+            Some("aws_secret_access_key=NEW_SECRET_ACCESS_KEY")
         );
+        assert_eq!(lines.next(), Some("aws_session_token=NEW_SESSION_TOKEN"));
+        assert_eq!(lines.next(), Some(""));
+        assert_eq!(lines.next(), Some("[example_static]"));
+        assert_eq!(
+            lines.next(),
+            Some("aws_secret_access_key=SECRET_ACCESS_KEY")
+        );
+        assert_eq!(lines.next(), Some("aws_access_key_id=ACCESS_KEY"));
+        assert_eq!(lines.next(), Some("foo=bar"));
+        assert_eq!(lines.next(), None);
 
         Ok(())
     }

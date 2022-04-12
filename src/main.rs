@@ -16,6 +16,7 @@ use tracing_subscriber::{prelude::*, Registry};
 use tracing_tree::HierarchicalLayer;
 
 #[derive(Parser, Debug)]
+#[clap(author, version, about)]
 struct Args {
     #[clap(flatten)]
     verbosity: Verbosity,
