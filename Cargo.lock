@@ -1842,7 +1842,6 @@ dependencies = [
  "base64 0.13.0",
  "clap",
  "clap-verbosity-flag",
- "derive_more",
  "dialoguer",
  "dirs",
  "futures",

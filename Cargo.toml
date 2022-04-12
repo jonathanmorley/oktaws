@@ -16,7 +16,6 @@ backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 clap = { version = "3", features = ["derive"] }
 clap-verbosity-flag = "1"
-derive_more = "0.99"
 dialoguer = "0.10"
 dirs = "4"
 futures = "0.3"
