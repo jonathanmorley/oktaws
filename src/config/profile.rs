@@ -1,14 +1,16 @@
 use crate::{
     aws::{get_account_alias, role::SamlRole},
-    okta::{applications::AppLink, client::Client as OktaClient},
+    okta::client::Client as OktaClient,
     saml::extract_account_name,
     select,
 };
 
 use anyhow::{anyhow, Result};
 use aws_types::Credentials;
+use okta::types::AppLink;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, warn, debug, trace};
+use tracing::{instrument, trace, warn};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -24,7 +26,9 @@ impl ProfileConfig {
         link: AppLink,
         default_role: Option<String>,
     ) -> Result<(String, Self)> {
-        let response = client.get_saml_response(link.link_url.clone()).await?;
+        let response = client
+            .get_saml_response(Url::parse(&link.link_url)?)
+            .await?;
         let aws_response = match response.post_to_aws().await {
             Err(e) => {
                 warn!("Caught error trying to login to AWS: {}, trying again", e);
@@ -150,7 +154,7 @@ impl Profile {
             .ok_or_else(|| anyhow!("Could not find Okta application for profile {}", self.name))?;
 
         let saml = client
-            .get_saml_response(app_link.link_url)
+            .get_saml_response(Url::parse(&app_link.link_url)?)
             .await
             .map_err(|e| {
                 anyhow!(
@@ -162,7 +166,7 @@ impl Profile {
 
         let roles = saml.roles;
 
-        debug!("SAML Roles: {:?}", &roles);
+        //debug!("SAML Roles: {:?}", &roles);
 
         let saml_role: SamlRole = roles
             .into_iter()

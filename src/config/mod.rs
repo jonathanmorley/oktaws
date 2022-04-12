@@ -1,8 +1,8 @@
 pub mod organization;
 pub mod profile;
 
-use std::path::PathBuf;
 use std::env::var as env_var;
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 

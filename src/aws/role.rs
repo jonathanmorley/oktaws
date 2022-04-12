@@ -2,10 +2,10 @@ use std::str;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
-use aws_sdk_iam::Credentials;
-use tracing::instrument;
-use aws_sdk_sts::{Client as StsClient, Config as StsConfig, Region as StsRegion};
 use aws_arn::ARN;
+use aws_sdk_iam::Credentials;
+use aws_sdk_sts::{Client as StsClient, Config as StsConfig, Region as StsRegion};
+use tracing::instrument;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SamlRole {
@@ -32,30 +32,42 @@ impl FromStr for SamlRole {
 
 impl SamlRole {
     pub fn role_name(&self) -> Result<String> {
-        self.role.resource.path_split().last().ok_or_else(|| anyhow!("No name found in {}", self.role)).map(ToString::to_string)
+        self.role
+            .resource
+            .path_split()
+            .last()
+            .ok_or_else(|| anyhow!("No name found in {}", self.role))
+            .map(ToString::to_string)
     }
 
-    async fn assume(&self, client: StsClient, saml_assertion: String, duration_seconds: Option<i32>) -> Result<Credentials, Error> {
-        let mut req = client.assume_role_with_saml();
-        if let Some(duration) = duration_seconds {
-            req = req.duration_seconds(duration);
-        }
-        req = req.principal_arn(self.provider.to_string());
-        req = req.role_arn(self.role.to_string());
-        req = req.saml_assertion(saml_assertion);
-
-        let credentials = req
+    #[instrument(level = "trace", skip(client))]
+    async fn assume(
+        &self,
+        client: StsClient,
+        saml_assertion: String,
+        duration_seconds: Option<i32>,
+    ) -> Result<Credentials, Error> {
+        let credentials = client
+            .assume_role_with_saml()
+            .set_duration_seconds(duration_seconds)
+            .principal_arn(self.provider.to_string())
+            .role_arn(self.role.to_string())
+            .saml_assertion(saml_assertion)
             .send()
             .await?
             .credentials
             .ok_or_else(|| anyhow!("No credentials returned"))?;
 
         Ok(Credentials::new(
-            credentials.access_key_id.ok_or_else(|| anyhow!("No Access Key Id found"))?,
-            credentials.secret_access_key.ok_or_else(|| anyhow!("No Secret Access Key found"))?,
+            credentials
+                .access_key_id
+                .ok_or_else(|| anyhow!("No Access Key Id found"))?,
+            credentials
+                .secret_access_key
+                .ok_or_else(|| anyhow!("No Secret Access Key found"))?,
             credentials.session_token,
             credentials.expiration.map(|dt| dt.try_into().unwrap()),
-            "STS"
+            "sts",
         ))
     }
 }
@@ -67,13 +79,13 @@ pub async fn sts_client() -> StsClient {
     StsClient::from_conf(config)
 }
 
-#[instrument(level = "trace", skip(saml_assertion))]
 pub async fn assume_role(
     role: &SamlRole,
     saml_assertion: String,
     duration_seconds: Option<i32>,
 ) -> Result<Credentials, Error> {
-    role.assume(sts_client().await, saml_assertion, duration_seconds).await
+    role.assume(sts_client().await, saml_assertion, duration_seconds)
+        .await
 }
 
 #[cfg(test)]
@@ -99,7 +111,9 @@ mod tests {
             "arn:aws:iam::123456789012:saml-provider/okta-idp,arn:aws:iam::123456789012:role/role1";
 
         let expected_role = SamlRole {
-            provider: "arn:aws:iam::123456789012:saml-provider/okta-idp".parse().unwrap(),
+            provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                .parse()
+                .unwrap(),
             role: "arn:aws:iam::123456789012:role/role1".parse().unwrap(),
         };
 
@@ -120,11 +134,15 @@ mod tests {
 
         let expected_roles = vec![
             SamlRole {
-                provider: "arn:aws:iam::123456789012:saml-provider/okta-idp".parse().unwrap(),
+                provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                    .parse()
+                    .unwrap(),
                 role: "arn:aws:iam::123456789012:role/role1".parse().unwrap(),
             },
             SamlRole {
-                provider: "arn:aws:iam::123456789012:saml-provider/okta-idp".parse().unwrap(),
+                provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                    .parse()
+                    .unwrap(),
                 role: "arn:aws:iam::123456789012:role/role2".parse().unwrap(),
             },
         ];
@@ -154,11 +172,14 @@ mod tests {
         let client = StsClient::from_conf_conn(conf, conn.clone());
 
         let role = SamlRole {
-            provider: "arn:aws:iam::123456789012:saml-provider/okta-idp".parse().unwrap(),
+            provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                .parse()
+                .unwrap(),
             role: "arn:aws:iam::123456789012:role/mock-role".parse().unwrap(),
         };
 
-        let result = block_on(role.assume(client, String::from("SAML_ASSERTION"), None)).unwrap_err();
+        let result =
+            block_on(role.assume(client, String::from("SAML_ASSERTION"), None)).unwrap_err();
 
         assert_eq!(result.to_string(), "Error { code: \"AccessDenied\", message: \"User: null is not authorized to perform: sts:AssumeRoleWithSAML on resource: arn:aws:iam::123456789012:role/mock-role\", request_id: \"b9e07db1-e745-4d0f-be1f-123456789012\" }");
 

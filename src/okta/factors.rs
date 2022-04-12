@@ -11,22 +11,10 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use dialoguer::Password;
+use okta::types::FactorProvider;
+use okta::types::FactorResultType;
+use okta::types::FactorStatus;
 use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum FactorResult {
-    Cancelled,
-    Challenge,
-    Error,
-    Failed,
-    PasscodeReplayed,
-    Rejected,
-    Success,
-    Timeout,
-    TimeWindowExceeded,
-    Waiting,
-}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "lowercase", tag = "factorType")]
@@ -98,28 +86,6 @@ pub enum Factor {
         #[serde(rename = "_links")]
         links: HashMap<String, Links>,
     },
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum FactorProvider {
-    Okta,
-    Rsa,
-    Symantec,
-    Google,
-    Duo,
-    Yubico,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum FactorStatus {
-    NotSetup,
-    PendingActivation,
-    Enrolled,
-    Active,
-    Inactive,
-    Expired,
 }
 
 #[derive(Deserialize, Debug)]
@@ -195,13 +161,13 @@ impl Client {
                 // Trigger sending of Push
                 let mut response: LoginResponse = self.post_absolute(url.clone(), &request).await?;
 
-                while Some(FactorResult::Waiting) == response.factor_result {
+                while Some(FactorResultType::Waiting) == response.factor_result {
                     sleep(Duration::from_millis(100));
                     response = self.post_absolute(url.clone(), &request).await?;
                 }
 
                 match response.factor_result {
-                    None | Some(FactorResult::Success) => Ok(response),
+                    None | Some(FactorResultType::Success) => Ok(response),
                     Some(result) => Err(anyhow!("Failed to verify with Push MFA ({:?})", result)),
                 }
             }

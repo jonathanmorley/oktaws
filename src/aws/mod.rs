@@ -1,11 +1,11 @@
-use crate::{aws::role::assume_role, saml::Response};
+pub mod credentials;
+pub mod role;
+
 use crate::aws::role::SamlRole;
+use crate::{aws::role::assume_role, saml::Response};
 
 use anyhow::{anyhow, Result};
 use aws_sdk_iam::{Client as IamClient, Config as IamConfig};
-
-pub mod credentials;
-pub mod role;
 
 pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<String> {
     let credentials = assume_role(role, response.raw.clone(), None)
@@ -19,7 +19,11 @@ pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<S
     let client = IamClient::from_conf(config);
 
     let mut aliases = client
-        .list_account_aliases().send().await?.account_aliases.unwrap();
+        .list_account_aliases()
+        .send()
+        .await?
+        .account_aliases
+        .unwrap();
 
     match aliases.len() {
         0 => Err(anyhow!("No AWS account alias found")),

@@ -1,159 +1,86 @@
-use std::convert::{TryFrom, TryInto};
 use std::env::var as env_var;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Error, Result};
-use dirs;
-use indexmap::map::Entry;
-use indexmap::IndexMap;
-use path_abs::PathFile;
+use anyhow::{anyhow, Context, Result};
 use aws_types::Credentials;
-use serde::{Deserialize, Serialize};
-use tracing::{trace, instrument};
+use dirs;
+use ini::{Ini, Properties, SectionEntry};
+use path_abs::PathFile;
+use tracing::instrument;
 
-// `IndexMaps`s are sorted based on insert order
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct Profile(IndexMap<String, String>);
-
-impl Profile {
-    fn is_sts_credentials(&self) -> bool {
-        self.0.contains_key("aws_access_key_id")
-            && self.0.contains_key("aws_secret_access_key")
-            && self.0.contains_key("aws_session_token")
-    }
-
-    fn set_sts_credentials(&mut self, creds: Credentials) -> Result<()> {
-        if !self.is_sts_credentials() {
-            return Err(anyhow!("Profile is not STS. Cannot set STS credentials"));
-        }
-
-        for (key, value) in Profile::from(creds).0 {
-            self.0.insert(key, value);
-        }
-
-        Ok(())
-    }
-}
-
-impl From<Credentials> for Profile {
-    fn from(creds: Credentials) -> Self {
-        let mut map = IndexMap::default();
-
-        map.insert("aws_access_key_id".to_string(), creds.access_key_id().to_string());
-        map.insert(
-            "aws_secret_access_key".to_string(),
-            creds.secret_access_key().to_string(),
-        );
-        if let Some(session_token) = creds.session_token() {
-            map.insert("aws_session_token".to_string(), session_token.to_string());
-        }
-        
-
-        Profile(map)
-    }
-}
-
-impl TryFrom<Profile> for Credentials {
-    type Error = Error;
-
-    fn try_from(mut profile: Profile) -> Result<Self, Self::Error> {
-        let access_key = profile
-            .0
-            .remove("aws_access_key_id")
-            .ok_or_else(|| anyhow!("No aws_access_key_id found"))?;
-
-        let secret_access_key = profile
-            .0
-            .remove("aws_secret_access_key")
-            .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?;
-
-        let session_token = profile
-            .0
-            .remove("aws_session_token")
-            .ok_or_else(|| anyhow!("No aws_secret_access_key found"))?;
-        
-        Ok(Credentials::from_keys(access_key, secret_access_key, Some(session_token)))
-    }
-}
-
-#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct Profiles(IndexMap<String, Profile>);
-
-impl Profiles {
-    pub fn set_sts_credentials(&mut self, name: String, creds: Credentials) -> Result<(), Error> {
-        match self.0.entry(name) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().set_sts_credentials(creds)?;
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(creds.into());
-            }
-        }
-        Ok(())
-    }
-
-    fn read_as_ini<R>(reader: R) -> Result<Self>
-    where
-        R: Read,
-    {
-        let mut content = String::new();
-        let mut reader = reader;
-        reader.read_to_string(&mut content)?;
-
-        trace!("Creds content: {:?}", content);
-
-        serde_ini::de::from_str(&content).map_err(Into::into)
-
-        //serde_ini::de::from_read(reader)
-    }
-
-    fn write_as_ini<W>(&self, writer: &mut W) -> Result<()>
-    where
-        W: Write,
-    {
-        let serialized = serde_ini::ser::to_string(self)?;
-
-        let valid = serialized.lines().all(|line| line.contains('=') || line.starts_with("["));
-        if valid {
-            writer.write_all(serialized.as_bytes()).map_err(Into::into)
-        } else {
-            trace!("{}", &serialized);
-            Err(anyhow!("Invalid credentials detected: {:?}", self))
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct CredentialsStore {
-    file: File,
-    pub profiles: Profiles,
+    path: PathFile,
+    profiles: Ini,
 }
 
 impl CredentialsStore {
-    pub fn new() -> Result<CredentialsStore> {
-        let creds = match env_var("AWS_SHARED_CREDENTIALS_FILE") {
-            Ok(path) => PathBuf::from(path),
-            Err(_) => CredentialsStore::default_profile_location()?,
+    #[instrument]
+    pub fn load(path: Option<&Path>) -> Result<CredentialsStore> {
+        let path = match (path, env_var("AWS_SHARED_CREDENTIALS_FILE")) {
+            (Some(path), _) => PathBuf::from(path),
+            (None, Ok(path)) => PathBuf::from(path),
+            (None, Err(_)) => CredentialsStore::default_location()?,
+        };
+
+        let path = PathFile::create(path)?;
+        let profiles =
+            Ini::load_from_file(&path).with_context(|| format!("Unable to parse {path:?}"))?;
+
+        let store = CredentialsStore { path, profiles };
+        store
+            .validate()
+            .with_context(|| format!("Unable to validate {:?}", store.path))?;
+
+        Ok(store)
+    }
+
+    pub fn upsert_credential(&mut self, profile: &str, creds: Credentials) {
+        self.profiles.set_to(
+            Some(profile),
+            "aws_access_key_id".into(),
+            creds.access_key_id().into(),
+        );
+        self.profiles.set_to(
+            Some(profile),
+            "aws_secret_access_key".into(),
+            creds.secret_access_key().into(),
+        );
+
+        if let Some(session_token) = creds.session_token() {
+            self.profiles.set_to(
+                Some(profile),
+                "aws_session_token".into(),
+                session_token.into(),
+            );
         }
-        .try_into();
+    }
 
-        trace!("Credentials Store: {:?}", &creds);
-
-        creds
+    pub fn read_profile(&self, profile: &str) -> Option<&Properties> {
+        self.profiles.section(Some(profile))
     }
 
     #[instrument(skip_all)]
-    pub fn save(&mut self) -> Result<()> {
-        self.profiles.write_as_ini(&mut self.file)
+    pub fn save(&self) -> Result<()> {
+        self.profiles.write_to_file(&self.path).map_err(Into::into)
     }
 
-    fn default_profile_location() -> Result<PathBuf> {
+    fn validate(&self) -> Result<()> {
+        for section in self.profiles.sections() {
+            if let Some(props) = self.profiles.section(section) {
+                for (key, _) in props.iter() {
+                    if key.contains("\n") {
+                        return Err(anyhow!(
+                            "Key {key:?} in Section {section:?} must not contain '\\n'"
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn default_location() -> Result<PathBuf> {
         match dirs::home_dir() {
             Some(home_dir) => Ok(home_dir.join(".aws").join("credentials")),
             None => Err(anyhow!("The environment variable HOME must be set.")),
@@ -161,243 +88,217 @@ impl CredentialsStore {
     }
 }
 
-impl TryFrom<PathBuf> for CredentialsStore {
-    type Error = Error;
-
-    fn try_from(file_path: PathBuf) -> Result<Self, Self::Error> {
-        file_path.as_path().try_into()
-    }
-}
-
-impl TryFrom<&Path> for CredentialsStore {
-    type Error = Error;
-
-    fn try_from(file_path: &Path) -> Result<Self, Self::Error> {
-        PathFile::create(&file_path)?.try_into()
-    }
-}
-
-impl TryFrom<PathFile> for CredentialsStore {
-    type Error = Error;
-
-    fn try_from(file_path: PathFile) -> Result<Self, Self::Error> {
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(file_path)?
-            .try_into()
-    }
-}
-
-impl TryFrom<File> for CredentialsStore {
-    type Error = Error;
-
-    fn try_from(mut file: File) -> Result<Self, Self::Error> {
-        let profiles = Profiles::read_as_ini(&file)?;
-
-        trace!("Profiles: {:?}", &profiles);
-
-        file.seek(SeekFrom::Start(0))?;
-        Ok(CredentialsStore { file, profiles })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use std::fs::File;
-    use std::io::{Read, Write};
+    use std::fs;
+    use std::io::Write;
 
     use tempfile;
-    use tempfile::Builder;
+    use tempfile::NamedTempFile;
 
     #[test]
-    fn parse_profiles_with_extra_fields() {
-        let profiles_ini = "[example]
+    fn parse_profile_with_extra_fields() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
+
+        write!(
+            tempfile,
+            "[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
-foo=bar";
+foo=bar"
+        )?;
 
-        let profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
+        let credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let profile = credentials.read_profile("example").unwrap();
 
-        assert_eq!(profiles.0["example"].0["aws_access_key_id"], "ACCESS_KEY");
-        assert_eq!(
-            profiles.0["example"].0["aws_secret_access_key"],
-            "SECRET_ACCESS_KEY"
-        );
-        assert_eq!(
-            profiles.0["example"].0["aws_session_token"],
-            "SESSION_TOKEN"
-        );
-        assert_eq!(profiles.0["example"].0["foo"], "bar");
+        assert_eq!(&profile["aws_access_key_id"], "ACCESS_KEY");
+        assert_eq!(&profile["aws_secret_access_key"], "SECRET_ACCESS_KEY");
+        assert_eq!(&profile["aws_session_token"], "SESSION_TOKEN");
+        assert_eq!(&profile["foo"], "bar");
+
+        Ok(())
     }
 
     #[test]
-    fn write_profiles_with_extra_fields() {
-        let creds = Credentials::from_keys(
-            "ACCESS_KEY",
-            "SECRET_ACCESS_KEY",
-            Some("SESSION_TOKEN".to_string())
-        );
+    fn parse_mixed_quotes_spaces() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
 
-        let mut profile: Profile = creds.into();
-        profile.0.insert("foo".to_string(), "bar".to_string());
-
-        let mut map = IndexMap::default();
-        map.insert("example".to_string(), profile);
-        let profiles = Profiles(map);
-
-        let mut w = Vec::new();
-        profiles.write_as_ini(&mut w).unwrap();
-
-        assert_eq!(
-            &String::from_utf8(w).unwrap(),
-            "[example]\r
-aws_access_key_id=ACCESS_KEY\r
-aws_secret_access_key=SECRET_ACCESS_KEY\r
-aws_session_token=SESSION_TOKEN\r
-foo=bar\r
-"
-        );
-    }
-
-    #[test]
-    fn parse_double_profiles() {
-        let profiles_ini = "
+        write!(
+            tempfile,
+            r#"
 [example]
-aws_access_key_id=ACCESS_KEY_1
-aws_secret_access_key=SECRET_ACCESS_KEY_1
-aws_session_token=SESSION_TOKEN_1
-[example]
-aws_access_key_id=ACCESS_KEY_2
-aws_secret_access_key=SECRET_ACCESS_KEY_2
-aws_session_token=SESSION_TOKEN_2";
+aws_access_key_id = ACCESS_KEY_1
+aws_secret_access_key="SECRET_ACCESS_KEY_1"
+aws_session_token='SESSION_TOKEN_1'"#
+        )?;
 
-        let profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
+        let credentials = CredentialsStore::load(Some(tempfile.path()))?;
+        let profile = credentials.read_profile("example").unwrap();
 
-        assert_eq!(profiles.0.len(), 1);
-        assert_eq!(profiles.0["example"].0["aws_access_key_id"], "ACCESS_KEY_2");
-        assert_eq!(
-            profiles.0["example"].0["aws_secret_access_key"],
-            "SECRET_ACCESS_KEY_2"
-        );
-        assert_eq!(
-            profiles.0["example"].0["aws_session_token"],
-            "SESSION_TOKEN_2"
-        );
+        assert_eq!(&profile["aws_access_key_id"], "ACCESS_KEY_1");
+        assert_eq!(&profile["aws_secret_access_key"], "SECRET_ACCESS_KEY_1");
+        assert_eq!(&profile["aws_session_token"], "SESSION_TOKEN_1");
+
+        Ok(())
     }
 
     #[test]
-    fn update_sts_credentials() {
-        let profiles_ini = "[example]
+    fn update_credential() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
+
+        write!(
+            tempfile,
+            r#"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
-foo=bar";
+foo=bar"#
+        )?;
 
-        let mut profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
+        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
 
-        profiles
-            .set_sts_credentials(
-                "example".to_string(),
-                Credentials::from_keys(
-                    "NEW_ACCESS_KEY",
-                    "NEW_SECRET_ACCESS_KEY",
-                    Some("NEW_SESSION_TOKEN".to_string())
-                )
-            )
-            .unwrap();
+        credentials.upsert_credential(
+            "example",
+            Credentials::from_keys(
+                "NEW_ACCESS_KEY",
+                "NEW_SECRET_ACCESS_KEY",
+                Some("NEW_SESSION_TOKEN".to_string()),
+            ),
+        );
 
-        assert_eq!(
-            profiles.0["example"].0["aws_access_key_id"],
-            "NEW_ACCESS_KEY"
-        );
-        assert_eq!(
-            profiles.0["example"].0["aws_secret_access_key"],
-            "NEW_SECRET_ACCESS_KEY"
-        );
-        assert_eq!(
-            profiles.0["example"].0["aws_session_token"],
-            "NEW_SESSION_TOKEN"
-        );
+        let profile = credentials.read_profile("example").unwrap();
+
+        assert_eq!(&profile["aws_access_key_id"], "NEW_ACCESS_KEY");
+        assert_eq!(&profile["aws_secret_access_key"], "NEW_SECRET_ACCESS_KEY");
+        assert_eq!(&profile["aws_session_token"], "NEW_SESSION_TOKEN");
+
+        Ok(())
     }
 
     #[test]
-    fn add_sts_credentials() {
-        let mut profiles = Profiles::default();
+    fn insert_credentials() -> Result<()> {
+        // This also tests file not existing
+        let tempfile = NamedTempFile::new()?;
 
-        profiles
-            .set_sts_credentials(
-                "example".to_string(),
-                Credentials::from_keys(
-                    "NEW_ACCESS_KEY".to_string(),
-                    "NEW_SECRET_ACCESS_KEY".to_string(),
-                    Some("NEW_SESSION_TOKEN".to_string())
-                )
-            )
-            .unwrap();
+        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
 
-        assert_eq!(
-            profiles.0["example"].0["aws_access_key_id"],
-            "NEW_ACCESS_KEY"
-        );
-        assert_eq!(
-            profiles.0["example"].0["aws_secret_access_key"],
-            "NEW_SECRET_ACCESS_KEY"
-        );
-        assert_eq!(
-            profiles.0["example"].0["aws_session_token"],
-            "NEW_SESSION_TOKEN"
-        );
-    }
-
-    #[test]
-    fn cannot_set_sts_creds_on_non_sts_profile() {
-        let profiles_ini = "[example]
-aws_access_key_id=ACCESS_KEY
-aws_secret_access_key=SECRET_ACCESS_KEY
-foo=bar";
-
-        let mut profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
-
-        let profile = profiles.0.get_mut("example").unwrap();
-
-        let err = profile
-            .set_sts_credentials(Credentials::from_keys(
+        credentials.upsert_credential(
+            "example",
+            Credentials::from_keys(
                 "NEW_ACCESS_KEY".to_string(),
                 "NEW_SECRET_ACCESS_KEY".to_string(),
-                Some("NEW_SESSION_TOKEN".to_string())
-            ))
-            .unwrap_err();
-
-        assert_eq!(
-            err.to_string(),
-            "Profile is not STS. Cannot set STS credentials"
+                Some("NEW_SESSION_TOKEN".to_string()),
+            ),
         );
+
+        let profile = credentials.read_profile("example").unwrap();
+
+        assert_eq!(&profile["aws_access_key_id"], "NEW_ACCESS_KEY");
+        assert_eq!(&profile["aws_secret_access_key"], "NEW_SECRET_ACCESS_KEY");
+        assert_eq!(&profile["aws_session_token"], "NEW_SESSION_TOKEN");
+
+        Ok(())
     }
 
     #[test]
-    fn cannot_parse_bad_ini() {
-        let profiles_ini = "[example]
+    fn update_creds_on_non_sts_profile() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
+
+        write!(
+            tempfile,
+            r#"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
-foo";
+foo=bar"#
+        )?;
 
-        let err = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap_err();
+        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
 
-        assert_eq!(
-            err.to_string(),
-            "Custom(\"INI syntax error: variable assignment missing '='\")"
+        credentials.upsert_credential(
+            "example",
+            Credentials::from_keys(
+                "NEW_ACCESS_KEY".to_string(),
+                "NEW_SECRET_ACCESS_KEY".to_string(),
+                Some("NEW_SESSION_TOKEN".to_string()),
+            ),
         );
+
+        let profile = credentials.read_profile("example").unwrap();
+
+        assert_eq!(&profile["aws_access_key_id"], "NEW_ACCESS_KEY");
+        assert_eq!(&profile["aws_secret_access_key"], "NEW_SECRET_ACCESS_KEY");
+        assert_eq!(&profile["aws_session_token"], "NEW_SESSION_TOKEN");
+        assert_eq!(&profile["foo"], "bar");
+
+        Ok(())
     }
 
     #[test]
-    fn roundtrip_with_update() {
+    fn parse_bad_ini() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
+
+        write!(
+            tempfile,
+            r#"[example]
+aws_access_key_id=ACCESS_KEY
+aws_secret_access_key=SECRET_ACCESS_KEY
+foo"#
+        )?;
+
+        let err = CredentialsStore::load(Some(tempfile.path())).err().unwrap();
+
+        assert_eq!(
+            format!("{err:?}"),
+            format!(
+                "Unable to parse \"{}\"
+
+Caused by:
+    3:3 expecting \"[Some('='), Some(':')]\" but found EOF.",
+                tempfile.path().to_string_lossy()
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_bad_ini_followed_by_good_ini() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
+
+        write!(
+            tempfile,
+            r#"[example]
+aws_access_key_id=ACCESS_KEY
+aws_secret_access_key=SECRET_ACCESS_KEY
+foo
+
+[example2]
+aws_access_key_id=ACCESS_KEY2
+aws_secret_access_key=SECRET_ACCESS_KEY2"#
+        )?;
+
+        let err = CredentialsStore::load(Some(tempfile.path())).err().unwrap();
+
+        assert_eq!(format!("{err:?}"), format!("Unable to validate \"{}\"
+
+Caused by:
+    Key \"foo\\n\\n[example2]\\naws_access_key_id\" in Section Some(\"example\") must not contain '\\n'", tempfile.path().to_string_lossy()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn roundtrip_with_update() -> Result<()> {
+        let mut tempfile = NamedTempFile::new()?;
+
         // This also checks that non-alphabetical ordering is preserved.
-        // Comments are not currnetly preserved
-        let profiles_ini = "[example_sts]
+        // Comments are not currently preserved
+        write!(
+            tempfile,
+            r#"[example_sts]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
@@ -407,95 +308,39 @@ bar=baz
 [example_static]
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_access_key_id=ACCESS_KEY
-foo=bar
-";
+foo=bar"#
+        )?;
 
-        let mut profiles = Profiles::read_as_ini(profiles_ini.as_bytes()).unwrap();
+        let mut credentials = CredentialsStore::load(Some(tempfile.path()))?;
 
-        let profile = profiles.0.get_mut("example_sts").unwrap();
-
-        profile
-            .set_sts_credentials(Credentials::from_keys(
+        credentials.upsert_credential(
+            "example_sts",
+            Credentials::from_keys(
                 "NEW_ACCESS_KEY".to_string(),
                 "NEW_SECRET_ACCESS_KEY".to_string(),
-                Some("NEW_SESSION_TOKEN".to_string())
-            ))
-            .unwrap();
+                Some("NEW_SESSION_TOKEN".to_string()),
+            ),
+        );
 
-        let mut w = Vec::new();
-        profiles.write_as_ini(&mut w).unwrap();
+        credentials.save()?;
+
+        let credentials = fs::read_to_string(tempfile)?;
 
         assert_eq!(
-            String::from_utf8(w).unwrap(),
-            "[example_sts]\r
-aws_access_key_id=NEW_ACCESS_KEY\r
-aws_secret_access_key=NEW_SECRET_ACCESS_KEY\r
-aws_session_token=NEW_SESSION_TOKEN\r
-bar=baz\r
-[example_static]\r
-aws_secret_access_key=SECRET_ACCESS_KEY\r
-aws_access_key_id=ACCESS_KEY\r
-foo=bar\r
+            credentials,
+            "[example_sts]
+bar=baz
+aws_access_key_id=NEW_ACCESS_KEY
+aws_secret_access_key=NEW_SECRET_ACCESS_KEY
+aws_session_token=NEW_SESSION_TOKEN
+
+[example_static]
+aws_secret_access_key=SECRET_ACCESS_KEY
+aws_access_key_id=ACCESS_KEY
+foo=bar
 "
         );
-    }
 
-    #[test]
-    fn write_to_file() {
-        let mut named_tempfile = Builder::new()
-            .prefix("credentials")
-            .rand_bytes(5)
-            .tempfile()
-            .unwrap();
-
-        write!(
-            named_tempfile,
-            "
-[existing]
-aws_access_key_id=ACCESS_KEY
-aws_secret_access_key=SECRET_ACCESS_KEY
-
-[example]
-aws_access_key_id=ACCESS_KEY
-aws_secret_access_key=SECRET_ACCESS_KEY
-aws_session_token=SESSION_TOKEN"
-        )
-        .unwrap();
-
-        let temp_path = named_tempfile.path();
-
-        let mut credentials_store: CredentialsStore = temp_path.try_into().unwrap();
-
-        credentials_store
-            .profiles
-            .set_sts_credentials(
-                String::from("example"),
-                Credentials::from_keys(
-                    String::from("ACCESS_KEY2"),
-                    String::from("SECRET_ACCESS_KEY2"),
-                    Some(String::from("SESSION_TOKEN2"))
-                )
-            )
-            .unwrap();
-
-        credentials_store.save().unwrap();
-
-        let mut buf = String::new();
-        File::open(temp_path)
-            .unwrap()
-            .read_to_string(&mut buf)
-            .unwrap();
-
-        assert_eq!(
-            &buf,
-            "[existing]\r
-aws_access_key_id=ACCESS_KEY\r
-aws_secret_access_key=SECRET_ACCESS_KEY\r
-[example]\r
-aws_access_key_id=ACCESS_KEY2\r
-aws_secret_access_key=SECRET_ACCESS_KEY2\r
-aws_session_token=SESSION_TOKEN2\r
-"
-        );
+        Ok(())
     }
 }
