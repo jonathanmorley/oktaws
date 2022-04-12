@@ -1,3 +1,7 @@
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![warn(clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
 pub mod aws;
 pub mod config;
 pub mod okta;
@@ -41,9 +45,5 @@ where
             .map_err(Into::into),
     }?;
 
-    if let Some(index) = index {
-        Ok(Some(items.remove(index)))
-    } else {
-        Ok(None)
-    }
+    Ok(index.map(|index| items.remove(index)))
 }

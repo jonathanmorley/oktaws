@@ -182,13 +182,21 @@ impl fmt::Display for Factor {
 }
 
 impl Client {
+    /// Given an MFA factor, follow the verification procedure until the MFA is accepted
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if there are any errors during validation
     pub async fn verify(&self, factor: &Factor, state_token: String) -> Result<LoginResponse> {
         match factor {
             Factor::Push { links, .. } => {
-                let url = match links.get("verify").unwrap() {
-                    Single(ref link) => link.href.clone(),
-                    Multi(ref links) => links.first().unwrap().href.clone(),
-                };
+                let url = links
+                    .get("verify")
+                    .and_then(|link| match link {
+                        Single(ref link) => Some(link.href.clone()),
+                        Multi(ref links) => links.first().map(|link| link.href.clone()),
+                    })
+                    .ok_or_else(|| anyhow!("No verify link found"))?;
 
                 let request = FactorVerificationRequest::Push { state_token };
 
@@ -206,10 +214,13 @@ impl Client {
                 }
             }
             Factor::Sms { links, .. } => {
-                let url = match links.get("verify").unwrap() {
-                    Single(ref link) => link.href.clone(),
-                    Multi(ref links) => links.first().unwrap().href.clone(),
-                };
+                let url = links
+                    .get("verify")
+                    .and_then(|link| match link {
+                        Single(ref link) => Some(link.href.clone()),
+                        Multi(ref links) => links.first().map(|link| link.href.clone()),
+                    })
+                    .ok_or_else(|| anyhow!("No verify link found"))?;
 
                 let request = FactorVerificationRequest::Sms {
                     state_token,
@@ -231,10 +242,13 @@ impl Client {
                 self.post_absolute(url, &request).await
             }
             Factor::Totp { links, .. } => {
-                let mut url = match links.get("verify").unwrap() {
-                    Single(ref link) => link.href.clone(),
-                    Multi(ref links) => links.first().unwrap().href.clone(),
-                };
+                let mut url = links
+                    .get("verify")
+                    .and_then(|link| match link {
+                        Single(ref link) => Some(link.href.clone()),
+                        Multi(ref links) => links.first().map(|link| link.href.clone()),
+                    })
+                    .ok_or_else(|| anyhow!("No verify link found"))?;
 
                 url.set_query(Some("rememberDevice"));
 

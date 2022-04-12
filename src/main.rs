@@ -1,6 +1,10 @@
-use oktaws::aws::credentials::CredentialsStore;
+#![deny(clippy::all, clippy::pedantic, clippy::nursery)]
+#![warn(clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
+
+use oktaws::aws::credentials::Store as CredentialsStore;
 use oktaws::config::oktaws_home;
-use oktaws::config::organization::{OrganizationConfig, OrganizationPattern};
+use oktaws::config::organization::{Config as OrganizationConfig, Pattern as OrganizationPattern};
 use oktaws::okta::client::Client as OktaClient;
 
 use std::convert::{TryFrom, TryInto};
@@ -98,7 +102,7 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
             .await;
 
         for (name, creds) in credentials_map {
-            aws_credentials.upsert_credential(&name, creds);
+            aws_credentials.upsert_credential(&name, &creds);
         }
     }
 
@@ -150,7 +154,7 @@ impl TryFrom<InitArgs> for Init {
             }
         }?;
 
-        Ok(Init {
+        Ok(Self {
             organization,
             username,
             force_new: args.force_new,
@@ -158,6 +162,7 @@ impl TryFrom<InitArgs> for Init {
     }
 }
 
+/// Output a config toml for a given organization
 async fn init(options: Init) -> Result<()> {
     let okta_client = OktaClient::new(
         options.organization.clone(),
