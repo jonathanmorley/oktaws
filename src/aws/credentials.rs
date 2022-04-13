@@ -258,7 +258,7 @@ foo"#
 
 Caused by:
     3:3 expecting \"[Some('='), Some(':')]\" but found EOF.",
-                tempfile.path()
+                normalize(tempfile.path())
             )
         );
 
@@ -289,7 +289,7 @@ aws_secret_access_key=SECRET_ACCESS_KEY2"#
 
 Caused by:
     Key \"foo\\n\\n[example2]\\naws_access_key_id\" in Section Some(\"example\") must not contain '\\n'",
-                tempfile.path()
+                normalize(tempfile.path())
             )
         );
 
@@ -352,5 +352,23 @@ foo=bar"#
         assert_eq!(lines.next(), None);
 
         Ok(())
+    }
+
+    /// For some reason, windows paths go through some canonicalization step
+    /// when used in errors.
+    ///
+    /// This is to emulate this behaviour during testing
+    fn normalize<P: AsRef<Path>>(p: P) -> String {
+        let path = p.as_ref();
+
+        #[cfg(target_os = "windows")]
+        {
+            format!(r"\\?\{}", path.to_string_lossy())
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            path.to_string_lossy().into_owned()
+        }
     }
 }
