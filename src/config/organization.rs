@@ -135,7 +135,7 @@ pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, Error
     if let Ok(system_user) = username::get_user_name() {
         input.default(system_user);
     }
-    
+
     input.interact_text().map_err(Into::into)
 }
 
