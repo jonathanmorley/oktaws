@@ -134,7 +134,7 @@ impl Profile {
                 Config::Name(_) => None,
                 Config::Detailed {
                     duration_seconds, ..
-                } => duration_seconds.clone(),
+                } => *duration_seconds,
             }
             .or(default_duration_seconds),
         })

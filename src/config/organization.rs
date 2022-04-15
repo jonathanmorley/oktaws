@@ -5,10 +5,10 @@ use crate::select_opt;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::fmt;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
+use std::{fmt, io};
 
 use anyhow::{anyhow, Error, Result};
 use aws_types::Credentials;
@@ -128,7 +128,12 @@ impl TryFrom<&Path> for Organization {
     }
 }
 
-pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, Error> {
+/// Prompt for a username for a given Okta organization.
+///
+/// # Errors
+///
+/// Will return `Err` if there are any IO errors during the prompt
+pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, io::Error> {
     let mut input = Input::<String>::new();
     input.with_prompt(&format!("Username for {}", organization));
 
@@ -136,7 +141,7 @@ pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, Error
         input.default(system_user);
     }
 
-    input.interact_text().map_err(Into::into)
+    input.interact_text()
 }
 
 impl Organization {
