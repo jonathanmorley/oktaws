@@ -12,19 +12,22 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
 use aws_types::Credentials;
+use dialoguer::Input;
 use futures::future::join_all;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml;
 use tracing::{debug, error, instrument};
 
+/// This is an intentionally 'loose' struct,
+/// representing the potential for overrides and later prompts
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
-    pub username: String,
+    pub username: Option<String>,
     pub role: Option<String>,
     pub duration_seconds: Option<i32>,
     #[serde(serialize_with = "toml::ser::tables_last")]
-    pub profiles: HashMap<String, profile::Spec>,
+    pub profiles: HashMap<String, profile::Config>,
 }
 
 impl Config {
@@ -65,10 +68,10 @@ impl Config {
 
         let profile_futures = selected_links
             .into_iter()
-            .map(|link| profile::Spec::from_app_link(client, link, default_role.clone()));
+            .map(|link| profile::Config::from_app_link(client, link, default_role.clone()));
 
         Ok(Self {
-            username,
+            username: Some(username),
             duration_seconds: None,
             role: default_role.clone(),
             profiles: join_all(profile_futures)
@@ -79,6 +82,8 @@ impl Config {
     }
 }
 
+/// This is a canonical representation of the Organization,
+/// with Options resolved and defaults propagated.
 #[derive(Clone, Debug)]
 pub struct Organization {
     pub name: String,
@@ -97,6 +102,11 @@ impl TryFrom<&Path> for Organization {
             .map(|stem| stem.to_string_lossy().into_owned())
             .ok_or_else(|| anyhow!("Organization name not parseable from {:?}", path))?;
 
+        let username = match cfg.clone().username {
+            Some(username) => username,
+            None => prompt_username(&filename)?,
+        };
+
         let profiles = cfg
             .profiles
             .iter()
@@ -112,10 +122,21 @@ impl TryFrom<&Path> for Organization {
 
         Ok(Self {
             name: filename,
-            username: cfg.username,
+            username,
             profiles,
         })
     }
+}
+
+pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, Error> {
+    let mut input = Input::<String>::new();
+    input.with_prompt(&format!("Username for {}", organization));
+
+    if let Ok(system_user) = username::get_user_name() {
+        input.default(system_user);
+    }
+    
+    input.interact_text().map_err(Into::into)
 }
 
 impl Organization {
