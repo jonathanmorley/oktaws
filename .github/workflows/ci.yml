@@ -3,11 +3,10 @@ name: Continuous Integration
 env:
   RUST_LOG: info
   RUST_BACKTRACE: 1
+  BAZEL_STARTUP_FLAGS: --bazelrc=${{ github.workspace }}/.github/github.bazelrc
 
 on:
   pull_request:
-    branches: [master]
-  push:
     branches: [master]
 
 jobs:
@@ -15,118 +14,34 @@ jobs:
     name: Test
     strategy:
       matrix:
-        target:
-          # Rustc's Tier 1 platforms
-          # https://doc.rust-lang.org/nightly/rustc/platform-support.html#tier-1-with-host-tools
-          - aarch64-unknown-linux-gnu
-          # Windows gnu is not currently working
-          # - i686-pc-windows-gnu
-          - i686-pc-windows-msvc
-          - i686-unknown-linux-gnu
-          - x86_64-apple-darwin
-          # Windows gnu is not currently working
-          # - x86_64-pc-windows-gnu
-          - x86_64-pc-windows-msvc
-          - x86_64-unknown-linux-gnu
-          # Select tier 2 platforms
-          # https://doc.rust-lang.org/nightly/rustc/platform-support.html#tier-2-with-host-tools
-          - aarch64-apple-darwin
-          # Windows ARM is not currently working
-          # - aarch64-pc-windows-msvc
-          - aarch64-unknown-linux-musl
-          - x86_64-unknown-linux-musl
-        toolchain:
-          - stable
-        # Testability according to cross
-        # https://github.com/rust-embedded/cross#supported-targets
+        # Create a job for each target triple
         include:
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            testable: true
-          # - target: i686-pc-windows-gnu
-          #   os: windows-latest
-          #   testable: true
-          - target: i686-pc-windows-msvc
-            os: windows-latest
-            testable: true
-          - target: i686-unknown-linux-gnu
-            os: ubuntu-latest
-            testable: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            testable: true
-          # - target: x86_64-pc-windows-gnu
-          #   os: windows-latest
-          #   testable: true
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            testable: true
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            testable: true
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            testable: false
-          # - target: aarch64-pc-windows-msvc
-          #   os: windows-latest
-          #   testable: false
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            testable: true
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            testable: true
+          - os: macos-11
+            env:
+              TARGET: "aarch64-apple-darwin"
+          - os: ubuntu-20.04
+            env:
+              TARGET: "aarch64-unknown-linux-gnu"
+          - os: macos-11
+            env:
+              TARGET: "x86_64-apple-darwin"
+          - os: ubuntu-20.04
+            env:
+              TARGET: "x86_64-pc-windows-gnu"
+          - os: windows-2019
+            env:
+              TARGET: "x86_64-pc-windows-msvc"
+          - os: ubuntu-20.04
+            env:
+              TARGET: "x86_64-unknown-linux-gnu"
+          - os: ubuntu-20.04
+            env:
+              TARGET: "x86_64-unknown-linux-musl"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          target: ${{ matrix.target }}
-          profile: minimal
-          components: clippy
-      - name: Install Cross
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cross
-          use-tool-cache: true
-      - name: Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: clippy
-          args: +${{ matrix.toolchain }} --target ${{ matrix.target }} -- -D warnings
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          use-cross: true
-          args: +${{ matrix.toolchain }} --target ${{ matrix.target }}
+        runs: bazel build --bazelrc=.ci.bazelrc ...
       - name: Test
-        uses: actions-rs/cargo@v1
-        if: matrix.testable
-        with:
-          command: test
-          use-cross: true
-          args: +${{ matrix.toolchain }} --target ${{ matrix.target }}
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
-          profile: minimal
-          components: rustfmt
-      - name: Format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        runs: bazel test --bazelrc=.ci.bazelrc ...

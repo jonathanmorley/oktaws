@@ -1,6 +1,4 @@
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
-#![warn(clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
 
 use oktaws::aws::credentials::Store as CredentialsStore;
 use oktaws::config::oktaws_home;

@@ -1,6 +1,4 @@
 #![deny(clippy::all, clippy::pedantic, clippy::nursery)]
-#![warn(clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
 
 pub mod aws;
 pub mod config;

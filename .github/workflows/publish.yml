@@ -13,63 +13,24 @@ jobs:
     name: Publish to GitHub Releases
     strategy:
       matrix:
-        target:
-          # Rustc's Tier 1 platforms
-          # https://doc.rust-lang.org/nightly/rustc/platform-support.html#tier-1-with-host-tools
-          - aarch64-unknown-linux-gnu
-          # Windows gnu is not currently working
-          # - i686-pc-windows-gnu
-          - i686-pc-windows-msvc
-          - i686-unknown-linux-gnu
-          - x86_64-apple-darwin
-          # Windows gnu is not currently working
-          # - x86_64-pc-windows-gnu
-          - x86_64-pc-windows-msvc
-          - x86_64-unknown-linux-gnu
-          # Select tier 2 platforms
-          # https://doc.rust-lang.org/nightly/rustc/platform-support.html#tier-2-with-host-tools
-          - aarch64-apple-darwin
-          # Windows ARM is not currently working
-          # - aarch64-pc-windows-msvc
-          - aarch64-unknown-linux-musl
-          - x86_64-unknown-linux-musl
-        # Testability according to cross
-        # https://github.com/rust-embedded/cross#supported-targets
-        include:
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-          # - target: i686-pc-windows-gnu
-          #   os: windows-latest
-          - target: i686-pc-windows-msvc
-            os: windows-latest
-          - target: i686-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          # - target: x86_64-pc-windows-gnu
-          #   os: windows-latest
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          # - target: aarch64-pc-windows-msvc
-          #   os: windows-latest
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+        os:
+          - windows-latest  # windows
+          - macos-latest    # macos
+          - ubuntu-latest   # linux
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Build
+        runs: bazel build --bazelrc=.ci.bazelrc ...
+      - name: Test
+        runs: bazel test --bazelrc=.ci.bazelrc ...
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          profile: minimal
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bazel-out//release/mything
+          asset_name: mything
       - name: Archive Release
         uses: taiki-e/upload-rust-binary-action@v1
         with:
