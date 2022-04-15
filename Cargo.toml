@@ -16,7 +16,7 @@ categories = [
 anyhow = "1"
 async-recursion = "1"
 aws-arn = "0.2"
-aws-sdk-sts = "0.9"
+aws-sdk-sts = "0.10"
 aws-sdk-iam = "0.9"
 aws-types = { version = "0.9", features = ["hardcoded-credentials"] }
 backoff = { version = "0.4", features = ["tokio"] }
