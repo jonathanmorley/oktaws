@@ -16,9 +16,9 @@ categories = [
 anyhow = "1"
 async-recursion = "1"
 aws-arn = "0.2"
-aws-sdk-sts = "0.9"
-aws-sdk-iam = "0.9"
-aws-types = { version = "0.9", features = ["hardcoded-credentials"] }
+aws-sdk-sts = "0.10"
+aws-sdk-iam = "0.10"
+aws-types = { version = "0.10", features = ["hardcoded-credentials"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
 clap = { version = "3", features = ["derive"] }
@@ -47,8 +47,8 @@ url = { version = "2", features = ["serde"] }
 username = "0.2"
 
 [dev-dependencies]
-aws-smithy-client = { version = "0.39", features = ["test-util"] }
-aws-smithy-http = "0.39"
+aws-smithy-client = { version = "0.40", features = ["test-util"] }
+aws-smithy-http = "0.40"
 http = "0.2"
 serial_test = "0.6"
 tempfile = "3"
