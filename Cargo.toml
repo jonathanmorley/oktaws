@@ -48,7 +48,7 @@ username = "0.2"
 
 [dev-dependencies]
 aws-smithy-client = { version = "0.39", features = ["test-util"] }
-aws-smithy-http = "0.39"
+aws-smithy-http = "0.40"
 http = "0.2"
 serial_test = "0.6"
 tempfile = "3"
