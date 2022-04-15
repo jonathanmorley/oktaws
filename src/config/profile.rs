@@ -121,16 +121,22 @@ impl Profile {
             name,
             application_name: match profile_config {
                 Config::Name(name) => name,
-                Config::Detailed { application, .. } => application
-            }.clone(),
+                Config::Detailed { application, .. } => application,
+            }
+            .clone(),
             role: match profile_config {
                 Config::Name(_) => None,
-                Config::Detailed { role, .. } => role.clone()
-            }.or(default_role).ok_or_else(|| anyhow!("No role found"))?,
+                Config::Detailed { role, .. } => role.clone(),
+            }
+            .or(default_role)
+            .ok_or_else(|| anyhow!("No role found"))?,
             duration_seconds: match profile_config {
                 Config::Name(_) => None,
-                Config::Detailed { duration_seconds, .. } => duration_seconds.clone()
-            }.or(default_duration_seconds)
+                Config::Detailed {
+                    duration_seconds, ..
+                } => duration_seconds.clone(),
+            }
+            .or(default_duration_seconds),
         })
     }
 
