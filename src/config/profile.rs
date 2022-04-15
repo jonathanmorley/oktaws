@@ -11,14 +11,20 @@ use aws_types::Credentials;
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, trace, warn};
 
+/// This is an intentionally 'loose' struct,
+/// representing the potential various ways of providing a profile.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum Spec {
+pub enum Config {
     Name(String),
-    Detailed(FullSpec),
+    Detailed {
+        application: String,
+        role: Option<String>,
+        duration_seconds: Option<i32>,
+    },
 }
 
-impl Spec {
+impl Config {
     #[instrument(skip(client, link, default_role), fields(organization=%client.base_url, application=%link.label))]
     pub async fn from_app_link(
         client: &OktaClient,
@@ -78,37 +84,19 @@ impl Spec {
         let profile_config = if Some(role_name.clone()) == default_role {
             Self::Name(link.label)
         } else {
-            Self::Detailed(FullSpec {
+            Self::Detailed {
                 application: link.label,
                 role: Some(role_name),
                 duration_seconds: None,
-            })
+            }
         };
 
         Ok((account_name, profile_config))
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FullSpec {
-    pub application: String,
-    pub role: Option<String>,
-    pub duration_seconds: Option<i32>,
-}
-
-impl From<Spec> for FullSpec {
-    fn from(profile_config: Spec) -> Self {
-        match profile_config {
-            Spec::Detailed(config) => config,
-            Spec::Name(application) => Self {
-                application,
-                role: None,
-                duration_seconds: None,
-            },
-        }
-    }
-}
-
+/// This is a canonical representation of the Profile,
+/// with required values resolved and defaults propagated.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Profile {
     pub name: String,
@@ -124,23 +112,25 @@ impl Profile {
     ///
     /// Will return `Err` if a role for the profile cannot be found
     pub fn try_from_spec(
-        profile_config: &Spec,
+        profile_config: &Config,
         name: String,
         default_role: Option<String>,
         default_duration_seconds: Option<i32>,
     ) -> Result<Self> {
-        let full_profile_config: FullSpec = profile_config.clone().into();
-
         Ok(Self {
             name,
-            application_name: full_profile_config.application,
-            role: full_profile_config
-                .role
-                .or(default_role)
-                .ok_or_else(|| anyhow!("No role found"))?,
-            duration_seconds: full_profile_config
-                .duration_seconds
-                .or(default_duration_seconds),
+            application_name: match profile_config {
+                Config::Name(name) => name,
+                Config::Detailed { application, .. } => application
+            }.clone(),
+            role: match profile_config {
+                Config::Name(_) => None,
+                Config::Detailed { role, .. } => role.clone()
+            }.or(default_role).ok_or_else(|| anyhow!("No role found"))?,
+            duration_seconds: match profile_config {
+                Config::Name(_) => None,
+                Config::Detailed { duration_seconds, .. } => duration_seconds.clone()
+            }.or(default_duration_seconds)
         })
     }
 
