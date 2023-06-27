@@ -1,8 +1,9 @@
 use crate::{
-    aws::{get_account_alias, role::SamlRole, sts_client},
+    aws::{get_account_alias, sts_client},
+    aws::sso::SsoClient,
     okta::applications::AppLink,
     okta::client::Client as OktaClient,
-    saml::extract_account_name,
+    aws::saml::extract_account_name,
     select,
 };
 
@@ -19,6 +20,7 @@ pub enum Config {
     Name(String),
     Detailed {
         application: String,
+        account: Option<String>,
         role: Option<String>,
         duration_seconds: Option<i32>,
     },
@@ -32,16 +34,16 @@ impl Config {
         default_role: Option<String>,
     ) -> Result<(String, Self)> {
         let response = client.get_saml_response(link.link_url).await?;
-        let aws_response = match response.post_to_aws().await {
+        let aws_response = match response.clone().post().await {
             Err(e) => {
                 warn!("Caught error trying to login to AWS: {}, trying again", e);
-                response.post_to_aws().await
+                response.clone().post().await
             }
             ok => ok,
         }?;
         let aws_response_text = aws_response.text().await?;
 
-        let roles = response.clone().roles;
+        let roles = response.clone().roles()?;
 
         let saml_role = match roles.len() {
             0 => Err(anyhow!("No role found")),
@@ -70,7 +72,7 @@ impl Config {
                 }
             }
         }?;
-
+        
         let role_name = saml_role.role_name()?.to_string();
 
         let account_name = get_account_alias(saml_role, &response)
@@ -86,6 +88,7 @@ impl Config {
         } else {
             Self::Detailed {
                 application: link.label,
+                account: None,
                 role: Some(role_name),
                 duration_seconds: None,
             }
@@ -101,6 +104,7 @@ impl Config {
 pub struct Profile {
     pub name: String,
     pub application_name: String,
+    pub account: Option<String>,
     pub role: String,
     pub duration_seconds: Option<i32>,
 }
@@ -124,6 +128,10 @@ impl Profile {
                 Config::Detailed { application, .. } => application,
             }
             .clone(),
+            account: match profile_config {
+                Config::Name(_) => None,
+                Config::Detailed { account, .. } => account.to_owned(),
+            },
             role: match profile_config {
                 Config::Name(_) => None,
                 Config::Detailed { role, .. } => role.clone(),
@@ -142,16 +150,35 @@ impl Profile {
 
     #[instrument(skip(self, client), fields(organization=%client.base_url, profile=%self.name))]
     pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials> {
-        let app_link = client
+        let saml_app_link = client
             .app_links(None)
             .await?
             .into_iter()
             .find(|app_link| {
                 app_link.app_name == "amazon_aws" && app_link.label == self.application_name
-            })
-            .ok_or_else(|| anyhow!("Could not find Okta application for profile {}", self.name))?;
+            });
 
-        let saml = client
+        if let Some(app_link) = saml_app_link {
+            return self.into_saml_credentials(client, app_link).await;
+        };
+
+        let sso_app_link = client
+        .app_links(None)
+        .await?
+        .into_iter()
+        .find(|app_link| {
+            app_link.app_name == "amazon_aws_sso" && app_link.label == self.application_name
+        });
+
+        if let Some(app_link) = sso_app_link {
+            return self.into_sso_credentials(client, app_link).await;
+        }
+
+        Err(anyhow!("Could not find Okta application for profile {}", self.name))
+    }
+
+    async fn into_saml_credentials(self, client: &OktaClient, app_link: AppLink) -> Result<Credentials> {
+        let response = client
             .get_saml_response(app_link.link_url)
             .await
             .map_err(|e| {
@@ -161,10 +188,8 @@ impl Profile {
                     e
                 )
             })?;
-
-        let roles = saml.roles;
-
-        let saml_role: SamlRole = roles
+    
+        let saml_role = response.roles()?
             .into_iter()
             .find(|r| r.role_name().map(|r| r == self.role).unwrap_or(false))
             .ok_or_else(|| {
@@ -178,10 +203,51 @@ impl Profile {
         trace!("Found role: {} for profile {}", saml_role.role, &self.name);
 
         let credentials = saml_role
-            .assume(sts_client(), saml.raw, self.duration_seconds)
+            .assume(sts_client(), response.saml, self.duration_seconds)
             .await
             .map_err(|e| anyhow!("Error assuming role for profile {} ({})", self.name, e))?;
 
+        trace!("Credentials: {:?}", credentials);
+
+        Ok(credentials)
+    }
+
+    async fn into_sso_credentials(self, client: &OktaClient, app_link: AppLink) -> Result<Credentials> {
+        let response = client
+            .get_saml_response(app_link.link_url)
+            .await
+            .map_err(|e| {
+                anyhow!(
+                    "Error getting SAML response for profile {} ({})",
+                    self.name,
+                    e
+                )
+            })?;
+
+        let response = response.post().await?;
+        let host = response.url().host().ok_or_else(|| anyhow!("No host found"))?;
+        let org_id = if let url::Host::Domain(domain) = host {
+            domain.split_once('.').map(|(org, _)| org).ok_or_else(|| anyhow!("No dots found in domain: {:?}", domain))
+        } else {
+            Err(anyhow!("Host: {:?} is not a domain", host))
+        }?;
+        let auth_code = response.url().query_pairs().find(|(k, _)| k.eq("workflowResultHandle")).ok_or_else(|| anyhow!("No token found"))?.1;
+
+        let client = SsoClient::new(org_id, &auth_code).await?;
+
+        let app_instance = if let Some(account) = self.account {
+            client.app_instances().await?.into_iter().find(|app| app.account_name() == Some(&account)).ok_or_else(|| anyhow!("Could not find account: {account}"))
+        } else {
+            Err(anyhow!("AWS SSO Applications must specify `account`"))
+        }?;
+        trace!("Found application: {:?}", app_instance);
+
+        let account_id = app_instance.account_id().ok_or_else(|| anyhow!("No account ID found"))?;
+
+        let profile = client.profiles(&app_instance.id).await?.into_iter().find(|profile| profile.name == self.role).ok_or_else(|| anyhow!("Cound not find profile: {}", self.role))?;
+        trace!("Found profile: {:?}", profile);
+
+        let credentials = client.credentials(account_id, &profile.name).await?;
         trace!("Credentials: {:?}", credentials);
 
         Ok(credentials)

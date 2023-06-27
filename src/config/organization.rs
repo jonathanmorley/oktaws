@@ -174,7 +174,7 @@ impl Organization {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Pattern(glob::Pattern);
 
 impl FromStr for Pattern {
@@ -279,6 +279,7 @@ baz = {{ application = "baz", role = "baz_role" }}
         assert!(organization.profiles.contains(&Profile {
             name: String::from("foo"),
             application_name: String::from("foo"),
+            account: None,
             role: String::from("my_role"),
             duration_seconds: Some(300)
         }));
@@ -286,6 +287,7 @@ baz = {{ application = "baz", role = "baz_role" }}
         assert!(organization.profiles.contains(&Profile {
             name: String::from("bar"),
             application_name: String::from("bar"),
+            account: None,
             role: String::from("my_role"),
             duration_seconds: Some(600)
         }));
@@ -293,6 +295,7 @@ baz = {{ application = "baz", role = "baz_role" }}
         assert!(organization.profiles.contains(&Profile {
             name: String::from("baz"),
             application_name: String::from("baz"),
+            account: None,
             role: String::from("baz_role"),
             duration_seconds: Some(300)
         }));

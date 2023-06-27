@@ -63,11 +63,11 @@ async fn main() -> Result<()> {
 #[derive(Parser, Debug)]
 struct RefreshArgs {
     /// Okta organizations to use
-    #[clap(short, long, default_value = "*", parse(try_from_str))]
+    #[clap(short, long, default_value = "*")]
     pub organizations: OrganizationPattern,
 
     /// Profiles to update
-    #[clap(default_value = "*", parse(try_from_str))]
+    #[clap(default_value = "*")]
     pub profiles: Pattern,
 
     /// Forces new credentials
