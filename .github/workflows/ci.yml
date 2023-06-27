@@ -35,8 +35,6 @@ jobs:
           # - aarch64-pc-windows-msvc
           - aarch64-unknown-linux-musl
           - x86_64-unknown-linux-musl
-        toolchain:
-          - stable
         # Testability according to cross
         # https://github.com/rust-embedded/cross#supported-targets
         include:
@@ -83,7 +81,6 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.toolchain }}
           target: ${{ matrix.target }}
           profile: minimal
           components: clippy
@@ -97,20 +94,20 @@ jobs:
         with:
           use-cross: true
           command: clippy
-          args: +${{ matrix.toolchain }} --target ${{ matrix.target }} -- -D warnings
+          args: --target ${{ matrix.target }} -- -D warnings
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           use-cross: true
-          args: +${{ matrix.toolchain }} --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }}
       - name: Test
         uses: actions-rs/cargo@v1
         if: matrix.testable
         with:
           command: test
           use-cross: true
-          args: +${{ matrix.toolchain }} --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }}
 
   fmt:
     name: Format
