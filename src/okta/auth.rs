@@ -3,10 +3,10 @@ use crate::okta::factors::{Factor, FactorResult};
 
 use anyhow::{anyhow, Result};
 use dialoguer;
-use serde::{Deserialize, Serialize};
-use tracing::{debug, info, trace};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+use tracing::{debug, info, trace};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -216,6 +216,5 @@ impl Client {
         } else {
             Ok(None)
         }
-        
     }
 }
