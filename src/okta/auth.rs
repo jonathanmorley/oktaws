@@ -5,6 +5,8 @@ use anyhow::{anyhow, Result};
 use dialoguer;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace};
+use kuchiki::traits::TendrilSink;
+use regex::Regex;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,5 +182,40 @@ impl Client {
             }
             _ => Err(anyhow!("Unknown error encountered during login")),
         }
+    }
+
+    /// Check whether the page is asking for extra verification.
+    /// This is a step during the okta login process that normally results from device tokens
+    /// not being sent with the request.
+    ///
+    /// # Errors
+    ///
+    /// This function should not error
+    pub fn extra_verification_token(text: String) -> Result<Option<String>> {
+        let doc = kuchiki::parse_html().one(text.clone());
+
+        let extra_verification = if let Ok(head) = doc.select_first("head") {
+            if let Ok(title) = head.as_node().select_first("title") {
+                let re = Regex::new(r#".* - Extra Verification$"#)?;
+                re.is_match(&title.text_contents())
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if extra_verification {
+            Regex::new(r#"var stateToken = '(.+)';"#)?
+                .captures(&text)
+                .map_or_else(
+                    || Err(anyhow!("No state token found")),
+                    |cap| Ok(cap[1].to_owned().replace("\\x2D", "-")),
+                )
+                .map(Option::Some)
+        } else {
+            Ok(None)
+        }
+        
     }
 }

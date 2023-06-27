@@ -3,7 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2021"
 name = "oktaws"
-version = "0.16.1"
+version = "0.17.0"
 license = "Apache-2.0"
 repository = "https://github.com/jonathanmorley/oktaws"
 keywords = ["okta", "aws", "saml"]
@@ -21,8 +21,8 @@ aws-sdk-iam = "0.10"
 aws-types = { version = "0.10", features = ["hardcoded-credentials"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.13"
-clap = { version = "3", features = ["derive"] }
-clap-verbosity-flag = "1"
+clap = { version = "4", features = ["derive"] }
+clap-verbosity-flag = "2"
 dialoguer = "0.10"
 dirs = "4"
 futures = "0.3"
@@ -42,9 +42,11 @@ toml = "0.5"
 tracing = "0.1"
 tracing-log = "0.1"
 tracing-subscriber = "0.3"
-tracing-tree = { git = "https://github.com/jonathanmorley/tracing-tree", branch = "remove-newlines" }
+tracing-tree = { git = "https://github.com/davidbarsky/tracing-tree", branch = "main" }
 url = { version = "2", features = ["serde"] }
 username = "0.2"
+lazy_static = "1.4.0"
+serde_json = "1.0.99"
 
 [dev-dependencies]
 aws-smithy-client = { version = "0.40", features = ["test-util"] }

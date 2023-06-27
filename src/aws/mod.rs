@@ -1,8 +1,10 @@
 pub mod credentials;
 pub mod role;
+pub mod saml;
+pub mod sso;
 
 use crate::aws::role::SamlRole;
-use crate::saml::Response;
+use crate::aws::saml::Response;
 
 use anyhow::{anyhow, Result};
 use aws_sdk_iam::{Client as IamClient, Config as IamConfig};
@@ -17,7 +19,7 @@ use aws_sdk_sts::{Client as StsClient, Config as StsConfig, Region as StsRegion}
 /// or if there are an unexpected number of aliases returned.
 pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<String> {
     let credentials = role
-        .assume(sts_client(), response.raw.clone(), None)
+        .assume(sts_client(), response.saml.clone(), None)
         .await
         .map_err(|e| anyhow!("Error assuming role ({})", e))?;
 

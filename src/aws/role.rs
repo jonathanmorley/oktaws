@@ -83,9 +83,8 @@ impl SamlRole {
 mod tests {
     use super::*;
 
-    use crate::saml::Response;
+    use crate::aws::saml::Response;
 
-    use std::convert::TryFrom;
     use std::fs::File;
     use std::io::Read;
 
@@ -120,7 +119,7 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response: Response = Response::try_from(saml_base64).unwrap();
+        let response: Response = Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
 
         let expected_roles = vec![
             SamlRole {
@@ -137,7 +136,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(response.roles, expected_roles);
+        assert_eq!(response.roles().unwrap(), expected_roles);
     }
 
     #[test]

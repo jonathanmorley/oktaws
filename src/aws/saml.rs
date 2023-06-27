@@ -1,81 +1,81 @@
 use crate::aws::role::SamlRole;
 
-use std::convert::TryFrom;
+use std::str::FromStr;
 
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, Error, Result};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
-use samuel::response::Response as SamlResponse;
 use tracing::error;
+use url::Url;
 
 #[derive(Clone, Debug)]
 pub struct Response {
-    pub raw: String,
-    pub roles: Vec<SamlRole>,
+    pub url: Url,
+    pub saml: String,
+    pub relay_state: String
 }
 
-impl TryFrom<String> for Response {
-    type Error = Error;
+impl Response {
+    pub fn new(url: String, saml: String, relay_state: Option<String>) -> Result<Self> {
+        Ok(Self {
+            url: Url::from_str(&url)?,
+            saml,
+            relay_state: relay_state.unwrap_or_default()
+        })
+    }
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        let decoded_saml = String::from_utf8(base64::decode(&s)?)?;
-
-        //trace!("Decoded SAML: {}", decoded_saml);
-
-        let response: SamlResponse = decoded_saml
+    pub fn saml(&self) -> Result<samuel::response::Response> {
+        String::from_utf8(base64::decode(&self.saml)?)?
             .parse()
-            .map_err(|_| anyhow!("Error parsing SAML"))?;
+            .map_err(|_| anyhow!("Error parsing SAML"))
+    }
 
-        let assertions = match response.assertions {
+    pub fn roles(&self) -> Result<Vec<SamlRole>> {
+        let assertions = match self.saml()?.assertions {
             Assertions::Plaintexts(assertions) => Ok(assertions),
             Assertions::Encrypteds(_) => {
                 Err(anyhow!("Encrypted assertions are not currently supported"))
             }
-            Assertions::None => Err(anyhow!("No roles found")),
+            Assertions::None => Ok(vec![]),
         }?;
 
         let role_attribute = assertions
             .into_iter()
             .flat_map(|assertion| assertion.attribute_statement)
             .flat_map(|attribute| match attribute {
-                AttributeStatement::PlaintextAttributes(attributes) => attributes,
+                AttributeStatement::PlaintextAttributes(attributes) => Ok(attributes),
                 AttributeStatement::EncryptedAttributes(_) => {
-                    error!("Encrypted assertions are not currently supported");
-                    vec![]
+                    Err(error!("Encrypted assertions are not currently supported"))
                 }
-                AttributeStatement::None => vec![],
+                AttributeStatement::None => Ok(vec![]),
             })
+            .flat_map(|x| x)
             .find(|attribute| attribute.name == "https://aws.amazon.com/SAML/Attributes/Role");
 
         if let Some(role_attribute) = role_attribute {
-            Ok(Self {
-                raw: s,
-                roles: role_attribute
-                    .values
-                    .into_iter()
-                    .map(|arn| arn.parse())
-                    .collect::<Result<Vec<SamlRole>, Error>>()?,
-            })
+            role_attribute
+                .values
+                .into_iter()
+                .map(|arn| arn.parse())
+                .collect::<Result<Vec<SamlRole>, Error>>()
         } else {
-            Err(anyhow!("No Role Attributes found"))
+            Ok(vec![])
         }
     }
-}
 
-impl Response {
     /// Post the SAML document to AWS, imitating the browser-based login flow
     ///
     /// # Errors
     ///
     /// Will return `Err` if there are any errors encountered while sending the request
-    pub async fn post_to_aws(&self) -> Result<reqwest::Response> {
+    pub async fn post(self) -> Result<reqwest::Response> {
         reqwest::Client::new()
-            .post("https://signin.aws.amazon.com/saml")
-            .form(&[("SAMLResponse", &self.raw), ("RelayState", &String::new())])
+            .post(self.url)
+            .form(&[("SAMLResponse", self.saml), ("RelayState", self.relay_state)])
             .send()
             .await
-            .with_context(|| anyhow!("Roles: {:?}", self.roles))
+            .map_err(Into::into)
     }
 }
 
@@ -160,10 +160,11 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response: Error = Response::try_from(saml_base64).unwrap_err();
+        let response = Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
+        let roles: Error = response.roles().unwrap_err();
 
         assert_eq!(
-            response.to_string(),
+            roles.to_string(),
             "Not enough elements in arn:aws:iam::123456789012:saml-provider/okta-idp"
         );
     }

@@ -5,7 +5,6 @@
 pub mod aws;
 pub mod config;
 pub mod okta;
-pub mod saml;
 
 use anyhow::{anyhow, Result};
 

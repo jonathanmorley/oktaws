@@ -34,9 +34,7 @@ impl Client {
     ///
     /// Will return `Err` if there are any errors while fetching the roles.
     pub async fn roles(&self, link: AppLink) -> Result<Vec<SamlRole>> {
-        self.get_saml_response(link.link_url)
-            .await
-            .map(|response| response.roles)
+        self.get_saml_response(link.link_url).await?.roles()
     }
 
     /// Given a list of `AppLink`s, visit each of them to get the AWS roles that can be assumed
