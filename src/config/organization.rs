@@ -135,7 +135,7 @@ impl TryFrom<&Path> for Organization {
 /// Will return `Err` if there are any IO errors during the prompt
 pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, io::Error> {
     let mut input = Input::<String>::new();
-    input.with_prompt(&format!("Username for {}", organization));
+    input.with_prompt(&format!("Username for {organization}"));
 
     if let Ok(system_user) = username::get_user_name() {
         input.default(system_user);

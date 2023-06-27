@@ -6,9 +6,9 @@ use std::time::Duration;
 use std::time::SystemTime;
 use tracing::{debug, trace};
 
-const BASE_URL: &'static str = "https://portal.sso.us-east-1.amazonaws.com";
+const BASE_URL: &str = "https://portal.sso.us-east-1.amazonaws.com";
 
-pub struct SsoClient {
+pub struct Client {
     token: String,
 }
 
@@ -41,7 +41,11 @@ pub struct Profile {
     pub relay_state: Option<String>,
 }
 
-impl SsoClient {
+impl Client {
+    /// # Errors
+    /// 
+    /// The function will error for network issues, or if the response is not parseable as expected
+    ///
     pub async fn new(org_id: &str, auth_code: &str) -> Result<Self> {
         #[derive(Deserialize)]
         struct SsoTokenResponse {
@@ -62,7 +66,11 @@ impl SsoClient {
 
         Ok(Self { token })
     }
-
+  
+    /// # Errors
+    /// 
+    /// The function will error for network issues, or if the response is not parseable as expected
+    ///
     pub async fn app_instances(&self) -> Result<Vec<AppInstance>> {
         let response = reqwest::Client::new()
             .get(format!("{BASE_URL}/instance/appinstances"))
@@ -78,6 +86,10 @@ impl SsoClient {
         Ok(result)
     }
 
+    /// # Errors
+    /// 
+    /// The function will error for network issues, or if the response is not parseable as expected
+    ///
     pub async fn profiles(&self, app_instance_id: &str) -> Result<Vec<Profile>> {
         let response = reqwest::Client::new()
             .get(format!(
@@ -95,6 +107,10 @@ impl SsoClient {
         Ok(result)
     }
 
+    /// # Errors
+    /// 
+    /// The function will error for network issues, or if the response is not parseable as expected
+    ///
     pub async fn credentials(
         &self,
         account_id: &str,
@@ -142,6 +158,7 @@ impl SsoClient {
 }
 
 impl AppInstance {
+    #[must_use]
     pub fn account_name(&self) -> Option<&str> {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"\((.+)\)").unwrap();
@@ -152,6 +169,7 @@ impl AppInstance {
             .map(|mat| mat.as_str())
     }
 
+    #[must_use]
     pub fn account_id(&self) -> Option<&str> {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"^(\d+)").unwrap();

@@ -16,7 +16,7 @@ impl Client {
     pub async fn get_saml_response(&self, app_url: Url) -> Result<SamlResponse> {
         let response = self.get_response(app_url.clone()).await?.text().await?;
 
-        if let Some(token) = Client::extra_verification_token(response.clone())? {
+        if let Some(token) = Self::extra_verification_token(&response)? {
             debug!("No SAML found for app {:?}, will re-login", &app_url);
 
             self.get_session_token(&LoginRequest::from_state_token(token))
@@ -63,7 +63,7 @@ pub fn extract_saml_response(text: &str) -> Result<SamlResponse> {
         .ok()
         .and_then(|node| node.attributes.borrow().get("value").map(ToOwned::to_owned));
 
-    SamlResponse::new(url, saml, relay_state)
+    SamlResponse::new(&url, saml, relay_state)
 }
 
 #[derive(thiserror::Error, Debug)]

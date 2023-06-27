@@ -1,6 +1,6 @@
 use crate::{
     aws::saml::extract_account_name,
-    aws::sso::SsoClient,
+    aws::sso::Client as SsoClient,
     aws::{get_account_alias, sts_client},
     okta::applications::AppLink,
     okta::client::Client as OktaClient,
@@ -100,7 +100,7 @@ impl Config {
 
 /// This is a canonical representation of the Profile,
 /// with required values resolved and defaults propagated.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct Profile {
     pub name: String,
     pub application_name: String,
@@ -130,7 +130,7 @@ impl Profile {
             .clone(),
             account: match profile_config {
                 Config::Name(_) => None,
-                Config::Detailed { account, .. } => account.to_owned(),
+                Config::Detailed { account, .. } => account.clone(),
             },
             role: match profile_config {
                 Config::Name(_) => None,

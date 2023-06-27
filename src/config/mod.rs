@@ -13,10 +13,10 @@ use anyhow::{anyhow, Result};
 /// Will return `Err` if there are no `OKTAWS_HOME` or `HOME`
 /// environment variables set.
 pub fn oktaws_home() -> Result<PathBuf> {
-    match env_var("OKTAWS_HOME") {
-        Ok(path) => Ok(PathBuf::from(path)),
-        Err(_) => default_profile_location(),
-    }
+    env_var("OKTAWS_HOME").map_or_else(
+        |_| default_profile_location(),
+        |path| Ok(PathBuf::from(path))
+    )
 }
 
 /// Return the default location for the Oktaws config directory.
@@ -25,8 +25,7 @@ pub fn oktaws_home() -> Result<PathBuf> {
 ///
 /// Will return `Err` if there is no `HOME` environment variable set.
 fn default_profile_location() -> Result<PathBuf> {
-    match dirs::home_dir() {
-        Some(home_dir) => Ok(home_dir.join(".oktaws")),
-        None => Err(anyhow!("The environment variable HOME must be set.")),
-    }
+    dirs::home_dir().map_or_else(
+        || Err(anyhow!("The environment variable HOME must be set.")),
+        |home_dir| Ok(home_dir.join(".oktaws")))
 }

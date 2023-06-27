@@ -65,7 +65,7 @@ impl Client {
     /// Will return `Err` if a URL cannot be constructed for the organization,
     /// or if there are underlying HTTP client creation issues.
     pub async fn new(organization: String, username: String, force_prompt: bool) -> Result<Self> {
-        let mut base_url = Url::parse(&format!("https://{}.okta.com/", organization))?;
+        let mut base_url = Url::parse(&format!("https://{organization}.okta.com/"))?;
         base_url
             .set_username(&username)
             .map_err(|_| anyhow!("Cannot set username for URL"))?;
@@ -84,7 +84,7 @@ impl Client {
         // Visit the homepage to get a DeviceToken (DT) cookie (used for persisting MFA information).
         client.get_response(base_url).await?;
 
-        let service = format!("oktaws::okta::{}", organization);
+        let service = format!("oktaws::okta::{organization}");
         let keyring = keyring::Entry::new(&service, &username);
 
         // get password
@@ -126,7 +126,7 @@ impl Client {
 
     pub fn set_session_id(&mut self, session_id: &str) {
         self.cookies
-            .add_cookie_str(&format!("sid={}", session_id), &self.base_url);
+            .add_cookie_str(&format!("sid={session_id}"), &self.base_url);
     }
 
     /// Given an absolute URL (not just a path), perform a GET request against it
@@ -258,10 +258,9 @@ impl Client {
         if force_prompt {
             self.prompt_password().map_err(Into::into)
         } else {
-            match Self::get_cached_password(keyring) {
-                Ok(password) => Ok(password),
-                Err(_) => self.prompt_password().map_err(Into::into),
-            }
+            Self::get_cached_password(keyring).or_else(
+                |_| self.prompt_password().map_err(Into::into)
+            )
         }
     }
 

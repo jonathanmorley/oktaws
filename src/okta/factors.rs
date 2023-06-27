@@ -167,16 +167,16 @@ pub enum FactorVerificationRequest {
 impl fmt::Display for Factor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Factor::Push { .. } => write!(f, "Okta Verify Push"),
-            Factor::Sms { ref profile, .. } => write!(f, "Okta SMS to {}", profile.phone_number),
-            Factor::Call { ref profile, .. } => write!(f, "Okta Call to {}", profile.phone_number),
-            Factor::Token { .. } => write!(f, "Okta One-time Password"),
-            Factor::Totp { ref provider, .. } => {
-                write!(f, "Okta Time-based One-time Password (from {:?})", provider)
+            Self::Push { .. } => write!(f, "Okta Verify Push"),
+            Self::Sms { ref profile, .. } => write!(f, "Okta SMS to {}", profile.phone_number),
+            Self::Call { ref profile, .. } => write!(f, "Okta Call to {}", profile.phone_number),
+            Self::Token { .. } => write!(f, "Okta One-time Password"),
+            Self::Totp { ref provider, .. } => {
+                write!(f, "Okta Time-based One-time Password (from {provider:?})")
             }
-            Factor::Hotp { .. } => write!(f, "Okta Hardware One-time Password"),
-            Factor::Question { ref profile, .. } => write!(f, "Question: {}", profile.question),
-            Factor::Web { .. } => write!(f, "Okta Web"),
+            Self::Hotp { .. } => write!(f, "Okta Hardware One-time Password"),
+            Self::Question { ref profile, .. } => write!(f, "Question: {}", profile.question),
+            Self::Web { .. } => write!(f, "Okta Web"),
         }
     }
 }
