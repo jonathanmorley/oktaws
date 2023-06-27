@@ -13,7 +13,7 @@ use url::Url;
 pub struct Response {
     pub url: Url,
     pub saml: String,
-    pub relay_state: String
+    pub relay_state: String,
 }
 
 impl Response {
@@ -21,7 +21,7 @@ impl Response {
         Ok(Self {
             url: Url::from_str(&url)?,
             saml,
-            relay_state: relay_state.unwrap_or_default()
+            relay_state: relay_state.unwrap_or_default(),
         })
     }
 
@@ -72,7 +72,10 @@ impl Response {
     pub async fn post(self) -> Result<reqwest::Response> {
         reqwest::Client::new()
             .post(self.url)
-            .form(&[("SAMLResponse", self.saml), ("RelayState", self.relay_state)])
+            .form(&[
+                ("SAMLResponse", self.saml),
+                ("RelayState", self.relay_state),
+            ])
             .send()
             .await
             .map_err(Into::into)
@@ -160,7 +163,8 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response = Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
+        let response =
+            Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
         let roles: Error = response.roles().unwrap_err();
 
         assert_eq!(

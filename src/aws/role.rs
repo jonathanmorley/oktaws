@@ -119,7 +119,8 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response: Response = Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
+        let response: Response =
+            Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
 
         let expected_roles = vec![
             SamlRole {
