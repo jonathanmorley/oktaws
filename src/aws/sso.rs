@@ -43,7 +43,7 @@ pub struct Profile {
 
 impl Client {
     /// # Errors
-    /// 
+    ///
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn new(org_id: &str, auth_code: &str) -> Result<Self> {
@@ -66,9 +66,9 @@ impl Client {
 
         Ok(Self { token })
     }
-  
+
     /// # Errors
-    /// 
+    ///
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn app_instances(&self) -> Result<Vec<AppInstance>> {
@@ -87,7 +87,7 @@ impl Client {
     }
 
     /// # Errors
-    /// 
+    ///
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn profiles(&self, app_instance_id: &str) -> Result<Vec<Profile>> {
@@ -108,7 +108,7 @@ impl Client {
     }
 
     /// # Errors
-    /// 
+    ///
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn credentials(

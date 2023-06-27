@@ -15,7 +15,7 @@ use anyhow::{anyhow, Result};
 pub fn oktaws_home() -> Result<PathBuf> {
     env_var("OKTAWS_HOME").map_or_else(
         |_| default_profile_location(),
-        |path| Ok(PathBuf::from(path))
+        |path| Ok(PathBuf::from(path)),
     )
 }
 
@@ -27,5 +27,6 @@ pub fn oktaws_home() -> Result<PathBuf> {
 fn default_profile_location() -> Result<PathBuf> {
     dirs::home_dir().map_or_else(
         || Err(anyhow!("The environment variable HOME must be set.")),
-        |home_dir| Ok(home_dir.join(".oktaws")))
+        |home_dir| Ok(home_dir.join(".oktaws")),
+    )
 }

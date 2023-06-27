@@ -84,7 +84,7 @@ impl Store {
     fn default_location() -> Result<PathBuf> {
         dirs::home_dir().map_or_else(
             || Err(anyhow!("The environment variable HOME must be set.")),
-            |home_dir| Ok(home_dir.join(".aws").join("credentials"))
+            |home_dir| Ok(home_dir.join(".aws").join("credentials")),
         )
     }
 }
