@@ -133,16 +133,17 @@ impl TryFrom<InitArgs> for Init {
     type Error = Error;
 
     fn try_from(args: InitArgs) -> Result<Self, Self::Error> {
-        let organization = match args.organization {
-            Some(organization) => Ok(organization),
-            None => dialoguer::Input::new()
-                .with_prompt("Okta Organization Name")
-                .interact_text(),
-        }?;
+        let organization = args.organization.map_or_else(
+            || {
+                dialoguer::Input::new()
+                    .with_prompt("Okta Organization Name")
+                    .interact_text()
+            },
+            Ok,
+        )?;
 
-        let username = match args.username {
-            Some(username) => Ok(username),
-            None => {
+        let username = args.username.map_or_else(
+            || {
                 let mut input = dialoguer::Input::new();
                 input.with_prompt(format!("Username for {}", &organization));
 
@@ -151,8 +152,9 @@ impl TryFrom<InitArgs> for Init {
                 }
 
                 input.interact_text()
-            }
-        }?;
+            },
+            Ok,
+        )?;
 
         Ok(Self {
             organization,

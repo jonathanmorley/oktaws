@@ -258,9 +258,8 @@ impl Client {
         if force_prompt {
             self.prompt_password().map_err(Into::into)
         } else {
-            Self::get_cached_password(keyring).or_else(
-                |_| self.prompt_password().map_err(Into::into)
-            )
+            Self::get_cached_password(keyring)
+                .or_else(|_| self.prompt_password().map_err(Into::into))
         }
     }
 

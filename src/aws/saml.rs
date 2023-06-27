@@ -18,7 +18,7 @@ pub struct Response {
 
 impl Response {
     /// # Errors
-    /// 
+    ///
     /// The function will error if the `url` parameter is not a valid URL
     ///
     pub fn new(url: &str, saml: String, relay_state: Option<String>) -> Result<Self> {
@@ -30,7 +30,7 @@ impl Response {
     }
 
     /// # Errors
-    /// 
+    ///
     /// The function will error if the `SamlResponse` object is not valid SAML
     ///
     pub fn saml(&self) -> Result<samuel::response::Response> {
@@ -40,7 +40,7 @@ impl Response {
     }
 
     /// # Errors
-    /// 
+    ///
     /// The function will error if it finds encrypted assertions
     ///
     pub fn roles(&self) -> Result<Vec<SamlRole>> {
@@ -175,8 +175,7 @@ mod tests {
 
         let saml_base64 = encode(&saml_xml);
 
-        let response =
-            Response::new(String::from("https://example.com"), saml_base64, None).unwrap();
+        let response = Response::new("https://example.com", saml_base64, None).unwrap();
         let roles: Error = response.roles().unwrap_err();
 
         assert_eq!(
