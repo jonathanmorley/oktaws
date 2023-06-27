@@ -17,20 +17,32 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn new(url: String, saml: String, relay_state: Option<String>) -> Result<Self> {
+    /// # Errors
+    /// 
+    /// The function will error if the `url` parameter is not a valid URL
+    ///
+    pub fn new(url: &str, saml: String, relay_state: Option<String>) -> Result<Self> {
         Ok(Self {
-            url: Url::from_str(&url)?,
+            url: Url::from_str(url)?,
             saml,
             relay_state: relay_state.unwrap_or_default(),
         })
     }
 
+    /// # Errors
+    /// 
+    /// The function will error if the `SamlResponse` object is not valid SAML
+    ///
     pub fn saml(&self) -> Result<samuel::response::Response> {
         String::from_utf8(base64::decode(&self.saml)?)?
             .parse()
             .map_err(|_| anyhow!("Error parsing SAML"))
     }
 
+    /// # Errors
+    /// 
+    /// The function will error if it finds encrypted assertions
+    ///
     pub fn roles(&self) -> Result<Vec<SamlRole>> {
         let assertions = match self.saml()?.assertions {
             Assertions::Plaintexts(assertions) => Ok(assertions),
@@ -50,7 +62,7 @@ impl Response {
                 }
                 AttributeStatement::None => Ok(vec![]),
             })
-            .flat_map(|x| x)
+            .flatten()
             .find(|attribute| attribute.name == "https://aws.amazon.com/SAML/Attributes/Role");
 
         if let Some(role_attribute) = role_attribute {

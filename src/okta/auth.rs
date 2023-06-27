@@ -191,8 +191,8 @@ impl Client {
     /// # Errors
     ///
     /// This function should not error
-    pub fn extra_verification_token(text: String) -> Result<Option<String>> {
-        let doc = kuchiki::parse_html().one(text.clone());
+    pub fn extra_verification_token(text: &str) -> Result<Option<String>> {
+        let doc = kuchiki::parse_html().one(text.to_string());
 
         let extra_verification = if let Ok(head) = doc.select_first("head") {
             if let Ok(title) = head.as_node().select_first("title") {
@@ -207,7 +207,7 @@ impl Client {
 
         if extra_verification {
             Regex::new(r#"var stateToken = '(.+)';"#)?
-                .captures(&text)
+                .captures(text)
                 .map_or_else(
                     || Err(anyhow!("No state token found")),
                     |cap| Ok(cap[1].to_owned().replace("\\x2D", "-")),

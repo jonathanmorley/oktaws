@@ -37,8 +37,8 @@ pub enum SessionProperties {
 impl fmt::Display for SessionProperties {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SessionProperties::CookieToken => write!(f, "cookieToken"),
-            SessionProperties::CookieTokenUrl => write!(f, "cookieTokenUrl"),
+            Self::CookieToken => write!(f, "cookieToken"),
+            Self::CookieTokenUrl => write!(f, "cookieTokenUrl"),
         }
     }
 }

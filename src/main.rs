@@ -182,7 +182,7 @@ async fn init(options: Init) -> Result<()> {
     let oktaws_config_path = oktaws_home.join(format!("{}.toml", options.organization));
 
     let write_to_file = dialoguer::Confirm::new()
-        .with_prompt(format!("Write config to {:?}?", oktaws_config_path))
+        .with_prompt(format!("Write config to {oktaws_config_path:?}?"))
         .interact()?;
 
     if write_to_file {
