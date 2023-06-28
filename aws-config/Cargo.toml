@@ -1,0 +1,73 @@
+[package]
+name = "aws-config"
+version = "0.0.0-smithy-rs-head"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
+description = "AWS SDK config and credential provider implementations."
+edition = "2021"
+exclude = ["test-data/*", "integration-tests/*"]
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+
+[features]
+client-hyper = ["aws-smithy-client/client-hyper"]
+rustls = ["aws-smithy-client/rustls"]
+native-tls = ["aws-smithy-client/native-tls"]
+rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
+credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
+
+default = ["client-hyper", "rustls", "rt-tokio", "credentials-sso"]
+
+[dependencies]
+aws-credential-types = { version = "*" }
+aws-http = { version = "*" }
+aws-sdk-sts = { version = "*", default-features = false }
+aws-smithy-async = { version = "*" }
+aws-smithy-client = { version = "*", default-features = false }
+aws-smithy-http = { version = "*" }
+aws-smithy-http-tower = { version = "*" }
+aws-smithy-json = { version = "*" }
+aws-smithy-types = { version = "*" }
+aws-types = { version = "*" }
+hyper = { version = "0.14.25", default-features = false }
+time = { version = "0.3.4", features = ["parsing"] }
+tokio = { version = "1.13.1", features = ["sync"] }
+tracing = { version = "0.1" }
+
+# implementation detail of IMDS credentials provider
+fastrand = "1"
+
+bytes = "1.1.0"
+http = "0.2.4"
+tower = { version = "0.4.8" }
+
+# implementation detail of SSO credential caching
+aws-sdk-sso = { version = "*", default-features = false, optional = true }
+ring = { version = "0.16", optional = true }
+hex = { version = "0.4.3", optional = true }
+zeroize = { version = "1", optional = true }
+
+[dev-dependencies]
+futures-util = { version = "0.3.16", default-features = false }
+tracing-test = "0.2.1"
+tracing-subscriber = { version = "0.3.16", features = ["fmt", "json"] }
+
+tokio = { version = "1.23.1", features = ["full", "test-util"] }
+
+# used for fuzzing profile parsing
+arbitrary = "=1.1.3" # 1.1.4 requires Rust 1.63 to compile
+
+# used for test case deserialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+aws-credential-types = { version = "*", features = ["test-util"] }
+aws-smithy-client = { version = "*", features = ["test-util"] }
+
+# used for a usage example
+hyper-rustls = { version = "0.23.0", features = ["webpki-tokio", "http2", "http1"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

@@ -1,57 +1,6 @@
-[package]
-authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
-description = "Generates temporary AWS credentials with Okta."
-edition = "2021"
-name = "oktaws"
-version = "0.17.0"
-license = "Apache-2.0"
-repository = "https://github.com/jonathanmorley/oktaws"
-keywords = ["okta", "aws", "saml"]
-categories = [
-  "command-line-utilities",
-  "authentication"
+[workspace]
+
+members = [
+    "oktaws",
+    "aws-config"
 ]
-
-[dependencies]
-anyhow = "1"
-async-recursion = "1"
-aws-arn = "0.2"
-aws-sdk-sts = "0.10"
-aws-sdk-iam = "0.10"
-aws-types = { version = "0.10", features = ["hardcoded-credentials"] }
-backoff = { version = "0.4", features = ["tokio"] }
-base64 = "0.13"
-clap = { version = "4", features = ["derive"] }
-clap-verbosity-flag = "2"
-dialoguer = "0.10"
-dirs = "4"
-futures = "0.3"
-glob = "0.3"
-itertools = "0.10"
-keyring = "1"
-kuchiki = "0.8"
-path_abs = "0.5"
-regex = "1"
-reqwest = { version = "0.11", default_features = false, features = ["cookies", "json", "rustls-tls"] }
-rust-ini = "0.18.0"
-samuel = "0.1"
-serde = { version = "1", features = ["derive"] }
-thiserror = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-toml = "0.5"
-tracing = "0.1"
-tracing-log = "0.1"
-tracing-subscriber = "0.3"
-tracing-tree = { git = "https://github.com/davidbarsky/tracing-tree", branch = "main" }
-url = { version = "2", features = ["serde"] }
-username = "0.2"
-lazy_static = "1.4.0"
-serde_json = "1.0.99"
-
-[dev-dependencies]
-aws-smithy-client = { version = "0.40", features = ["test-util"] }
-aws-smithy-http = "0.40"
-http = "0.2"
-serial_test = "0.6"
-tempfile = "3"
-tokio-test = "0.4"
