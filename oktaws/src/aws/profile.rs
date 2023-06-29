@@ -39,6 +39,10 @@ impl Store {
         })
     }
 
+    /// # Errors
+    ///
+    /// Will return Err if the credentials provided are not STS.
+    /// Will return Err if the current credentials for the profile are not STS.
     pub fn upsert_credential(&mut self, profile_name: &str, creds: &Credentials) -> Result<()> {
         if let None = self.profiles.get_profile(profile_name) {
             self.profiles
@@ -49,6 +53,15 @@ impl Store {
             .profiles
             .get_profile_mut(profile_name)
             .ok_or_else(|| eyre!("Could not find profile: {profile_name}"))?;
+
+        if profile.get("aws_access_key_id").is_some()
+            && profile.get("aws_secret_access_key").is_some()
+            && profile.get("aws_session_token").is_none()
+        {
+            return Err(eyre!(
+                "The credentials for {profile_name} are not STS. Refusing to overwrite them"
+            ));
+        }
 
         profile.set("aws_access_key_id", creds.access_key_id());
         profile.set("aws_secret_access_key", creds.secret_access_key());
@@ -226,26 +239,26 @@ foo=bar"#
         let mut store =
             tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
 
-        store.upsert_credential(
-            "example",
-            &Credentials::new(
-                "NEW_ACCESS_KEY",
-                "NEW_SECRET_ACCESS_KEY",
-                Some("NEW_SESSION_TOKEN".to_string()),
-                None,
-                "oktaws",
-            ),
-        )?;
+        let err = store
+            .upsert_credential(
+                "example",
+                &Credentials::new(
+                    "NEW_ACCESS_KEY",
+                    "NEW_SECRET_ACCESS_KEY",
+                    Some("NEW_SESSION_TOKEN".to_string()),
+                    None,
+                    "oktaws",
+                ),
+            )
+            .unwrap_err();
 
-        let profile = store.profiles.get_profile("example").unwrap();
-
-        assert_eq!(profile.get("aws_access_key_id"), Some("NEW_ACCESS_KEY"));
         assert_eq!(
-            profile.get("aws_secret_access_key"),
-            Some("NEW_SECRET_ACCESS_KEY")
+            format!("{err:?}"),
+            "The credentials for example are not STS. Refusing to overwrite them
+
+Location:
+    oktaws/src/aws/profile.rs:61:24",
         );
-        assert_eq!(profile.get("aws_session_token"), Some("NEW_SESSION_TOKEN"));
-        assert_eq!(profile.get("foo"), Some("bar"));
 
         Ok(())
     }
@@ -275,7 +288,7 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    oktaws/src/aws/profile.rs:32:24",
+    oktaws/src/aws/profile.rs:34:24",
                 normalize(tempfile.path())
             )
         );
@@ -312,7 +325,7 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    oktaws/src/aws/profile.rs:32:24",
+    oktaws/src/aws/profile.rs:34:24",
                 normalize(tempfile.path())
             )
         );
