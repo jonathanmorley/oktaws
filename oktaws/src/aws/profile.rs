@@ -254,10 +254,13 @@ foo=bar"#
 
         assert_eq!(
             format!("{err:?}"),
-            format!("The credentials for example are not STS. Refusing to overwrite them
+            format!(
+                "The credentials for example are not STS. Refusing to overwrite them
 
 Location:
-    {}:61:24", normalize_path_separators("oktaws/src/aws/profile.rs")),
+    {}:61:24",
+                normalize_path_separators("oktaws/src/aws/profile.rs")
+            ),
         );
 
         Ok(())
@@ -289,7 +292,8 @@ Caused by:
 
 Location:
     {}:34:24",
-                normalize(tempfile.path()), normalize_path_separators("oktaws/src/aws/profile.rs")
+                normalize(tempfile.path()),
+                normalize_path_separators("oktaws/src/aws/profile.rs")
             )
         );
 
@@ -326,7 +330,8 @@ Caused by:
 
 Location:
     {}:34:24",
-                normalize(tempfile.path()), normalize_path_separators("oktaws/src/aws/profile.rs")
+                normalize(tempfile.path()),
+                normalize_path_separators("oktaws/src/aws/profile.rs")
             )
         );
 
