@@ -404,18 +404,7 @@ foo=bar"#
 
         #[cfg(target_os = "windows")]
         {
-            format!("{}", p);
             format!(r"\\?\{}", path.to_string_lossy())
-        }
-
-        #[cfg(target_arch = "x86_64")]
-        {
-            format!("{}", p);
-        }
-
-        #[cfg(target_arch = "aarch64")]
-        {
-            format!("{}", p);
         }
 
         #[cfg(not(target_os = "windows"))]
