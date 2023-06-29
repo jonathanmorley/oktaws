@@ -9,8 +9,8 @@ on:
     branches: [master]
 
 jobs:
-  test:
-    name: Test
+  verify:
+    name: Veridy
     strategy:
       matrix:
         include:
@@ -25,7 +25,7 @@ jobs:
             testable: true
           - target: aarch64-apple-darwin
             os: macos-latest
-            testable: false
+            testable: true
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
