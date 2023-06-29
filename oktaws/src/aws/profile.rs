@@ -259,7 +259,7 @@ foo=bar"#
 
 Location:
     {}:61:24",
-                normalize_path_separators("oktaws/src/aws/profile.rs")
+                PathBuf::from("oktaws/src/aws/profile.rs").display()
             ),
         );
 
@@ -292,8 +292,8 @@ Caused by:
 
 Location:
     {}:34:24",
-                normalize(tempfile.path()),
-                normalize_path_separators("oktaws/src/aws/profile.rs")
+                tempfile.path().display(),
+                PathBuf::from("oktaws/src/aws/profile.rs").display()
             )
         );
 
@@ -330,8 +330,8 @@ Caused by:
 
 Location:
     {}:34:24",
-                normalize(tempfile.path()),
-                normalize_path_separators("oktaws/src/aws/profile.rs")
+                tempfile.path().display(),
+                PathBuf::from("oktaws/src/aws/profile.rs").display()
             )
         );
 
@@ -398,35 +398,5 @@ foo=bar"#
         assert_eq!(lines.next(), None);
 
         Ok(())
-    }
-
-    /// For some reason, windows paths go through some canonicalization step
-    /// when used in errors.
-    ///
-    /// This is to emulate this behaviour during testing
-    fn normalize<P: AsRef<Path>>(p: P) -> String {
-        let path = p.as_ref();
-
-        #[cfg(target_os = "windows")]
-        {
-            format!(r"\\?\{}", path.to_string_lossy())
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            path.to_string_lossy().into_owned()
-        }
-    }
-
-    fn normalize_path_separators(s: &str) -> String {
-        #[cfg(target_os = "windows")]
-        {
-            s.replace('/', "\\")
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            s.to_owned()
-        }
     }
 }

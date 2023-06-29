@@ -6,6 +6,11 @@ This program authenticates with Okta, assumes a provided role, and pulls a tempo
 
 ## Installation
 
+Follow the instructions in the release for the version you want to install.
+You should also ensure that the install location (usually `~/.cargo/bin`) is in your PATH.
+
+### Versions older than 0.17.0
+
 Grab a binary for your OS from the [latest release](https://github.com/jonathanmorley/oktaws/releases/latest), and put it somewhere in your PATH. Linux, MacOS and Windows OSes are supported.
 
 ## Setup
