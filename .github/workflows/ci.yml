@@ -36,6 +36,14 @@ jobs:
           rustup update stable --no-self-update && rustup default stable
           # Install the target
           rustup target add ${{ matrix.target }}
+          # Install any components
+          rustup component add clippy
+      - name: Clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: clippy-${{ matrix.target }}
+          args: --target=${{ matrix.target }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
       - name: Build
         run: cargo build --target=${{ matrix.target }} --all-targets --all-features
       - name: Test
@@ -56,35 +64,3 @@ jobs:
           rustup component add rustfmt
       - name: Format
         run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Install Rust
-        run: |
-          # Install the host platform toolchain
-          rustup update stable --no-self-update && rustup default stable
-          # Install the target platform toolchain
-          rustup target add ${{ matrix.target }}
-          # Install any components
-          rustup component add clippy
-      - name: Clippy
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: clippy-${{ matrix.target }}
-          args: --target=${{ matrix.target }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
