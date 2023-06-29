@@ -158,27 +158,35 @@ impl ProfileSet {
         }
     }
 
-    /// Returns a string represenation of the profiles, with syntax based on `kind`.
+    /// Returns a string representation of the profiles, with syntax based on `kind`.
     pub fn to_string(&self, kind: ProfileFileKind) -> String {
         let mut str = String::new();
-        
+
         // Convert the maps to BTreeMaps so that the output is consistently ordered
 
         for (name, profile) in BTreeMap::from_iter(&self.profiles) {
             match (name.as_ref(), kind) {
-                (_, ProfileFileKind::Credentials) | (normalize::DEFAULT, ProfileFileKind::Config) => str.push_str(&format!("[{name}]\n")),
-                (_, ProfileFileKind::Config) => str.push_str(&format!("[{} {}]\n", normalize::PROFILE_PREFIX, name)),
+                (_, ProfileFileKind::Credentials)
+                | (normalize::DEFAULT, ProfileFileKind::Config) => {
+                    str.push_str(&format!("[{name}]\n"))
+                }
+                (_, ProfileFileKind::Config) => {
+                    str.push_str(&format!("[{} {}]\n", normalize::PROFILE_PREFIX, name))
+                }
             }
 
             for (key, Property { value, .. }) in BTreeMap::from_iter(&profile.properties) {
                 str.push_str(&format!("{key}={value}\n"));
             }
+
+            str.push('\n');
         }
 
-        str.push('\n');
+        str.pop();
 
         str
     }
+
 }
 
 /// An individual configuration profile

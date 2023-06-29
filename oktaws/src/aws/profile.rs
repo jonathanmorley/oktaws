@@ -309,8 +309,6 @@ foo=bar"#
 
         let mut store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
 
-        dbg!(&store);
-
         store.upsert_credential(
             "example_sts",
             &Credentials::new(
@@ -335,6 +333,7 @@ foo=bar"#
             Some("aws_secret_access_key=SECRET_ACCESS_KEY")
         );
         assert_eq!(lines.next(), Some("foo=bar"));
+        assert_eq!(lines.next(), Some(""));
         assert_eq!(lines.next(), Some("[example_sts]"));
         assert_eq!(lines.next(), Some("aws_access_key_id=NEW_ACCESS_KEY"));
         assert_eq!(
@@ -343,8 +342,6 @@ foo=bar"#
         );
         assert_eq!(lines.next(), Some("aws_session_token=NEW_SESSION_TOKEN"));
         assert_eq!(lines.next(), Some("bar=baz"));
-        assert_eq!(lines.next(), Some(""));
-        
         assert_eq!(lines.next(), None);
 
         Ok(())
