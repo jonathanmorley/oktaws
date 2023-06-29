@@ -32,6 +32,8 @@ jobs:
           rustup target add ${{ join(fromJson(matrix.targets), ' ') }}
           # Install any components
           rustup component add clippy
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
       - name: Clippy
         run: cargo clippy --target=${{ join(fromJson(matrix.targets), ' --target=') }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
       - name: Build
@@ -51,5 +53,7 @@ jobs:
           rustup update stable --no-self-update && rustup default stable
           # Install any components
           rustup component add rustfmt
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all -- --check
