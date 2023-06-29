@@ -404,6 +404,7 @@ foo=bar"#
 
         #[cfg(target_os = "windows")]
         {
+            format!("{}", p);
             format!(r"\\?\{}", path.to_string_lossy())
         }
 
