@@ -7,7 +7,8 @@ edition = "2021"
 exclude = ["test-data/*", "integration-tests/*"]
 license = "Apache-2.0"
 repository = "https://github.com/jonathanmorley/oktaws"
-
+keywords = []
+categories = []
 
 [features]
 client-hyper = ["aws-smithy-client/client-hyper"]
