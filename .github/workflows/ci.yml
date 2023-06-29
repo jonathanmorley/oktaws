@@ -41,28 +41,20 @@ jobs:
         run: rustup update 1.67.1 --no-self-update && rustup default 1.67.1
       - name: Install clippy
         run: rustup component add clippy
-      - name: Install Cross
-        uses: actions-rs/install@v0.1
-        with:
-          crate: cross
-          use-tool-cache: true
       - name: Clippy
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
           command: clippy
           args: --target ${{ matrix.target }} -- -D warnings
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          use-cross: true
           args: --target ${{ matrix.target }}
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          use-cross: true
           args: --target ${{ matrix.target }} --workspace --exclude=aws-config
 
   fmt:
