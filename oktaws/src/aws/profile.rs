@@ -254,10 +254,10 @@ foo=bar"#
 
         assert_eq!(
             format!("{err:?}"),
-            "The credentials for example are not STS. Refusing to overwrite them
+            format!("The credentials for example are not STS. Refusing to overwrite them
 
 Location:
-    oktaws/src/aws/profile.rs:61:24",
+    {}:61:24", normalize_path_separators("oktaws/src/aws/profile.rs")),
         );
 
         Ok(())
@@ -288,8 +288,8 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    oktaws/src/aws/profile.rs:34:24",
-                normalize(tempfile.path())
+    {}:34:24",
+                normalize(tempfile.path()), normalize_path_separators("oktaws/src/aws/profile.rs")
             )
         );
 
@@ -325,8 +325,8 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    oktaws/src/aws/profile.rs:34:24",
-                normalize(tempfile.path())
+    {}:34:24",
+                normalize(tempfile.path()), normalize_path_separators("oktaws/src/aws/profile.rs")
             )
         );
 
@@ -410,6 +410,18 @@ foo=bar"#
         #[cfg(not(target_os = "windows"))]
         {
             path.to_string_lossy().into_owned()
+        }
+    }
+
+    fn normalize_path_separators(s: &str) -> String {
+        #[cfg(target_os = "windows")]
+        {
+            s.replace("/", "\\")
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            s.to_owned()
         }
     }
 }
