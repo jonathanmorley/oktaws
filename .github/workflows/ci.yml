@@ -40,6 +40,8 @@ jobs:
           rustup component add clippy
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
       - name: Clippy
         run: cargo clippy --target=${{ matrix.target }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
       - name: Build
@@ -62,5 +64,7 @@ jobs:
           rustup component add rustfmt
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
       - name: Format
         run: cargo fmt --all -- --check
