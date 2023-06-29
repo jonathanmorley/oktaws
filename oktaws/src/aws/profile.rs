@@ -1,21 +1,21 @@
+use aws_config::profile;
+use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
+use aws_config::profile::{Profile, ProfileSet};
+use aws_credential_types::Credentials;
+use aws_types::os_shim_internal::{Env, Fs};
+use dirs;
+use eyre::{eyre, Result};
+use path_abs::PathFile;
+use std::collections::HashMap;
 use std::env::var as env_var;
 use std::fs;
 use std::path::{Path, PathBuf};
-use eyre::{eyre, Result};
-use aws_credential_types::Credentials;
-use dirs;
-use path_abs::PathFile;
 use tracing::instrument;
-use aws_types::os_shim_internal::{Env, Fs};
-use aws_config::profile;
-use aws_config::profile::{ProfileSet, Profile};
-use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Store {
     path: PathFile,
-    profiles: ProfileSet
+    profiles: ProfileSet,
 }
 
 impl Store {
@@ -27,26 +27,37 @@ impl Store {
             (None, Err(_)) => Self::default_location()?,
         };
 
-        let profile_files = ProfileFiles::builder().with_file(ProfileFileKind::Credentials, &path).build();
+        let profile_files = ProfileFiles::builder()
+            .with_file(ProfileFileKind::Credentials, &path)
+            .build();
 
         let profiles = profile::load(&Fs::default(), &Env::default(), &profile_files, None).await?;
 
         Ok(Self {
             path: PathFile::create(path)?,
-            profiles
+            profiles,
         })
     }
 
     pub fn upsert_credential(&mut self, profile_name: &str, creds: &Credentials) -> Result<()> {
         if let None = self.profiles.get_profile(profile_name) {
-            self.profiles.set_profile(Profile::new(profile_name.to_string(), HashMap::new()));
+            self.profiles
+                .set_profile(Profile::new(profile_name.to_string(), HashMap::new()));
         };
-        
-        let profile = self.profiles.get_profile_mut(profile_name).ok_or_else(|| eyre!("Could not find profile: {profile_name}"))?;
-    
+
+        let profile = self
+            .profiles
+            .get_profile_mut(profile_name)
+            .ok_or_else(|| eyre!("Could not find profile: {profile_name}"))?;
+
         profile.set("aws_access_key_id", creds.access_key_id());
         profile.set("aws_secret_access_key", creds.secret_access_key());
-        profile.set("aws_session_token", creds.session_token().ok_or_else(|| eyre!("No session token found for {profile_name}"))?);
+        profile.set(
+            "aws_session_token",
+            creds
+                .session_token()
+                .ok_or_else(|| eyre!("No session token found for {profile_name}"))?,
+        );
 
         Ok(())
     }
@@ -88,11 +99,15 @@ aws_session_token=SESSION_TOKEN
 foo=bar"
         )?;
 
-        let store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let store =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
         let profile = store.profiles.get_profile("example").unwrap();
 
         assert_eq!(profile.get("aws_access_key_id"), Some("ACCESS_KEY"));
-        assert_eq!(profile.get("aws_secret_access_key"), Some("SECRET_ACCESS_KEY"));
+        assert_eq!(
+            profile.get("aws_secret_access_key"),
+            Some("SECRET_ACCESS_KEY")
+        );
         assert_eq!(profile.get("aws_session_token"), Some("SESSION_TOKEN"));
         assert_eq!(profile.get("foo"), Some("bar"));
 
@@ -112,11 +127,15 @@ aws_secret_access_key="SECRET_ACCESS_KEY_1"
 aws_session_token='SESSION_TOKEN_1'"#
         )?;
 
-        let store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let store =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
         let profile = store.profiles.get_profile("example").unwrap();
 
         assert_eq!(profile.get("aws_access_key_id"), Some("ACCESS_KEY_1"));
-        assert_eq!(profile.get("aws_secret_access_key"), Some("\"SECRET_ACCESS_KEY_1\""));
+        assert_eq!(
+            profile.get("aws_secret_access_key"),
+            Some("\"SECRET_ACCESS_KEY_1\"")
+        );
         assert_eq!(profile.get("aws_session_token"), Some("'SESSION_TOKEN_1'"));
 
         Ok(())
@@ -135,7 +154,8 @@ aws_session_token=SESSION_TOKEN
 foo=bar"#
         )?;
 
-        let mut store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
 
         store.upsert_credential(
             "example",
@@ -144,14 +164,17 @@ foo=bar"#
                 "NEW_SECRET_ACCESS_KEY",
                 Some("NEW_SESSION_TOKEN".to_string()),
                 None,
-                "oktaws"
+                "oktaws",
             ),
         )?;
 
         let profile = store.profiles.get_profile("example").unwrap();
 
         assert_eq!(profile.get("aws_access_key_id"), Some("NEW_ACCESS_KEY"));
-        assert_eq!(profile.get("aws_secret_access_key"), Some("NEW_SECRET_ACCESS_KEY"));
+        assert_eq!(
+            profile.get("aws_secret_access_key"),
+            Some("NEW_SECRET_ACCESS_KEY")
+        );
         assert_eq!(profile.get("aws_session_token"), Some("NEW_SESSION_TOKEN"));
 
         Ok(())
@@ -162,7 +185,8 @@ foo=bar"#
         // This also tests file not existing
         let tempfile = NamedTempFile::new()?;
 
-        let mut store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
 
         store.upsert_credential(
             "example",
@@ -171,14 +195,17 @@ foo=bar"#
                 "NEW_SECRET_ACCESS_KEY",
                 Some("NEW_SESSION_TOKEN".to_string()),
                 None,
-                "oktaws"
+                "oktaws",
             ),
         )?;
 
         let profile = store.profiles.get_profile("example").unwrap();
 
         assert_eq!(profile.get("aws_access_key_id"), Some("NEW_ACCESS_KEY"));
-        assert_eq!(profile.get("aws_secret_access_key"), Some("NEW_SECRET_ACCESS_KEY"));
+        assert_eq!(
+            profile.get("aws_secret_access_key"),
+            Some("NEW_SECRET_ACCESS_KEY")
+        );
         assert_eq!(profile.get("aws_session_token"), Some("NEW_SESSION_TOKEN"));
 
         Ok(())
@@ -196,7 +223,8 @@ aws_secret_access_key=SECRET_ACCESS_KEY
 foo=bar"#
         )?;
 
-        let mut store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
 
         store.upsert_credential(
             "example",
@@ -205,14 +233,17 @@ foo=bar"#
                 "NEW_SECRET_ACCESS_KEY",
                 Some("NEW_SESSION_TOKEN".to_string()),
                 None,
-                "oktaws"
+                "oktaws",
             ),
         )?;
 
         let profile = store.profiles.get_profile("example").unwrap();
 
         assert_eq!(profile.get("aws_access_key_id"), Some("NEW_ACCESS_KEY"));
-        assert_eq!(profile.get("aws_secret_access_key"), Some("NEW_SECRET_ACCESS_KEY"));
+        assert_eq!(
+            profile.get("aws_secret_access_key"),
+            Some("NEW_SECRET_ACCESS_KEY")
+        );
         assert_eq!(profile.get("aws_session_token"), Some("NEW_SESSION_TOKEN"));
         assert_eq!(profile.get("foo"), Some("bar"));
 
@@ -231,7 +262,8 @@ aws_secret_access_key=SECRET_ACCESS_KEY
 foo"#
         )?;
 
-        let err = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.err().unwrap() });
+        let err =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.err().unwrap() });
 
         assert_eq!(
             format!("{err:?}"),
@@ -267,11 +299,13 @@ aws_access_key_id=ACCESS_KEY2
 aws_secret_access_key=SECRET_ACCESS_KEY2"#
         )?;
 
-        let err = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.err().unwrap() });
+        let err =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.err().unwrap() });
 
         assert_eq!(
             format!("{err:?}"),
-            format!("could not parse profile file
+            format!(
+                "could not parse profile file
 
 Caused by:
     error parsing {} on line 4:
@@ -307,7 +341,8 @@ aws_access_key_id=ACCESS_KEY
 foo=bar"#
         )?;
 
-        let mut store = tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store =
+            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
 
         store.upsert_credential(
             "example_sts",
@@ -316,14 +351,14 @@ foo=bar"#
                 "NEW_SECRET_ACCESS_KEY",
                 Some("NEW_SESSION_TOKEN".to_string()),
                 None,
-                "oktaws"
+                "oktaws",
             ),
         )?;
 
         store.save()?;
 
         let credentials = fs::read_to_string(tempfile)?;
-        
+
         // These are line by line to avoid OS-specific line-endings
         let mut lines = credentials.lines();
         assert_eq!(lines.next(), Some("[example_static]"));

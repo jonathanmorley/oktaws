@@ -6,10 +6,10 @@ pub mod sso;
 use crate::aws::role::SamlRole;
 use crate::aws::saml::Response;
 
-use eyre::{eyre, Result};
 use aws_sdk_iam::{Client as IamClient, Config as IamConfig};
-use aws_sdk_sts::{Client as StsClient, Config as StsConfig};
 use aws_sdk_sts::config::Region as StsRegion;
+use aws_sdk_sts::{Client as StsClient, Config as StsConfig};
+use eyre::{eyre, Result};
 
 /// Get the AWS account alias via IAM SDK calls
 ///

@@ -4,10 +4,10 @@ use std::collections::HashSet;
 use std::io;
 use std::sync::Arc;
 
-use eyre::{eyre, Result};
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use dialoguer::Password;
+use eyre::{eyre, Result};
 use reqwest::cookie::Jar;
 use reqwest::header::{HeaderValue, ACCEPT};
 use reqwest::Response;

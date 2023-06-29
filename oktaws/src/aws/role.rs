@@ -3,10 +3,10 @@
 use std::str;
 use std::str::FromStr;
 
-use eyre::{eyre, Error, Result};
 use aws_arn::ResourceName as ARN;
 use aws_credential_types::Credentials;
 use aws_sdk_sts::Client as StsClient;
+use eyre::{eyre, Error, Result};
 use tracing::instrument;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -88,12 +88,12 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
-    use aws_sdk_sts::Config as StsConfig;
     use aws_sdk_sts::config::Region as StsRegion;
+    use aws_sdk_sts::Config as StsConfig;
     use aws_smithy_client::test_connection::TestConnection;
     use aws_smithy_http::body::SdkBody;
+    use base64::engine::{general_purpose::STANDARD_NO_PAD as b64, Engine};
     use tokio_test::block_on;
-    use base64::engine::{Engine, general_purpose::STANDARD_NO_PAD as b64};
 
     #[test]
     fn parse_attribute() {
@@ -161,7 +161,7 @@ mod tests {
             .http_connector(conn.clone())
             .build();
         dbg!(&conn);
-        let client = StsClient::from_conf(conf);       
+        let client = StsClient::from_conf(conf);
 
         let role = SamlRole {
             provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"

@@ -186,7 +186,6 @@ impl ProfileSet {
 
         str
     }
-
 }
 
 /// An individual configuration profile
@@ -216,7 +215,13 @@ impl Profile {
 
     /// Sets the value of the property named `name`
     pub fn set(&mut self, name: impl Into<String> + Clone, value: impl Into<String>) {
-        self.properties.insert(name.clone().into(), Property { key: name.into(), value: value.into() });
+        self.properties.insert(
+            name.clone().into(),
+            Property {
+                key: name.into(),
+                value: value.into(),
+            },
+        );
     }
 }
 

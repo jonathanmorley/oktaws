@@ -9,9 +9,9 @@ use oktaws::okta::client::Client as OktaClient;
 
 use std::convert::{TryFrom, TryInto};
 
-use color_eyre::eyre::{eyre, Result};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
+use color_eyre::eyre::{eyre, Result};
 use glob::Pattern;
 use tracing::instrument;
 use tracing_log::AsTrace;
