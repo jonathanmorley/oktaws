@@ -4,3 +4,6 @@ members = [
     "oktaws",
     "aws-config"
 ]
+
+[patch."https://github.com/jonathanmorley/smithy-rs"]
+aws-sdk-sts = { version = "*" }
