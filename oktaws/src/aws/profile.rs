@@ -421,7 +421,7 @@ foo=bar"#
     fn normalize_path_separators(s: &str) -> String {
         #[cfg(target_os = "windows")]
         {
-            s.replace("/", "\\")
+            s.replace('/', "\\")
         }
 
         #[cfg(not(target_os = "windows"))]
