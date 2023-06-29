@@ -148,7 +148,7 @@ mod tests {
         f.read_to_string(&mut saml_xml)
             .expect("something went wrong reading the file");
 
-        let conn = TestConnection::new(vec![(
+        let connector : TestConnection<_>= TestConnection::new(vec![(
             http::Request::builder()
                 .uri(http::Uri::from_static("https://sts.us-east-1.amazonaws.com/"))
                 .body(SdkBody::from(r#"Action=AssumeRoleWithSAML&Version=2011-06-15&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fmock-role&PrincipalArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Asaml-provider%2Fokta-idp&SAMLAssertion=SAML_ASSERTION"#)).unwrap(),
@@ -156,12 +156,13 @@ mod tests {
                 .status(http::StatusCode::from_u16(403).unwrap())
                 .body(saml_xml).unwrap())
         ]);
-        let conf: StsConfig = StsConfig::builder()
+
+        let config: StsConfig = StsConfig::builder()
             .region(StsRegion::new("us-east-1"))
-            .http_connector(conn.clone())
+            .http_connector(connector.clone())
             .build();
-        dbg!(&conn);
-        let client = StsClient::from_conf(conf);
+
+        let client = StsClient::from_conf(config);
 
         let role = SamlRole {
             provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
@@ -175,6 +176,6 @@ mod tests {
 
         assert_eq!(result.root_cause().to_string(), "Error { code: \"AccessDenied\", message: \"User: null is not authorized to perform: sts:AssumeRoleWithSAML on resource: arn:aws:iam::123456789012:role/mock-role\" }");
 
-        conn.assert_requests_match(&[]);
+        connector.assert_requests_match(&[]);
     }
 }

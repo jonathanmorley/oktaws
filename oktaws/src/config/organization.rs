@@ -223,9 +223,9 @@ mod tests {
     use tempfile::{self, TempDir};
 
     fn create_mock_toml(dir: &Path, name: &str) {
-        let filepath = dir.join(format!("{}.toml", name));
+        let filepath = dir.join(format!("{name}.toml"));
         let mut file = File::create(filepath).unwrap();
-        write!(file, "username = \"{}_user\"\n[profiles]", name).unwrap();
+        write!(file, "username = \"{name}_user\"\n[profiles]").unwrap();
     }
 
     fn create_mock_config_dir() -> TempDir {
@@ -390,7 +390,7 @@ foo = "foo"
     fn does_not_find_nested_config() {
         let tempdir = create_mock_config_dir();
 
-        env::set_var("OKTAWS_HOME", &tempdir.path());
+        env::set_var("OKTAWS_HOME", tempdir.path());
 
         let mock_dir = tempdir.path().join("mock");
         std::fs::create_dir(&mock_dir).unwrap();

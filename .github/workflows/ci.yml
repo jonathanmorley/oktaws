@@ -32,13 +32,15 @@ jobs:
         uses: actions/checkout@v3
       - name: Install Rust
         run: |
+          # Install the host platform toolchain
+          rustup update stable --no-self-update && rustup default stable
+          # Install the target platform toolchain
           rustup update stable-${{ matrix.target }} --no-self-update
-          rustup default stable-${{ matrix.target }}
       - name: Build
-        run: cargo build
+        run: cargo --target=${{ matrix.target }} build
       - name: Test
         if: matrix.testable
-        run: cargo test --workspace --exclude=aws-config
+        run: cargo --target=${{ matrix.target }} test --workspace --exclude=aws-config
 
   format:
     name: Format
@@ -48,8 +50,9 @@ jobs:
         uses: actions/checkout@v3
       - name: Install Rust
         run: |
-          rustup update stable --no-self-update
-          rustup default stable
+          # Install the host platform toolchain
+          rustup update stable --no-self-update && rustup default stable
+          # Install any components
           rustup component add rustfmt
       - name: Format
         run: cargo fmt --all -- --check
@@ -65,20 +68,24 @@ jobs:
             os: windows-latest
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-          # - target: aarch64-apple-darwin
-          #   os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Rust
         run: |
+          # Install the host platform toolchain
+          rustup update stable --no-self-update && rustup default stable
+          # Install the target platform toolchain
           rustup update stable-${{ matrix.target }} --no-self-update
-          rustup default stable-${{ matrix.target }}
+          # Install any components
           rustup component add clippy
       - name: Clippy
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: clippy-${{ matrix.target }}
-          args: --all-targets --all-features -- -D warnings
+          toolchain: ${{ matrix.target }}
+          args: --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
