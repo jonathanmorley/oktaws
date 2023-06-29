@@ -408,6 +408,16 @@ foo=bar"#
             format!(r"\\?\{}", path.to_string_lossy())
         }
 
+        #[cfg(target_arch = "x86_64")]
+        {
+            format!("{}", p);
+        }
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            format!("{}", p);
+        }
+
         #[cfg(not(target_os = "windows"))]
         {
             path.to_string_lossy().into_owned()
