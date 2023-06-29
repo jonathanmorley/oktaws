@@ -7,8 +7,8 @@ use crate::{
     select,
 };
 
-use eyre::{eyre, Result};
 use aws_credential_types::Credentials;
+use eyre::{eyre, Result};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, trace, warn};
 

@@ -10,9 +10,9 @@ use std::path::Path;
 use std::str::FromStr;
 use std::{fmt, io};
 
-use eyre::{eyre, Error, Result};
 use aws_credential_types::Credentials;
 use dialoguer::Input;
+use eyre::{eyre, Error, Result};
 use futures::future::join_all;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

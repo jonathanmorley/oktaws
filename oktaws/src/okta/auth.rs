@@ -1,8 +1,8 @@
 use crate::okta::client::Client;
 use crate::okta::factors::{Factor, FactorResult};
 
-use eyre::{eyre, Result};
 use dialoguer;
+use eyre::{eyre, Result};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use serde::{Deserialize, Serialize};

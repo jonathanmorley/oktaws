@@ -9,8 +9,8 @@ use std::fmt;
 use std::thread::sleep;
 use std::time::Duration;
 
-use eyre::{eyre, Result};
 use dialoguer::Password;
+use eyre::{eyre, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
