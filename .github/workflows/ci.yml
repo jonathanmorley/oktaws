@@ -41,13 +41,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          profile: minimal
-          components: clippy
+      - name: Install Tool Versions
+        uses: jdxcode/rtx-action@v1
       - name: Install Cross
         uses: actions-rs/install@v0.1
         with:
@@ -79,13 +74,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
-          profile: minimal
-          components: rustfmt
+      - name: Install Tool Versions
+        uses: jdxcode/rtx-action@v1
       - name: Format
         uses: actions-rs/cargo@v1
         with:
