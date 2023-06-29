@@ -9,46 +9,49 @@ on:
     branches: [master]
 
 jobs:
-  test:
-    name: Test
+  verify:
+    name: Verify
     strategy:
       matrix:
         include:
           - target: x86_64-apple-darwin
             os: macos-latest
+            testable: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+            testable: true
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            testable: true
           - target: aarch64-apple-darwin
             os: macos-latest
+            testable: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Rust
         run: |
-          rustup update stable --no-self-update
-          rustup default stable
-          rustup target add ${{ matrix.target }}
+          rustup update stable-${{ matrix.target }} --no-self-update
+          rustup default stable-${{ matrix.target }}
           rustup component add clippy
       - name: Clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --target ${{ matrix.target }} -- -D warnings
+          args: -- -D warnings
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target ${{ matrix.target }}
       - name: Test
+        if: matrix.testable
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --target ${{ matrix.target }} --workspace --exclude=aws-config
+          args: --workspace --exclude=aws-config
 
-  fmt:
+  format:
     name: Format
     runs-on: ubuntu-latest
     steps:
