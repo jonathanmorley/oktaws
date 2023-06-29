@@ -37,10 +37,10 @@ jobs:
           # Install the target platform toolchain
           rustup update stable-${{ matrix.target }} --no-self-update
       - name: Build
-        run: cargo --target=${{ matrix.target }} build
+        run: cargo build --target=${{ matrix.target }}
       - name: Test
         if: matrix.testable
-        run: cargo --target=${{ matrix.target }} test --workspace --exclude=aws-config
+        run: cargo test --target=${{ matrix.target }} --workspace --exclude=aws-config
 
   format:
     name: Format
