@@ -37,10 +37,10 @@ jobs:
           # Install the target platform toolchain
           rustup update stable-${{ matrix.target }} --no-self-update
       - name: Build
-        run: cargo build --target=${{ matrix.target }}
+        run: cargo +stable-${{ matrix.target }} build
       - name: Test
         if: matrix.testable
-        run: cargo test --target=${{ matrix.target }} --workspace --exclude=aws-config
+        run: cargo +stable-${{ matrix.target }} test --workspace --exclude=aws-config
 
   format:
     name: Format
@@ -87,4 +87,5 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: clippy-${{ matrix.target }}
-          args: --target=${{ matrix.target }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
+          toolchain: stable-${{ matrix.target }}
+          args: --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
