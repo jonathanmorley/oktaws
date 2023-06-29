@@ -44,7 +44,7 @@ impl Store {
     /// Will return Err if the credentials provided are not STS.
     /// Will return Err if the current credentials for the profile are not STS.
     pub fn upsert_credential(&mut self, profile_name: &str, creds: &Credentials) -> Result<()> {
-        if let None = self.profiles.get_profile(profile_name) {
+        if self.profiles.get_profile(profile_name).is_none() {
             self.profiles
                 .set_profile(Profile::new(profile_name.to_string(), HashMap::new()));
         };

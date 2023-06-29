@@ -11,6 +11,7 @@ categories = [
   "command-line-utilities",
   "authentication"
 ]
+readme = "README.md"
 
 [dependencies]
 async-recursion = "1"
