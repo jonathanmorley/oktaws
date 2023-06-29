@@ -10,7 +10,6 @@ on:
 
 jobs:
   verify:
-    name: Verify
     strategy:
       matrix:
         include:
@@ -20,6 +19,7 @@ jobs:
             targets: '["x86_64-pc-windows-msvc"]'
           - os: ubuntu-latest
             targets: '["x86_64-unknown-linux-gnu"]'
+    name: Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -28,7 +28,7 @@ jobs:
         run: |
           # Install the host platform toolchain
           rustup update stable --no-self-update && rustup default stable
-          # Install the target
+          # Install targets
           rustup target add ${{ join(fromJson(matrix.targets), ' ') }}
           # Install any components
           rustup component add clippy
