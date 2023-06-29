@@ -2,7 +2,7 @@ use crate::aws::role::SamlRole;
 
 use std::str::FromStr;
 
-use base64::engine::{general_purpose::STANDARD_NO_PAD as b64, Engine};
+use base64::engine::{general_purpose::STANDARD as b64, Engine};
 use eyre::{eyre, Error, Result};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
