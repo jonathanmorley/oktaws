@@ -92,7 +92,7 @@ mod tests {
     use aws_sdk_sts::Config as StsConfig;
     use aws_smithy_client::test_connection::TestConnection;
     use aws_smithy_http::body::SdkBody;
-    use base64::engine::{general_purpose::STANDARD_NO_PAD as b64, Engine};
+    use base64::engine::{general_purpose::STANDARD as b64, Engine};
     use tokio_test::block_on;
 
     #[test]
