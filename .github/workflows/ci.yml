@@ -36,20 +36,12 @@ jobs:
           rustup default stable-${{ matrix.target }}
           rustup component add clippy
       - name: Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+        run: cargo clippy -- -D warnings
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
+        run: cargo build
       - name: Test
         if: matrix.testable
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace --exclude=aws-config
+        run: cargo test --workspace --exclude=aws-config
 
   format:
     name: Format
@@ -63,7 +55,4 @@ jobs:
           rustup default stable
           rustup component add rustfmt
       - name: Format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
