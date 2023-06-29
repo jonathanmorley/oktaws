@@ -15,15 +15,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            targets:
-              - x86_64-apple-darwin
-              - aarch64-apple-darwin
+            targets: '["x86_64-apple-darwin", "aarch64-apple-darwin"]'
           - os: windows-latest
-            targets:
-              - x86_64-pc-windows-msvc
+            targets: '["x86_64-pc-windows-msvc"]'
           - os: ubuntu-latest
-            targets:
-              - x86_64-unknown-linux-gnu
+            targets: '["x86_64-unknown-linux-gnu"]'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -33,15 +29,15 @@ jobs:
           # Install the host platform toolchain
           rustup update stable --no-self-update && rustup default stable
           # Install the target
-          rustup target add ${{ fromJson(matrix.targets) }}
+          rustup target add ${{ join(fromJson(matrix.targets), ' ') }}
           # Install any components
           rustup component add clippy
       - name: Clippy
-        run: cargo clippy --target=${{ matrix.targets }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
+        run: cargo clippy --target=${{ join(fromJson(matrix.targets), ' --target=') }} --all-targets --all-features --workspace --exclude=aws-config -- -D warnings
       - name: Build
-        run: cargo build --target=${{ matrix.targets }} --all-targets --all-features
+        run: cargo build --target=${{ join(fromJson(matrix.targets), ' --target=') }} --all-targets --all-features
       - name: Test
-        run: cargo test --target=${{ matrix.targets }} --all-targets --all-features --workspace --exclude=aws-config
+        run: cargo test --target=${{ join(fromJson(matrix.targets), ' --target=') }} --all-targets --all-features --workspace --exclude=aws-config
 
   format:
     name: Format
