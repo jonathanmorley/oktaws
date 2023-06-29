@@ -259,7 +259,7 @@ foo=bar"#
 
 Location:
     {}:61:24",
-                PathBuf::from("oktaws/src/aws/profile.rs").display()
+                PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             ),
         );
 
@@ -293,7 +293,7 @@ Caused by:
 Location:
     {}:34:24",
                 tempfile.path().display(),
-                PathBuf::from("oktaws/src/aws/profile.rs").display()
+                PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             )
         );
 
@@ -331,7 +331,7 @@ Caused by:
 Location:
     {}:34:24",
                 tempfile.path().display(),
-                PathBuf::from("oktaws/src/aws/profile.rs").display()
+                PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             )
         );
 
