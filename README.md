@@ -1,4 +1,4 @@
-[![Build and Test](https://github.com/jonathanmorley/oktaws/actions/workflows/build.yml/badge.svg)](https://github.com/jonathanmorley/oktaws/actions/workflows/build.yml)
+[![Continuous Integration](https://github.com/jonathanmorley/oktaws/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathanmorley/oktaws/actions/workflows/ci.yml)
 
 # oktaws
 
