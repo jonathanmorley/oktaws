@@ -102,7 +102,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
 
-    use path_abs::PathOps;
     use tempfile;
     use tempfile::NamedTempFile;
 
