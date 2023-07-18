@@ -2056,7 +2056,6 @@ dependencies = [
  "tracing-tree",
  "url",
  "username",
- "zbus",
 ]
 
 [[package]]
