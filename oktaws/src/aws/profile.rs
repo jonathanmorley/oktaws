@@ -35,7 +35,13 @@ impl Store {
             profile_files = profile_files.with_contents(ProfileFileKind::Credentials, "");
         }
 
-        let profiles = profile::load(&Fs::default(), &Env::default(), &profile_files.build(), None).await?;
+        let profiles = profile::load(
+            &Fs::default(),
+            &Env::default(),
+            &profile_files.build(),
+            None,
+        )
+        .await?;
 
         Ok(Self { path, profiles })
     }
@@ -109,10 +115,15 @@ mod tests {
     fn create_new_store() -> Result<()> {
         let tmp_dir = tempfile::tempdir()?;
 
-        let mut store =
-            tokio_test::block_on(async { Store::load(Some(&tmp_dir.path().join(".aws").join("credentials"))).await.unwrap() });
+        let mut store = tokio_test::block_on(async {
+            Store::load(Some(&tmp_dir.path().join(".aws").join("credentials")))
+                .await
+                .unwrap()
+        });
 
-        store.profiles.set_profile(Profile::new("mock-profile".to_string(), HashMap::new()));
+        store
+            .profiles
+            .set_profile(Profile::new("mock-profile".to_string(), HashMap::new()));
 
         store.save()
     }
@@ -276,7 +287,7 @@ foo=bar"#
                 "The credentials for example are not STS. Refusing to overwrite them
 
 Location:
-    {}:62:24",
+    {}:68:24",
                 PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             ),
         );
