@@ -5,7 +5,6 @@ use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::{Env, Fs};
 use dirs;
 use eyre::{eyre, Result};
-use path_abs::PathFile;
 use std::collections::HashMap;
 use std::env::var as env_var;
 use std::fs;
@@ -14,7 +13,7 @@ use tracing::instrument;
 
 #[derive(Debug)]
 pub struct Store {
-    path: PathFile,
+    path: PathBuf,
     profiles: ProfileSet,
 }
 
@@ -27,16 +26,18 @@ impl Store {
             (None, Err(_)) => Self::default_location()?,
         };
 
-        let profile_files = ProfileFiles::builder()
-            .with_file(ProfileFileKind::Credentials, &path)
-            .build();
+        let mut profile_files = ProfileFiles::builder();
 
-        let profiles = profile::load(&Fs::default(), &Env::default(), &profile_files, None).await?;
+        if path.exists() {
+            profile_files = profile_files.with_file(ProfileFileKind::Credentials, &path);
+        } else {
+            // Dummy credentials
+            profile_files = profile_files.with_contents(ProfileFileKind::Credentials, "");
+        }
 
-        Ok(Self {
-            path: PathFile::create(path)?,
-            profiles,
-        })
+        let profiles = profile::load(&Fs::default(), &Env::default(), &profile_files.build(), None).await?;
+
+        Ok(Self { path, profiles })
     }
 
     /// # Errors
@@ -78,6 +79,11 @@ impl Store {
     #[instrument(skip_all)]
     pub fn save(&self) -> Result<()> {
         let credentials = self.profiles.to_string(ProfileFileKind::Credentials);
+
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
         fs::write(&self.path, credentials).map_err(Into::into)
     }
 
@@ -96,8 +102,21 @@ mod tests {
     use std::fs;
     use std::io::Write;
 
+    use path_abs::PathOps;
     use tempfile;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn create_new_store() -> Result<()> {
+        let tmp_dir = tempfile::tempdir()?;
+
+        let mut store =
+            tokio_test::block_on(async { Store::load(Some(&tmp_dir.path().join(".aws").join("credentials"))).await.unwrap() });
+
+        store.profiles.set_profile(Profile::new("mock-profile".to_string(), HashMap::new()));
+
+        store.save()
+    }
 
     #[test]
     fn parse_profile_with_extra_fields() -> Result<()> {
@@ -258,7 +277,7 @@ foo=bar"#
                 "The credentials for example are not STS. Refusing to overwrite them
 
 Location:
-    {}:61:24",
+    {}:62:24",
                 PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             ),
         );
@@ -291,7 +310,7 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    {}:34:24",
+    {}:38:24",
                 tempfile.path().display(),
                 PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             )
@@ -329,7 +348,7 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    {}:34:24",
+    {}:38:24",
                 tempfile.path().display(),
                 PathBuf::from_iter(["oktaws", "src", "aws", "profile.rs"]).display()
             )
