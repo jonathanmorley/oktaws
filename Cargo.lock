@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "oktaws"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "async-recursion",
  "aws-arn",
@@ -2039,7 +2039,6 @@ dependencies = [
  "keyring",
  "kuchiki",
  "lazy_static",
- "path_abs",
  "regex",
  "reqwest",
  "samuel",
@@ -2057,7 +2056,6 @@ dependencies = [
  "tracing-tree",
  "url",
  "username",
- "zbus",
 ]
 
 [[package]]
@@ -2186,18 +2184,6 @@ dependencies = [
  "redox_syscall 0.3.5",
  "smallvec",
  "windows-targets 0.48.1",
-]
-
-[[package]]
-name = "path_abs"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05ef02f6342ac01d8a93b65f96db53fe68a92a15f41144f97fb00a9e669633c3"
-dependencies = [
- "serde",
- "serde_derive",
- "std_prelude",
- "stfu8",
 ]
 
 [[package]]
@@ -3033,22 +3019,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "std_prelude"
-version = "0.2.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8207e78455ffdf55661170876f88daf85356e4edd54e0a3dbc79586ca1e50cbe"
-
-[[package]]
-name = "stfu8"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1310970b29733b601839578f8ba24991a97057dbedc4ac0decea835474054ee7"
-dependencies = [
- "lazy_static",
- "regex",
-]
 
 [[package]]
 name = "string_cache"
