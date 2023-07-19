@@ -3,7 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2021"
 name = "oktaws"
-version = "0.17.2"
+version = "0.17.3"
 license = "Apache-2.0"
 repository = "https://github.com/jonathanmorley/oktaws"
 keywords = ["okta", "aws", "saml"]
@@ -43,7 +43,7 @@ toml = "0.7"
 tracing = "0.1"
 tracing-log = "0.1"
 tracing-subscriber = "0.3"
-tracing-tree = { git = "https://github.com/davidbarsky/tracing-tree", branch = "main" }
+tracing-tree = "0.2.4"
 url = { version = "2", features = ["serde"] }
 username = "0.2"
 eyre = "0.6.8"
