@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "oktaws"
-version = "0.17.2"
+version = "0.17.3"
 dependencies = [
  "async-recursion",
  "aws-arn",
@@ -3468,8 +3468,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-tree"
-version = "0.2.3"
-source = "git+https://github.com/davidbarsky/tracing-tree?branch=main#e37bd3f2a3baf68f7a50d29eae76dbc452974fb1"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92d6b63348fad3ae0439b8bebf8d38fb5bda0b115d7a8a7e6f165f12790c58c3"
 dependencies = [
  "is-terminal",
  "nu-ansi-term",
