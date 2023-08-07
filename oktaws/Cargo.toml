@@ -18,7 +18,7 @@ async-recursion = "1"
 aws-arn = "0.3"
 aws-credential-types = "0.55"
 aws-sdk-sts = "0.28"
-aws-sdk-iam = "0.28"
+aws-sdk-iam = "0.29"
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.21"
 clap = { version = "4", features = ["derive"] }
