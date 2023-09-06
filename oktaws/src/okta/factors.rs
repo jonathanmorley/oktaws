@@ -145,7 +145,7 @@ pub enum FactorStatus {
 pub struct QuestionFactorProfile {
     answer: Option<String>,
     question: String,
-    question_text: String
+    question_text: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -158,7 +158,7 @@ pub struct SmsFactorProfile {
 #[serde(rename_all = "camelCase")]
 pub struct CallFactorProfile {
     phone_number: String,
-    phone_extension: Option<String>
+    phone_extension: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -168,7 +168,7 @@ pub struct PushFactorProfile {
     device_type: Option<String>,
     name: Option<String>,
     platform: Option<String>,
-    version: Option<String>
+    version: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -177,11 +177,10 @@ pub struct TokenFactorProfile {
     credential_id: String,
 }
 
-
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WebFactorProfile {
-    credential_id: String
+    credential_id: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -190,13 +189,13 @@ pub struct WebAuthnFactorProfile {
     credential_id: String,
     app_id: Option<String>,
     version: Option<String>,
-    authenticator_name: Option<String>
+    authenticator_name: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailFactorProfile {
-    email: String
+    email: String,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -222,14 +221,25 @@ pub enum FactorVerificationRequest {
     #[serde(rename_all = "camelCase")]
     Token { pass_code: String },
     #[serde(rename_all = "camelCase")]
-    WebAuthn { state_token: String }
+    WebAuthn { state_token: String },
 }
 
 impl fmt::Display for Factor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Self::Push { provider: FactorProvider::Okta, profile: PushFactorProfile { name: Some(ref name), .. }, .. } => write!(f, "Push (to Okta Verify on {name})"),
-            Self::Push { provider: FactorProvider::Okta, .. } => write!(f, "Push (to Okta Verify)"),
+            Self::Push {
+                provider: FactorProvider::Okta,
+                profile:
+                    PushFactorProfile {
+                        name: Some(ref name),
+                        ..
+                    },
+                ..
+            } => write!(f, "Push (to Okta Verify on {name})"),
+            Self::Push {
+                provider: FactorProvider::Okta,
+                ..
+            } => write!(f, "Push (to Okta Verify)"),
             Self::Push { ref provider, .. } => write!(f, "Push (to {provider:?})"),
             Self::Sms { ref profile, .. } => write!(f, "SMS (to {})", profile.phone_number),
             Self::Call { ref profile, .. } => write!(f, "Call (to {})", profile.phone_number),
@@ -237,10 +247,19 @@ impl fmt::Display for Factor {
             Self::Totp { ref provider, .. } => {
                 write!(f, "Time-based One-time Password (from {provider:?})")
             }
-            Self::Hotp { ref provider, .. } => write!(f, "Hardware One-time Password (from {provider:?})"),
+            Self::Hotp { ref provider, .. } => {
+                write!(f, "Hardware One-time Password (from {provider:?})")
+            }
             Self::Question { ref profile, .. } => write!(f, "Question: {}", profile.question),
             Self::Web { ref provider, .. } => write!(f, "Web (from {provider:?})"),
-            Self::WebAuthn { profile: WebAuthnFactorProfile { authenticator_name: Some(ref authenticator_name), .. }, .. } => write!(f, "Web Authn ({authenticator_name})"),
+            Self::WebAuthn {
+                profile:
+                    WebAuthnFactorProfile {
+                        authenticator_name: Some(ref authenticator_name),
+                        ..
+                    },
+                ..
+            } => write!(f, "Web Authn ({authenticator_name})"),
             Self::WebAuthn { .. } => write!(f, "Web Authn"),
         }
     }
