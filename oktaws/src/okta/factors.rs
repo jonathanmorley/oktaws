@@ -143,9 +143,9 @@ pub enum FactorStatus {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionFactorProfile {
-    answer: Option<String>,
+    // answer: Option<String>,
     question: String,
-    question_text: String,
+    // question_text: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -158,44 +158,44 @@ pub struct SmsFactorProfile {
 #[serde(rename_all = "camelCase")]
 pub struct CallFactorProfile {
     phone_number: String,
-    phone_extension: Option<String>,
+    // phone_extension: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PushFactorProfile {
-    credential_id: String,
-    device_type: Option<String>,
+    // credential_id: String,
+    // device_type: Option<String>,
     name: Option<String>,
-    platform: Option<String>,
-    version: Option<String>,
+    // platform: Option<String>,
+    // version: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenFactorProfile {
-    credential_id: String,
+    // credential_id: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WebFactorProfile {
-    credential_id: String,
+    // credential_id: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WebAuthnFactorProfile {
-    credential_id: String,
-    app_id: Option<String>,
-    version: Option<String>,
+    // credential_id: String,
+    // app_id: Option<String>,
+    // version: Option<String>,
     authenticator_name: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct EmailFactorProfile {
-    email: String,
+    // email: String,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
