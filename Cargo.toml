@@ -1,9 +1,6 @@
 [workspace]
-
-members = [
-    "oktaws",
-    "aws-config"
-]
+members = ["oktaws", "aws-config"]
+resolver = "2"
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]
