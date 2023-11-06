@@ -52,7 +52,7 @@ aws-smithy-types = "0.55.3"
 aws-config = { path = "../aws-config", default_features = false }
 
 [dev-dependencies]
-aws-smithy-client = { version = "0.55", features = ["test-util"] }
+aws-smithy-client = { version = "0.57", features = ["test-util"] }
 aws-smithy-http = "0.55"
 http = "0.2"
 serial_test = "2"
