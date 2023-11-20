@@ -16,7 +16,7 @@ readme = "README.md"
 [dependencies]
 async-recursion = "1"
 aws-arn = "0.3"
-aws-credential-types = "0.55"
+aws-credential-types = "0.101"
 aws-sdk-sts = "0.28"
 aws-sdk-iam = "0.28"
 backoff = { version = "0.4", features = ["tokio"] }
