@@ -63,11 +63,15 @@ impl Config {
             .map(|(_, x)| x)
             .collect::<Vec<_>>();
 
-        let default_role = select_opt(
-            default_role_names,
-            "Choose Default Role [None]",
-            ToOwned::to_owned,
-        )?;
+        let default_role = if default_role_names.is_empty() {
+            None
+        } else {
+            select_opt(
+                default_role_names,
+                "Choose Default Role [None]",
+                ToOwned::to_owned,
+            )?
+        };
 
         let profile_futures = selected_links
             .into_iter()

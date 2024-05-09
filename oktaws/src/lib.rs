@@ -35,13 +35,13 @@ where
     S: ToString,
 {
     let index = match items.len() {
-        0 => Ok(None),
+        0 => Err(eyre!("No items found")),
         _ => dialoguer::Select::new()
             .with_prompt(prompt)
             .items(&items.iter().map(displayer).collect::<Vec<_>>())
             .default(0)
             .interact_opt()
-            .map_err(|err| eyre!(err)),
+            .map_err(Into::into),
     }?;
 
     Ok(index.map(|index| items.remove(index)))
