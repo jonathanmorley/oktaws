@@ -1,9 +1,12 @@
+use mockall_double::double;
+
+#[double]
+use crate::okta::client::Client as OktaClient;
 use crate::{
     aws::saml::extract_account_name,
     aws::sso::Client as SsoClient,
     aws::{get_account_alias, sts_client},
     okta::applications::AppLink,
-    okta::client::Client as OktaClient,
     select,
 };
 
@@ -27,7 +30,7 @@ pub enum Config {
 }
 
 impl Config {
-    #[instrument(skip(client, link, default_role), fields(organization=%client.base_url, application=%link.label))]
+    #[instrument(skip(client, link, default_role), fields(organization=%client.base_url(), application=%link.label))]
     pub async fn from_app_link(
         client: &OktaClient,
         link: AppLink,
@@ -148,7 +151,7 @@ impl Profile {
         })
     }
 
-    #[instrument(skip(self, client), fields(organization=%client.base_url, profile=%self.name))]
+    #[instrument(skip(self, client), fields(organization=%client.base_url(), profile=%self.name))]
     pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials> {
         let saml_app_link = client.app_links(None).await?.into_iter().find(|app_link| {
             app_link.app_name == "amazon_aws" && app_link.label == self.application_name
