@@ -428,24 +428,30 @@ foo = "foo"
     async fn init_without_obvious_default_role() {
         let mut client = OktaClient::new();
         client.expect_app_links().returning(|_| Ok(Vec::new()));
-        
-        // With two (different) roles
-        client.expect_all_roles().returning(|_| Ok(vec![
-            SamlRole {
-                provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
-                    .parse()
-                    .unwrap(),
-                role: "arn:aws:iam::123456789012:role/mock-role".parse().unwrap(),
-            },
-            SamlRole {
-                provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
-                    .parse()
-                    .unwrap(),
-                role: "arn:aws:iam::123456789012:role/mock-role-2".parse().unwrap(),
-            }
-        ]));
 
-        let config = Config::from_organization(&client, String::from("test_user")).await.unwrap();
+        // With two (different) roles
+        client.expect_all_roles().returning(|_| {
+            Ok(vec![
+                SamlRole {
+                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                        .parse()
+                        .unwrap(),
+                    role: "arn:aws:iam::123456789012:role/mock-role".parse().unwrap(),
+                },
+                SamlRole {
+                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                        .parse()
+                        .unwrap(),
+                    role: "arn:aws:iam::123456789012:role/mock-role-2"
+                        .parse()
+                        .unwrap(),
+                },
+            ])
+        });
+
+        let config = Config::from_organization(&client, String::from("test_user"))
+            .await
+            .unwrap();
 
         assert_eq!(config.role, None);
     }

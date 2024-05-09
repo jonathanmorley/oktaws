@@ -116,7 +116,10 @@ impl Client {
             "Credentials"
         };
 
-        debug!("Attempting to login to {} with {login_type}", self.base_url());
+        debug!(
+            "Attempting to login to {} with {login_type}",
+            self.base_url()
+        );
 
         self.post("api/v1/authn", req).await
     }
