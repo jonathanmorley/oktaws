@@ -119,7 +119,7 @@ pub fn extract_saml_account_name(text: &str) -> Result<String> {
     let doc = kuchiki::parse_html().one(text);
     let account_str = doc
         .select("div.saml-account-name")
-        .map_err(|_| eyre!("SAML account name Not found"))?
+        .map_err(|()| eyre!("SAML account name Not found"))?
         .next()
         .ok_or_else(|| eyre!("SAML account name Not found"))?
         .text_contents();
@@ -143,7 +143,7 @@ pub fn extract_dashboard_account_name(text: &str) -> Result<String> {
     let doc = kuchiki::parse_html().one(text);
     let account_str = doc
         .select("span[data-testid='awsc-nav-account-menu-button']")
-        .map_err(|_| eyre!("Dashboard Account selector not valid"))?
+        .map_err(|()| eyre!("Dashboard Account selector not valid"))?
         .next()
         .ok_or_else(|| eyre!("Dashboard Account name not found in {}", text))?
         .text_contents();

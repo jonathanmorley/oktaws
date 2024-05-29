@@ -1,5 +1,8 @@
+use mockall_double::double;
+
 use crate::config::oktaws_home;
 use crate::config::profile::{self, Profile};
+#[double]
 use crate::okta::client::Client as OktaClient;
 use crate::select_opt;
 
@@ -59,11 +62,16 @@ impl Config {
             .filter(|&(i, _)| i > 1)
             .map(|(_, x)| x)
             .collect::<Vec<_>>();
-        let default_role = select_opt(
-            default_role_names,
-            "Choose Default Role [None]",
-            ToOwned::to_owned,
-        )?;
+
+        let default_role = if default_role_names.is_empty() {
+            None
+        } else {
+            select_opt(
+                default_role_names,
+                "Choose Default Role [None]",
+                ToOwned::to_owned,
+            )?
+        };
 
         let profile_futures = selected_links
             .into_iter()
@@ -213,6 +221,8 @@ impl Pattern {
 
 #[cfg(test)]
 mod tests {
+    use crate::aws::role::SamlRole;
+
     use super::*;
 
     use std::env;
@@ -412,5 +422,37 @@ foo = "foo"
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn init_without_obvious_default_role() {
+        let mut client = OktaClient::new();
+        client.expect_app_links().returning(|_| Ok(Vec::new()));
+
+        // With two (different) roles
+        client.expect_all_roles().returning(|_| {
+            Ok(vec![
+                SamlRole {
+                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                        .parse()
+                        .unwrap(),
+                    role: "arn:aws:iam::123456789012:role/mock-role".parse().unwrap(),
+                },
+                SamlRole {
+                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
+                        .parse()
+                        .unwrap(),
+                    role: "arn:aws:iam::123456789012:role/mock-role-2"
+                        .parse()
+                        .unwrap(),
+                },
+            ])
+        });
+
+        let config = Config::from_organization(&client, String::from("test_user"))
+            .await
+            .unwrap();
+
+        assert_eq!(config.role, None);
     }
 }

@@ -40,7 +40,7 @@ pub fn extract_saml_response(text: &str) -> Result<SamlResponse> {
 
     let form = doc
         .select_first("form[id='appForm']")
-        .map_err(|_| eyre!("No SAML form found"))?;
+        .map_err(|()| eyre!("No SAML form found"))?;
 
     let url = form
         .attributes
@@ -51,7 +51,7 @@ pub fn extract_saml_response(text: &str) -> Result<SamlResponse> {
     let saml = form
         .as_node()
         .select_first("input[name='SAMLResponse']")
-        .map_err(|_| eyre!("No SAML Response found"))?
+        .map_err(|()| eyre!("No SAML Response found"))?
         .attributes
         .borrow()
         .get("value")

@@ -20,7 +20,7 @@ use url::Url;
 #[derive(Debug)]
 pub struct Client {
     client: HttpClient,
-    pub base_url: Url,
+    base_url: Url,
     pub cookies: Arc<Jar>,
 }
 
@@ -68,7 +68,7 @@ impl Client {
         let mut base_url = Url::parse(&format!("https://{organization}.okta.com/"))?;
         base_url
             .set_username(&username)
-            .map_err(|_| eyre!("Cannot set username for URL"))?;
+            .map_err(|()| eyre!("Cannot set username for URL"))?;
 
         let cookies = Arc::from(Jar::default());
 
@@ -122,6 +122,11 @@ impl Client {
         client.new_session(session_token, &HashSet::new()).await?;
 
         Ok(client)
+    }
+
+    #[must_use]
+    pub const fn base_url(&self) -> &Url {
+        &self.base_url
     }
 
     pub fn set_session_id(&mut self, session_id: &str) {
@@ -274,5 +279,15 @@ impl Client {
         if let Err(e) = keyring.set_password(password) {
             warn!("Error while saving credentials: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mockall::mock! {
+    pub Client {
+        pub fn base_url(&self) -> &Url;
+        pub async fn app_links(&self, user_id: Option<()>) -> Result<Vec<crate::okta::applications::AppLink>>;
+        pub async fn all_roles(&self, links: Vec<crate::okta::applications::AppLink>) -> Result<Vec<crate::aws::role::SamlRole>>;
+        pub async fn get_saml_response(&self, url: Url) -> Result<crate::aws::saml::Response>;
     }
 }
