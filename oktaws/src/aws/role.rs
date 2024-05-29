@@ -151,7 +151,7 @@ mod tests {
         let connector : TestConnection<_>= TestConnection::new(vec![(
             http::Request::builder()
                 .uri(http::Uri::from_static("https://sts.us-east-1.amazonaws.com/"))
-                .body(SdkBody::from(r#"Action=AssumeRoleWithSAML&Version=2011-06-15&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fmock-role&PrincipalArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Asaml-provider%2Fokta-idp&SAMLAssertion=SAML_ASSERTION"#)).unwrap(),
+                .body(SdkBody::from(r"Action=AssumeRoleWithSAML&Version=2011-06-15&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fmock-role&PrincipalArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Asaml-provider%2Fokta-idp&SAMLAssertion=SAML_ASSERTION")).unwrap(),
             http::Response::builder()
                 .status(http::StatusCode::from_u16(403).unwrap())
                 .body(saml_xml).unwrap())

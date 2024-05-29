@@ -68,7 +68,7 @@ impl Client {
         let mut base_url = Url::parse(&format!("https://{organization}.okta.com/"))?;
         base_url
             .set_username(&username)
-            .map_err(|_| eyre!("Cannot set username for URL"))?;
+            .map_err(|()| eyre!("Cannot set username for URL"))?;
 
         let cookies = Arc::from(Jar::default());
 

@@ -50,7 +50,7 @@ impl Config {
 
         let saml_role = match roles.len() {
             0 => Err(eyre!("No role found")),
-            1 => Ok(roles.get(0).unwrap()),
+            1 => Ok(roles.first().unwrap()),
             _ => {
                 if let Some(default_role) = default_role.clone() {
                     match roles

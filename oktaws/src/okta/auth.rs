@@ -199,7 +199,7 @@ impl Client {
 
         let extra_verification = if let Ok(head) = doc.select_first("head") {
             if let Ok(title) = head.as_node().select_first("title") {
-                let re = Regex::new(r#".* - Extra Verification$"#)?;
+                let re = Regex::new(r".* - Extra Verification$")?;
                 re.is_match(&title.text_contents())
             } else {
                 false
@@ -209,7 +209,7 @@ impl Client {
         };
 
         if extra_verification {
-            Regex::new(r#"var stateToken = '(.+)';"#)?
+            Regex::new(r"var stateToken = '(.+)';")?
                 .captures(text)
                 .map_or_else(
                     || Err(eyre!("No state token found")),
