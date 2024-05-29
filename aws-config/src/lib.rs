@@ -11,6 +11,7 @@
     rustdoc::missing_crate_level_docs,
     unreachable_pub
 )]
+#![allow(clippy::all)]
 
 //! `aws-config` provides implementations of region and credential resolution.
 //!
