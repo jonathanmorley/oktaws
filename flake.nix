@@ -1,12 +1,12 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/24.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, nixpkgs, flake-utils }:
     {
-      overlay = final: prev: {
+      overlays.default = final: prev: {
         oktaws = prev.callPackage ./default.nix { };
       };
     } // flake-utils.lib.eachDefaultSystem(system:
