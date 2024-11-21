@@ -54,7 +54,7 @@ mockall = "0.12.1"
 mockall_double = "0.3.1"
 
 [dev-dependencies]
-aws-smithy-client = { version = "0.55", features = ["test-util"] }
+aws-smithy-client = { version = "0.61", features = ["test-util"] }
 aws-smithy-http = "0.55"
 http = "0.2"
 serial_test = "2"
