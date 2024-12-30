@@ -137,6 +137,9 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      - name: OS Dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt install -y libdbus-1-dev
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
