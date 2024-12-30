@@ -1,7 +1,0 @@
-{
-  "name": "empty-config",
-  "docs": "config was invalid",
-  "result": {
-    "ErrorContains": "could not parse profile file"
-  }
-}

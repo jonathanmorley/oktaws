@@ -1,6 +1,65 @@
-[workspace]
-members = ["oktaws", "aws-config"]
-resolver = "2"
+[package]
+authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
+description = "Generates temporary AWS credentials with Okta."
+edition = "2021"
+name = "oktaws"
+version = "0.18.0"
+license = "Apache-2.0"
+repository = "https://github.com/jonathanmorley/oktaws"
+keywords = ["okta", "aws", "saml"]
+categories = [
+  "command-line-utilities",
+  "authentication"
+]
+readme = "README.md"
+
+[dependencies]
+async-recursion = "1"
+aws-arn = "0.3"
+aws-credential-types = "0.55"
+aws-sdk-sts = "0.28"
+aws-sdk-iam = "0.28"
+backoff = { version = "0.4", features = ["tokio"] }
+base64 = "0.21"
+clap = { version = "4", features = ["derive"] }
+clap-verbosity-flag = "2"
+color-eyre = "0.6"
+dialoguer = "0.10"
+dirs = "5"
+futures = "0.3"
+glob = "0.3"
+itertools = "0.11"
+keyring = "2"
+kuchiki = "0.8"
+lazy_static = "1.4.0"
+regex = "1"
+reqwest = { version = "0.11", default-features = false, features = ["cookies", "json", "rustls-tls"] }
+samuel = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.99"
+thiserror = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+toml = "0.7"
+tracing = "0.1"
+tracing-log = "0.1"
+tracing-subscriber = "0.3"
+tracing-tree = "0.2.4"
+url = { version = "2", features = ["serde"] }
+username = "0.2"
+eyre = "0.6.8"
+aws-smithy-types = "0.55.3"
+aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+mockall = "0.12.1"
+mockall_double = "0.3.1"
+
+[dev-dependencies]
+aws-smithy-client = { version = "0.55", features = ["test-util"] }
+aws-smithy-http = "0.55"
+http = "0.2"
+serial_test = "2"
+tempfile = "3"
+tokio-test = "0.4"
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]
