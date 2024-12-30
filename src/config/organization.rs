@@ -21,6 +21,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml;
 use tracing::{debug, error, instrument};
+use whoami::username;
 
 /// This is an intentionally 'loose' struct,
 /// representing the potential for overrides and later prompts
@@ -141,14 +142,11 @@ impl TryFrom<&Path> for Organization {
 ///
 /// Will return `Err` if there are any IO errors during the prompt
 pub fn prompt_username(organization: &impl fmt::Display) -> Result<String> {
-    let mut input = Input::<String>::new();
-    input = input.with_prompt(format!("Username for {organization}"));
-
-    if let Ok(system_user) = username::get_user_name() {
-        input = input.default(system_user);
-    }
-
-    input.interact_text().map_err(Into::into)
+    Input::<String>::new()
+        .with_prompt(format!("Username for {}", organization))
+        .default(username())
+        .interact_text()
+        .map_err(Into::into)
 }
 
 impl Organization {

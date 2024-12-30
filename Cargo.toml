@@ -45,7 +45,7 @@ tracing-log = "0.2"
 tracing-subscriber = "0.3"
 tracing-tree = "0.4"
 url = { version = "2", features = ["serde"] }
-username = "0.2"
+whoami = "1"
 eyre = "0.6"
 aws-smithy-types = "1"
 aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }

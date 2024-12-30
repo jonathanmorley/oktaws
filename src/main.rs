@@ -18,6 +18,7 @@ use tracing_log::AsTrace;
 use tracing_subscriber::filter::Targets;
 use tracing_subscriber::{prelude::*, Registry};
 use tracing_tree::HierarchicalLayer;
+use whoami::username;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -146,14 +147,10 @@ impl TryFrom<InitArgs> for Init {
 
         let username = args.username.map_or_else(
             || {
-                let mut input = dialoguer::Input::new();
-                input = input.with_prompt(format!("Username for {}", &organization));
-
-                if let Ok(system_user) = username::get_user_name() {
-                    input = input.default(system_user);
-                }
-
-                input.interact_text()
+                dialoguer::Input::<String>::new()
+                    .with_prompt(format!("Username for {}", organization))
+                    .default(username())
+                    .interact_text()
             },
             Ok,
         )?;
