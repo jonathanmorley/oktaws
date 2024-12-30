@@ -247,7 +247,7 @@ impl Client {
 
     fn prompt_password(&self) -> Result<String> {
         Password::new()
-            .with_prompt(&format!("Password for {}", self.base_url))
+            .with_prompt(format!("Password for {}", self.base_url))
             .interact()
             .map_err(Into::into)
     }
@@ -259,7 +259,7 @@ impl Client {
     /// Will return `Err` if there are any IO errors during password prompting,
     /// or if there were errors encountered while retrieving the password from the cache.
     pub fn get_password(&self, keyring: &keyring::Entry, force_prompt: bool) -> Result<String> {
-        // If the user chooses to force new creds, prompt them for them
+        // If the user chooses to force new credentials, prompt them for them
         if force_prompt {
             self.prompt_password().map_err(Into::into)
         } else {

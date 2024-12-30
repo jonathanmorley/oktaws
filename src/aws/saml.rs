@@ -7,7 +7,6 @@ use eyre::{eyre, Error, Result};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};
-use tracing::error;
 use url::Url;
 
 #[derive(Clone, Debug)]
@@ -59,7 +58,7 @@ impl Response {
             .flat_map(|attribute| match attribute {
                 AttributeStatement::PlaintextAttributes(attributes) => Ok(attributes),
                 AttributeStatement::EncryptedAttributes(_) => {
-                    Err(error!("Encrypted assertions are not currently supported"))
+                    Err(eyre!("Encrypted assertions are not currently supported"))
                 }
                 AttributeStatement::None => Ok(vec![]),
             })

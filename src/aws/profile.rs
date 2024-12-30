@@ -45,12 +45,12 @@ impl ToIni for EnvConfigSections {
 
         for profile in self.profiles().sorted() {
             ini.push_str(&self.get_profile(profile).unwrap().to_ini());
-            ini.push_str("\n");
+            ini.push('\n');
         }
 
         for sso_session in self.sso_sessions().sorted() {
             ini.push_str(&self.sso_session(sso_session).unwrap().to_ini());
-            ini.push_str("\n");
+            ini.push('\n');
         }
 
         for key in self.other_sections().keys().sorted() {
