@@ -17,7 +17,7 @@ jobs:
             runner: windows-latest
             testable: true
           - target: aarch64-pc-windows-msvc
-            runner: windows-latest
+            runner: ubuntu-latest
             testable: false
           - target: x86_64-apple-darwin
             runner: macos-13
