@@ -1,7 +1,7 @@
 { pkgs, lib, rustPlatform, perl }:
 rustPlatform.buildRustPackage {
   pname = "oktaws";
-  version = "0.18.0";
+  version = "0.19.0";
 
   src = lib.cleanSource ./.;
 
