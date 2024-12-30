@@ -248,7 +248,8 @@ impl Client {
     fn prompt_password(&self) -> Result<String> {
         Password::new()
             .with_prompt(&format!("Password for {}", self.base_url))
-            .interact().map_err(Into::into)
+            .interact()
+            .map_err(Into::into)
     }
 
     /// Return the password for authenticating with this client

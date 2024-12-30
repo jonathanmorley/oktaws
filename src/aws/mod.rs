@@ -33,7 +33,7 @@ pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<S
         .send()
         .await?
         .account_aliases;
-    
+
     match aliases.len() {
         0 => Err(eyre!("No AWS account alias found")),
         1 => Ok(aliases.remove(0)),
@@ -44,6 +44,9 @@ pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<S
 #[must_use]
 pub fn sts_client() -> StsClient {
     let region = StsRegion::new("us-east-1");
-    let config = StsConfig::builder().region(region).behavior_version_latest().build();
+    let config = StsConfig::builder()
+        .region(region)
+        .behavior_version_latest()
+        .build();
     StsClient::from_conf(config)
 }

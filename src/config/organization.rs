@@ -8,10 +8,10 @@ use crate::select_opt;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
-use std::fmt;
 
 use aws_credential_types::Credentials;
 use dialoguer::Input;

@@ -66,10 +66,8 @@ impl SamlRole {
             .ok_or_else(|| eyre!("No credentials returned"))?;
 
         Ok(Credentials::new(
-            credentials
-                .access_key_id,
-            credentials
-                .secret_access_key,
+            credentials.access_key_id,
+            credentials.secret_access_key,
             Some(credentials.session_token),
             credentials.expiration.try_into().ok(),
             "sts",

@@ -1,11 +1,11 @@
+use aws_credential_types::Credentials;
 use aws_runtime::env_config::file::EnvConfigFileKind as ProfileFileKind;
 use aws_runtime::env_config::file::EnvConfigFiles;
+use aws_runtime::env_config::property::Property;
+use aws_runtime::env_config::section::EnvConfigSections;
+use aws_runtime::env_config::section::Profile;
 use aws_runtime::env_config::section::Section;
 use aws_runtime::env_config::source::load as load_config_files;
-use aws_runtime::env_config::section::Profile;
-use aws_runtime::env_config::section::EnvConfigSections;
-use aws_runtime::env_config::property::Property;
-use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::{Env, Fs};
 use dirs;
 use eyre::Context;
@@ -28,7 +28,11 @@ impl<T: Section> ToIni for &T {
         ini.push_str(&format!("[{}]\n", self.name()));
 
         for property in self.properties().keys().sorted() {
-            ini.push_str(&format!("{}={}\n", property, self.properties().get(property).unwrap().value()));
+            ini.push_str(&format!(
+                "{}={}\n",
+                property,
+                self.properties().get(property).unwrap().value()
+            ));
         }
 
         ini
@@ -50,7 +54,11 @@ impl ToIni for EnvConfigSections {
         }
 
         for key in self.other_sections().keys().sorted() {
-            ini.push_str(&format!("{}={}\n", key, self.other_sections().get(key).unwrap()));
+            ini.push_str(&format!(
+                "{}={}\n",
+                key,
+                self.other_sections().get(key).unwrap()
+            ));
         }
 
         ini
@@ -80,8 +88,10 @@ impl Store {
             profile_files = profile_files.with_contents(ProfileFileKind::Credentials, "");
         }
 
-        let config_file = load_config_files(&Env::default(), &Fs::default(), &profile_files.build()).await?;
-        let profiles = EnvConfigSections::parse(config_file).context("could not parse profile file")?;
+        let config_file =
+            load_config_files(&Env::default(), &Fs::default(), &profile_files.build()).await?;
+        let profiles =
+            EnvConfigSections::parse(config_file).context("could not parse profile file")?;
 
         Ok(Self { path, profiles })
     }
@@ -110,16 +120,29 @@ impl Store {
             ));
         }
 
-        profile.insert(String::from("aws_access_key_id"), Property::new(String::from("aws_access_key_id"), creds.access_key_id().to_string()));
-        profile.insert(String::from("aws_secret_access_key"), Property::new(String::from("aws_secret_access_key"), creds.secret_access_key().to_string()));
+        profile.insert(
+            String::from("aws_access_key_id"),
+            Property::new(
+                String::from("aws_access_key_id"),
+                creds.access_key_id().to_string(),
+            ),
+        );
+        profile.insert(
+            String::from("aws_secret_access_key"),
+            Property::new(
+                String::from("aws_secret_access_key"),
+                creds.secret_access_key().to_string(),
+            ),
+        );
         profile.insert(
             String::from("aws_session_token"),
-            Property::new(String::from("aws_session_token"),
-            creds
-                .session_token()
-                .ok_or_else(|| eyre!("No session token found for {profile_name}"))?
-                .to_string()
-            )
+            Property::new(
+                String::from("aws_session_token"),
+                creds
+                    .session_token()
+                    .ok_or_else(|| eyre!("No session token found for {profile_name}"))?
+                    .to_string(),
+            ),
         );
 
         Ok(())
