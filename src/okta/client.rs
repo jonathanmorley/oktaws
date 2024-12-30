@@ -1,7 +1,6 @@
 use crate::okta::auth::LoginRequest;
 
 use std::collections::HashSet;
-use std::io;
 use std::sync::Arc;
 
 use backoff::future::retry;
@@ -246,10 +245,10 @@ impl Client {
         }
     }
 
-    fn prompt_password(&self) -> Result<String, io::Error> {
+    fn prompt_password(&self) -> Result<String> {
         Password::new()
             .with_prompt(&format!("Password for {}", self.base_url))
-            .interact()
+            .interact().map_err(Into::into)
     }
 
     /// Return the password for authenticating with this client

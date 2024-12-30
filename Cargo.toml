@@ -16,47 +16,47 @@ readme = "README.md"
 [dependencies]
 async-recursion = "1"
 aws-arn = "0.3"
-aws-credential-types = "1.2.1"
-aws-sdk-sts = "1.53.0"
-aws-sdk-iam = "1.55.0"
+aws-credential-types = "1"
+aws-sdk-sts = "1"
+aws-sdk-iam = "1"
 backoff = { version = "0.4", features = ["tokio"] }
-base64 = "0.21"
+base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
-clap-verbosity-flag = "2"
+clap-verbosity-flag = "3"
 color-eyre = "0.6"
-dialoguer = "0.10"
+dialoguer = "0.11"
 dirs = "5"
 futures = "0.3"
 glob = "0.3"
-itertools = "0.11"
-keyring = "2"
+itertools = "0.13"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 kuchiki = "0.8"
-lazy_static = "1.4.0"
+lazy_static = "1"
 regex = "1"
-reqwest = { version = "0.11", default-features = false, features = ["cookies", "json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["cookies", "json", "rustls-tls"] }
 samuel = "0.1"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.99"
-thiserror = "1"
+serde_json = "1"
+thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-toml = "0.7"
+toml = "0.8"
 tracing = "0.1"
-tracing-log = "0.1"
+tracing-log = "0.2"
 tracing-subscriber = "0.3"
-tracing-tree = "0.2.4"
+tracing-tree = "0.4"
 url = { version = "2", features = ["serde"] }
 username = "0.2"
-eyre = "0.6.8"
-aws-smithy-types = "1.2.11"
+eyre = "0.6"
+aws-smithy-types = "1"
 aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
 aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-mockall = "0.12.1"
-mockall_double = "0.3.1"
+mockall_double = "0.3"
 
 [dev-dependencies]
-aws-smithy-runtime = { version = "1.7.6", features = ["test-util"] }
-http = "0.2"
-serial_test = "2"
+aws-smithy-runtime = { version = "1", features = ["test-util"] }
+http = "1"
+mockall = "0.13"
+serial_test = "3"
 tempfile = "3"
 tokio-test = "0.4"
 

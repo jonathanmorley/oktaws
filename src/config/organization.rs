@@ -11,7 +11,7 @@ use std::convert::TryFrom;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
-use std::{fmt, io};
+use std::fmt;
 
 use aws_credential_types::Credentials;
 use dialoguer::Input;
@@ -140,15 +140,15 @@ impl TryFrom<&Path> for Organization {
 /// # Errors
 ///
 /// Will return `Err` if there are any IO errors during the prompt
-pub fn prompt_username(organization: &impl fmt::Display) -> Result<String, io::Error> {
+pub fn prompt_username(organization: &impl fmt::Display) -> Result<String> {
     let mut input = Input::<String>::new();
-    input.with_prompt(&format!("Username for {organization}"));
+    input = input.with_prompt(&format!("Username for {organization}"));
 
     if let Ok(system_user) = username::get_user_name() {
-        input.default(system_user);
+        input = input.default(system_user);
     }
 
-    input.interact_text()
+    input.interact_text().map_err(Into::into)
 }
 
 impl Organization {

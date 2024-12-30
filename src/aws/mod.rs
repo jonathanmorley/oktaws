@@ -44,6 +44,6 @@ pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<S
 #[must_use]
 pub fn sts_client() -> StsClient {
     let region = StsRegion::new("us-east-1");
-    let config = StsConfig::builder().region(region).build();
+    let config = StsConfig::builder().region(region).behavior_version_latest().build();
     StsClient::from_conf(config)
 }

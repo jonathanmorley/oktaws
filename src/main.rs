@@ -147,10 +147,10 @@ impl TryFrom<InitArgs> for Init {
         let username = args.username.map_or_else(
             || {
                 let mut input = dialoguer::Input::new();
-                input.with_prompt(format!("Username for {}", &organization));
+                input = input.with_prompt(format!("Username for {}", &organization));
 
                 if let Ok(system_user) = username::get_user_name() {
-                    input.default(system_user);
+                    input = input.default(system_user);
                 }
 
                 input.interact_text()
