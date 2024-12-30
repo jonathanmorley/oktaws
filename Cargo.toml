@@ -1,24 +1,64 @@
-[workspace]
-members = ["oktaws", "aws-config"]
-resolver = "2"
-
-# Config for 'cargo dist'
-[workspace.metadata.dist]
-# The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.0.7"
-# The preferred Rust toolchain to use in CI (rustup toolchain syntax)
-rust-toolchain-version = "1.78.0"
-# CI backends to support (see 'cargo dist generate-ci')
-ci = ["github"]
-# The installers to generate for each app
-installers = ["shell", "powershell"]
-# Target platforms to build apps for (Rust target-triple syntax)
-targets = [
-  "x86_64-unknown-linux-gnu",
-  "x86_64-apple-darwin",
-  "x86_64-pc-windows-msvc",
-  "aarch64-apple-darwin"
+[package]
+authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
+description = "Generates temporary AWS credentials with Okta."
+edition = "2021"
+name = "oktaws"
+version = "0.19.0"
+license = "Apache-2.0"
+repository = "https://github.com/jonathanmorley/oktaws"
+keywords = ["okta", "aws", "saml"]
+categories = [
+  "command-line-utilities",
+  "authentication"
 ]
+readme = "README.md"
+
+[dependencies]
+async-recursion = "1"
+aws-arn = "0.3"
+aws-credential-types = "1"
+aws-sdk-sts = "1"
+aws-sdk-iam = "1"
+backoff = { version = "0.4", features = ["tokio"] }
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+clap-verbosity-flag = "3"
+color-eyre = "0.6"
+dialoguer = "0.11"
+dirs = "5"
+futures = "0.3"
+glob = "0.3"
+itertools = "0.13"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+kuchiki = "0.8"
+lazy_static = "1"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["cookies", "json", "rustls-tls"] }
+samuel = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-log = "0.2"
+tracing-subscriber = "0.3"
+tracing-tree = "0.4"
+url = { version = "2", features = ["serde"] }
+whoami = "1"
+eyre = "0.6"
+aws-smithy-types = "1"
+aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+mockall_double = "0.3"
+
+[dev-dependencies]
+aws-smithy-runtime = { version = "1", features = ["test-util"] }
+http = "1"
+mockall = "0.13"
+serial_test = "3"
+tempfile = "3"
+tokio-test = "0.4"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
