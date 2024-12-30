@@ -148,7 +148,7 @@ impl TryFrom<InitArgs> for Init {
         let username = args.username.map_or_else(
             || {
                 dialoguer::Input::<String>::new()
-                    .with_prompt(format!("Username for {}", organization))
+                    .with_prompt(format!("Username for {organization}"))
                     .default(username())
                     .interact_text()
             },

@@ -143,7 +143,7 @@ impl TryFrom<&Path> for Organization {
 /// Will return `Err` if there are any IO errors during the prompt
 pub fn prompt_username(organization: &impl fmt::Display) -> Result<String> {
     Input::<String>::new()
-        .with_prompt(format!("Username for {}", organization))
+        .with_prompt(format!("Username for {organization}"))
         .default(username())
         .interact_text()
         .map_err(Into::into)
