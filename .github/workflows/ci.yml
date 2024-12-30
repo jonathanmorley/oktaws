@@ -46,9 +46,6 @@ jobs:
         with:
           cache-all-crates: true
           key: ${{ matrix.target }}
-      - name: OS Dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt install -y libdbus-1-dev
       - name: Clippy
         run: cargo clippy --target=${{ matrix.target }} --all-targets --all-features -- -D warnings
       - name: Build

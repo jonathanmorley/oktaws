@@ -29,7 +29,7 @@ dirs = "5"
 futures = "0.3"
 glob = "0.3"
 itertools = "0.13"
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "vendored"] }
 kuchiki = "0.8"
 lazy_static = "1"
 regex = "1"
