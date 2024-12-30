@@ -28,19 +28,17 @@ pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<S
         .credentials_provider(credentials)
         .build();
 
-    IamClient::from_conf(config)
+    let mut aliases = IamClient::from_conf(config)
         .list_account_aliases()
         .send()
         .await?
-        .account_aliases
-        .map_or_else(
-            || Err(eyre!("No AWS account alias found")),
-            |mut aliases| match aliases.len() {
-                0 => Err(eyre!("No AWS account alias found")),
-                1 => Ok(aliases.remove(0)),
-                _ => Err(eyre!("More than 1 AWS account alias found")),
-            },
-        )
+        .account_aliases;
+    
+    match aliases.len() {
+        0 => Err(eyre!("No AWS account alias found")),
+        1 => Ok(aliases.remove(0)),
+        _ => Err(eyre!("More than 1 AWS account alias found")),
+    }
 }
 
 #[must_use]

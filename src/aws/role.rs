@@ -67,13 +67,11 @@ impl SamlRole {
 
         Ok(Credentials::new(
             credentials
-                .access_key_id
-                .ok_or_else(|| eyre!("No Access Key Id found"))?,
+                .access_key_id,
             credentials
-                .secret_access_key
-                .ok_or_else(|| eyre!("No Secret Access Key found"))?,
-            credentials.session_token,
-            credentials.expiration.map(|dt| dt.try_into().unwrap()),
+                .secret_access_key,
+            Some(credentials.session_token),
+            credentials.expiration.try_into().ok(),
             "sts",
         ))
     }
@@ -90,8 +88,8 @@ mod tests {
 
     use aws_sdk_sts::config::Region as StsRegion;
     use aws_sdk_sts::Config as StsConfig;
-    use aws_smithy_client::test_connection::TestConnection;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+    use aws_smithy_types::body::SdkBody;
     use base64::engine::{general_purpose::STANDARD as b64, Engine};
     use tokio_test::block_on;
 
@@ -148,18 +146,21 @@ mod tests {
         f.read_to_string(&mut saml_xml)
             .expect("something went wrong reading the file");
 
-        let connector : TestConnection<_>= TestConnection::new(vec![(
-            http::Request::builder()
-                .uri(http::Uri::from_static("https://sts.us-east-1.amazonaws.com/"))
-                .body(SdkBody::from(r"Action=AssumeRoleWithSAML&Version=2011-06-15&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fmock-role&PrincipalArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Asaml-provider%2Fokta-idp&SAMLAssertion=SAML_ASSERTION")).unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(403).unwrap())
-                .body(saml_xml).unwrap())
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                http::Request::builder()
+                    .uri(http::Uri::from_static("https://sts.us-east-1.amazonaws.com/"))
+                    .body(SdkBody::from(r"Action=AssumeRoleWithSAML&Version=2011-06-15&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fmock-role&PrincipalArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Asaml-provider%2Fokta-idp&SAMLAssertion=SAML_ASSERTION")).unwrap(),
+                http::Response::builder()
+                    .status(403)
+                    .body(SdkBody::from(saml_xml)).unwrap()
+            )
         ]);
 
         let config: StsConfig = StsConfig::builder()
             .region(StsRegion::new("us-east-1"))
-            .http_connector(connector.clone())
+            .http_client(http_client.clone())
+            .behavior_version_latest()
             .build();
 
         let client = StsClient::from_conf(config);
@@ -176,6 +177,6 @@ mod tests {
 
         assert_eq!(result.root_cause().to_string(), "Error { code: \"AccessDenied\", message: \"User: null is not authorized to perform: sts:AssumeRoleWithSAML on resource: arn:aws:iam::123456789012:role/mock-role\" }");
 
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 }
