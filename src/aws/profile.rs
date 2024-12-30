@@ -353,7 +353,7 @@ foo=bar"#
                 "The credentials for example are not STS. Refusing to overwrite them
 
 Location:
-    {}:108:24",
+    {}:118:24",
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             ),
         );
@@ -386,7 +386,7 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    {}:84:62",
+    {}:94:51",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )
@@ -424,7 +424,7 @@ Caused by:
       Expected an '=' sign defining a property
 
 Location:
-    {}:84:62",
+    {}:94:51",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )
