@@ -1,58 +1,36 @@
 name: Continuous Integration
 
-env:
-  RUST_LOG: info
-  RUST_BACKTRACE: 1
-
 on:
   pull_request:
     branches: [master]
+
+# Release already exercises a build, so this only needs to worry about testable targets
 
 jobs:
   verify:
     strategy:
       matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            runner: windows-latest
-            testable: true
-          - target: aarch64-pc-windows-msvc
-            runner: windows-latest
-            testable: false
-          - target: x86_64-apple-darwin
-            runner: macos-13
-            testable: true
-          - target: aarch64-apple-darwin
-            runner: macos-latest
-            testable: true
-          - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
-            testable: true
-    name: Verify (${{ matrix.target }})
+        runner:
+          - ubuntu-latest   # x86_64-unknown-linux-gnu
+          - macos-13        # x86_64-apple-darwin
+          - macos-latest    # aarch64-apple-darwin
+          - windows-latest  # x86_64-pc-windows-msvc
+    name: Verify (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Rust
-        run: |
-          # Install the host platform toolchain
-          rustup update stable --no-self-update && rustup default stable
-          # Install target
-          rustup target add ${{ matrix.target }}
-          # Install any components
-          rustup component add clippy
+        uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
-          key: ${{ matrix.target }}
+          key: ${{ matrix.runner }}
       - name: Clippy
-        run: cargo clippy --target=${{ matrix.target }} --all-targets --all-features -- -D warnings
-      - name: Build
-        run: cargo build --target=${{ matrix.target }} --all-targets --all-features
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test
-        if: matrix.testable
-        run: cargo test --target=${{ matrix.target }} --all-targets --all-features --workspace --exclude=aws-config
+        run: cargo test --all-targets --all-features
 
   format:
     name: Format
@@ -61,11 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Rust
-        run: |
-          # Install the host platform toolchain
-          rustup update stable --no-self-update && rustup default stable
-          # Install any components
-          rustup component add rustfmt
+        uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:

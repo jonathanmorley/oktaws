@@ -143,8 +143,6 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-      - name: Extra rust components
-        run: rustup component add llvm-tools
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
