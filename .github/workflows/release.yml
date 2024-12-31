@@ -143,12 +143,8 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-      # When using cargo-xwin, the dependencies section is ignored
-      - name: OS dependencies
-        if: runner.os == 'Linux'
-        run: |
-          apt-get update
-          apt-get install libllvm18 llvm-18 llvm-18-dev
+      - name: Extra rust components
+        run: rustup component add llvm-tools
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
