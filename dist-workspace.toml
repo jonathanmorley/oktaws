@@ -26,8 +26,3 @@ install-path = "CARGO_HOME"
 install-updater = false
 pr-run-mode = "upload"
 github-attestations = true
-
-[dist.dependencies.apt]
-libllvm18 = '*'
-llvm-18 = "*"
-llvm-18-dev = "*"
