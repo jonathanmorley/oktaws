@@ -143,8 +143,6 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-      - name: Ensure correct toolchain
-        run: rustup update
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot

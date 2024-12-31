@@ -26,3 +26,8 @@ install-path = "CARGO_HOME"
 install-updater = false
 pr-run-mode = "upload"
 github-attestations = true
+
+# Force disable the containerised runner for aarch64-pc-windows-msvc
+# as it makes it a snowflake.
+[dist.github-custom-runners.aarch64-pc-windows-msvc]
+runner = "ubuntu-20.04"
