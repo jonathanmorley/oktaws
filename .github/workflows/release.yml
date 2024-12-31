@@ -147,8 +147,8 @@ jobs:
       - name: OS dependencies
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install libllvm18 llvm-18 llvm-18-dev
+          apt-get update
+          apt-get install libllvm18 llvm-18 llvm-18-dev
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
