@@ -140,24 +140,17 @@ jobs:
           pattern: artifacts-*
           path: target/distrib/
           merge-multiple: true
-      - name: Check xwin
-        continue-on-error: true
-        run: |
-          command -v cargo-xwin
-          cargo-xwin --version
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-      - name: Check xwin
-        continue-on-error: true
-        run: |
-          command -v cargo-xwin
-          cargo-xwin --version
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
+        # the ring crate requires clang
+        env:
+          XWIN_CROSS_COMPILER: clang
       - name: Attest
         uses: actions/attest-build-provenance@v1
         with:
