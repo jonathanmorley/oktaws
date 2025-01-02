@@ -3,7 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2021"
 name = "oktaws"
-version = "0.19.0"
+version = "0.19.1"
 license = "Apache-2.0"
 repository = "https://github.com/jonathanmorley/oktaws"
 keywords = ["okta", "aws", "saml"]
@@ -17,8 +17,8 @@ readme = "README.md"
 async-recursion = "1"
 aws-arn = "0.3"
 aws-credential-types = "1"
-aws-sdk-sts = "1"
-aws-sdk-iam = "1"
+aws-sdk-sts = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-iam = { version = "1", features = ["behavior-version-latest"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
@@ -48,8 +48,8 @@ url = { version = "2", features = ["serde"] }
 whoami = "1"
 eyre = "0.6"
 aws-smithy-types = "1"
-aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-runtime = "1"
+aws-types = "1"
 mockall_double = "0.3"
 
 [dev-dependencies]
@@ -59,6 +59,14 @@ mockall = "0.13"
 serial_test = "3"
 tempfile = "3"
 tokio-test = "0.4"
+
+[patch.crates-io]
+aws-credential-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-smithy-async = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-smithy-runtime-api = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-smithy-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
