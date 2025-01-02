@@ -26,6 +26,7 @@ pub async fn get_account_alias(role: &SamlRole, response: &Response) -> Result<S
 
     let config = IamConfig::builder()
         .credentials_provider(credentials)
+        .behavior_version_latest()
         .build();
 
     let mut aliases = IamClient::from_conf(config)

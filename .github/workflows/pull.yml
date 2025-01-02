@@ -1,21 +1,19 @@
-name: Continuous Integration
+name: PR Verification
 
 on:
   pull_request:
     branches: [master]
 
-# Release already exercises a build, so this only needs to worry about testable targets
-
 jobs:
-  verify:
+  cargo:
     strategy:
       matrix:
         runner:
+          # Release already exercises a build, so this only needs to worry about testable targets
           - ubuntu-latest   # x86_64-unknown-linux-gnu
           - macos-13        # x86_64-apple-darwin
           - macos-latest    # aarch64-apple-darwin
           - windows-latest  # x86_64-pc-windows-msvc
-    name: Verify (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
@@ -30,3 +28,23 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --all-targets --all-features
+  nix:
+    strategy:
+      matrix:
+        runner:
+          - ubuntu-latest   # x86_64-linux
+          - macos-13        # x86_64-darwin
+          - macos-latest    # aarch64-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - name: Format
+        run: nix fmt -- --check .
+      - name: Build
+        run: nix build
+  verify:
+    needs: [cargo, nix]
+    runs-on: ubuntu-latest
