@@ -48,3 +48,5 @@ jobs:
   verify:
     needs: [cargo, nix]
     runs-on: ubuntu-latest
+    steps:
+      - run: echo "Verified!"
