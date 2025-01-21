@@ -10,10 +10,11 @@ jobs:
       matrix:
         runner:
           # Release already exercises a build, so this only needs to worry about testable targets
-          - ubuntu-latest   # x86_64-unknown-linux-gnu
-          - macos-13        # x86_64-apple-darwin
-          - macos-latest    # aarch64-apple-darwin
-          - windows-latest  # x86_64-pc-windows-msvc
+          - ubuntu-24.04     # x86_64-unknown-linux-gnu
+          - ubuntu-24.04-arm # aarch64-unknown-linux-gnu
+          - macos-13         # x86_64-apple-darwin
+          - macos-latest     # aarch64-apple-darwin
+          - windows-latest   # x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
@@ -32,9 +33,10 @@ jobs:
     strategy:
       matrix:
         runner:
-          - ubuntu-latest   # x86_64-linux
-          - macos-13        # x86_64-darwin
-          - macos-latest    # aarch64-darwin
+          - ubuntu-24.04     # x86_64-linux
+          - ubuntu-24.04-arm # aarch64-linux
+          - macos-13         # x86_64-darwin
+          - macos-latest     # aarch64-darwin
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
