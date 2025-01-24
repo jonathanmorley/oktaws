@@ -255,11 +255,11 @@ aws_session_token='SESSION_TOKEN_1'"#
 
         write!(
             tempfile,
-            r#"[example]
+            r"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
-foo=bar"#
+foo=bar"
         )?;
 
         let mut store =
@@ -325,10 +325,10 @@ foo=bar"#
 
         write!(
             tempfile,
-            r#"[example]
+            r"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
-foo=bar"#
+foo=bar"
         )?;
 
         let mut store =
@@ -367,10 +367,10 @@ Location:
 
         write!(
             tempfile,
-            r#"[example]
+            r"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
-foo"#
+foo"
         )?;
 
         let err =
@@ -401,14 +401,14 @@ Location:
 
         write!(
             tempfile,
-            r#"[example]
+            r"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 foo
 
 [example2]
 aws_access_key_id=ACCESS_KEY2
-aws_secret_access_key=SECRET_ACCESS_KEY2"#
+aws_secret_access_key=SECRET_ACCESS_KEY2"
         )?;
 
         let err =
@@ -441,7 +441,7 @@ Location:
         // Comments are not currently preserved
         write!(
             tempfile,
-            r#"[example_sts]
+            r"[example_sts]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_session_token=SESSION_TOKEN
@@ -451,7 +451,7 @@ bar=baz
 [example_static]
 aws_secret_access_key=SECRET_ACCESS_KEY
 aws_access_key_id=ACCESS_KEY
-foo=bar"#
+foo=bar"
         )?;
 
         let mut store =
