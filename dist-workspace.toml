@@ -31,3 +31,11 @@ github-attestations = true
 # as it makes it a snowflake.
 [dist.github-custom-runners.aarch64-pc-windows-msvc]
 runner = "ubuntu-latest"
+
+# Remove ubuntu-20.04
+[dist.github-custom-runners.x86_64-unknown-linux-musl]
+runner = "ubuntu-latest"
+[dist.github-custom-runners.aarch64-unknown-linux-gnu]
+runner = "ubuntu-latest"
+[dist.github-custom-runners.x86_64-unknown-linux-gnu]
+runner = "ubuntu-latest"
