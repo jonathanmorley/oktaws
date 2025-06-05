@@ -11,10 +11,9 @@
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
       craneLib = crane.mkLib pkgs;
     in {
-      formatter = pkgs.alejandra;
+      formatter = nixpkgs.legacyPackages.${system}.alejandra;
       packages.default = craneLib.buildPackage {
         src = craneLib.cleanCargoSource ./.;
         doCheck = false;

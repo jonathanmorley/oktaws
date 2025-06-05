@@ -3,7 +3,7 @@ authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
 description = "Generates temporary AWS credentials with Okta."
 edition = "2021"
 name = "oktaws"
-version = "0.19.1"
+version = "0.20.0"
 license = "Apache-2.0"
 repository = "https://github.com/jonathanmorley/oktaws"
 keywords = ["okta", "aws", "saml"]
@@ -16,6 +16,7 @@ readme = "README.md"
 [dependencies]
 async-recursion = "1"
 aws-arn = "0.3"
+aws_config_mod = { git = "https://github.com/jonathanmorley/aws_config_mod", branch = "set-credentials" }
 aws-credential-types = "1"
 aws-sdk-sts = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-iam = { version = "1", features = ["behavior-version-latest"] }
@@ -61,12 +62,12 @@ tempfile = "3"
 tokio-test = "0.4"
 
 [patch.crates-io]
-aws-credential-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-aws-smithy-async = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-aws-smithy-runtime-api = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-aws-smithy-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
-aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+# aws-credential-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+# aws-runtime = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+# aws-smithy-async = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+# aws-smithy-runtime-api = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+# aws-smithy-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
+# aws-types = { git = "https://github.com/jonathanmorley/smithy-rs", branch = "profile-mutation" }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
