@@ -1,5 +1,5 @@
-use aws_credential_types::Credentials;
 use aws_config_mod::{AwsCredentialsFile, Value};
+use aws_credential_types::Credentials;
 use dirs;
 use eyre::{eyre, Context, Result};
 use std::env::var as env_var;
@@ -23,9 +23,14 @@ impl Store {
             )?,
         };
 
-        let credentials_file = fs::read_to_string(&path)?.parse().wrap_err_with(|| format!("Failed to parse AWS credentials file {:?}", &path))?;
+        let credentials_file = fs::read_to_string(&path)?
+            .parse()
+            .wrap_err_with(|| format!("Failed to parse AWS credentials file {:?}", &path))?;
 
-        Ok(Self { path, credentials_file })
+        Ok(Self {
+            path,
+            credentials_file,
+        })
     }
 
     /// # Errors
@@ -39,12 +44,23 @@ impl Store {
         let secret_access_key_name = profile.get_setting(&"aws_secret_access_key".parse()?);
         let session_token_name = profile.get_setting(&"aws_session_token".parse()?);
 
-        if access_key_id.is_some() && secret_access_key_name.is_some() && session_token_name.is_none() {
-            return Err(eyre!("The credentials for {profile_name} are not STS. Refusing to overwrite them"));
+        if access_key_id.is_some()
+            && secret_access_key_name.is_some()
+            && session_token_name.is_none()
+        {
+            return Err(eyre!(
+                "The credentials for {profile_name} are not STS. Refusing to overwrite them"
+            ));
         }
 
-        profile.set("aws_access_key_id".parse()?, Value::from(creds.access_key_id()));
-        profile.set("aws_secret_access_key".parse()?, Value::from(creds.secret_access_key()));
+        profile.set(
+            "aws_access_key_id".parse()?,
+            Value::from(creds.access_key_id()),
+        );
+        profile.set(
+            "aws_secret_access_key".parse()?,
+            Value::from(creds.secret_access_key()),
+        );
         if let Some(session_token) = creds.session_token() {
             profile.set("aws_session_token".parse()?, Value::from(session_token));
         } else {
@@ -122,7 +138,10 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
             lines.next(),
             Some("aws_secret_access_key = NEW_FOO_SECRET_ACCESS_KEY")
         );
-        assert_eq!(lines.next(), Some("aws_session_token = NEW_FOO_SESSION_TOKEN"));
+        assert_eq!(
+            lines.next(),
+            Some("aws_session_token = NEW_FOO_SESSION_TOKEN")
+        );
         assert_eq!(lines.next(), None);
 
         Ok(())
@@ -155,11 +174,15 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
 
         assert_eq!(
             contents,
-            format!(r#"{}
+            format!(
+                r#"{}
 [example]
 aws_access_key_id = NEW_EXAMPLE_ACCESS_KEY
 aws_secret_access_key = NEW_EXAMPLE_SECRET_ACCESS_KEY
-aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#, CREDENTIALS.trim_end()).as_str()
+aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#,
+                CREDENTIALS.trim_end()
+            )
+            .as_str()
         );
 
         Ok(())
@@ -173,7 +196,7 @@ aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#, CREDENTIALS.trim_end()).as_str(
 
         let mut store =
             tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
-        
+
         store.upsert_credential(
             "foo",
             &Credentials::new(
