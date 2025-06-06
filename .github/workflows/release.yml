@@ -121,11 +121,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install Rust
-        run: |
-          if ! command -v cargo > /dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          fi
+        uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: swatinem/rust-cache@v2
         with:
           key: ${{ join(matrix.targets, '-') }}
