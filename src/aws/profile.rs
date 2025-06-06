@@ -153,7 +153,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
     fn insert_credential_existing_file() -> Result<()> {
         let mut tempfile = NamedTempFile::new()?;
 
-        write!(tempfile, "{}", CREDENTIALS)?;
+        write!(tempfile, "{CREDENTIALS}")?;
 
         let mut store = Store::load(Some(tempfile.path()))?;
 
@@ -176,11 +176,11 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
         assert_eq!(
             contents,
             format!(
-                r#"{}
+                r"{}
 [example]
 aws_access_key_id = NEW_EXAMPLE_ACCESS_KEY
 aws_secret_access_key = NEW_EXAMPLE_SECRET_ACCESS_KEY
-aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#,
+aws_session_token = NEW_EXAMPLE_SESSION_TOKEN",
                 CREDENTIALS.trim_end()
             )
             .as_str()
@@ -193,7 +193,7 @@ aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#,
     fn update_existing_credential() -> Result<()> {
         let mut tempfile = NamedTempFile::new()?;
 
-        write!(tempfile, "{}", CREDENTIALS)?;
+        write!(tempfile, "{CREDENTIALS}")?;
 
         let mut store = Store::load(Some(tempfile.path()))?;
 
@@ -216,7 +216,7 @@ aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#,
         // Whitespace is preserved (except trailing whitespace), quotes are removed
         assert_eq!(
             contents,
-            r#"[foo]
+            r"[foo]
 # This is an important comment
 # Extra whitespace is allowed
 aws_access_key_id =                NEW_FOO_ACCESS_KEY
@@ -231,7 +231,7 @@ foo=bar
 [static]
 # This profile is not STS, and should not be changed
 aws_access_key_id = STATIC_ACCESS_KEY
-aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"#
+aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"
         );
 
         Ok(())
@@ -241,7 +241,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"#
     fn not_update_creds_on_static_profile() -> Result<()> {
         let mut tempfile = NamedTempFile::new()?;
 
-        write!(tempfile, "{}", CREDENTIALS)?;
+        write!(tempfile, "{CREDENTIALS}")?;
 
         let mut store = Store::load(Some(tempfile.path()))?;
 
@@ -285,10 +285,10 @@ Location:
 
         write!(
             tempfile,
-            r#"[example]
+            r"[example]
 aws_access_key_id=ACCESS_KEY
 aws_secret_access_key=SECRET_ACCESS_KEY
-foo"#
+foo"
         )?;
 
         let err = Store::load(Some(tempfile.path())).unwrap_err();
