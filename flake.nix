@@ -5,7 +5,6 @@
   };
 
   outputs = {
-    self,
     nixpkgs,
     crane,
     flake-utils,
@@ -19,15 +18,6 @@
       packages.default = craneLib.buildPackage {
         src = craneLib.cleanCargoSource ./.;
         doCheck = false;
-        buildInputs =
-          [
-            # Add additional build inputs here
-          ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            # Additional darwin specific inputs can be set here
-            pkgs.libiconv
-            pkgs.darwin.Security
-          ];
       };
     });
 }

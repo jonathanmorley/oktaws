@@ -81,7 +81,7 @@ struct RefreshArgs {
 #[instrument(skip_all, fields(organizations=%args.organizations,profiles=%args.profiles))]
 async fn refresh(args: RefreshArgs) -> Result<()> {
     // Set up a store for AWS profiles
-    let mut aws_credentials = ProfileStore::load(None).await?;
+    let mut aws_credentials = ProfileStore::load(None)?;
 
     let organizations = args.organizations.organizations()?;
 
@@ -183,7 +183,7 @@ async fn init(options: Init) -> Result<()> {
     let oktaws_config_path = oktaws_home.join(format!("{}.toml", options.organization));
 
     let write_to_file = dialoguer::Confirm::new()
-        .with_prompt(format!("Write config to {oktaws_config_path:?}?"))
+        .with_prompt(format!("Write config to {}?", oktaws_config_path.display()))
         .interact()?;
 
     if write_to_file {

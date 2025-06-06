@@ -18,7 +18,7 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct Client {
-    client: HttpClient,
+    http: HttpClient,
     base_url: Url,
     pub cookies: Arc<Jar>,
 }
@@ -72,7 +72,7 @@ impl Client {
         let cookies = Arc::from(Jar::default());
 
         let mut client = Self {
-            client: HttpClient::builder()
+            http: HttpClient::builder()
                 .cookie_store(true)
                 .cookie_provider(cookies.clone())
                 .build()?,
@@ -141,7 +141,7 @@ impl Client {
     /// Will return `Err` if there are any errors performing the GET operation.
     pub async fn get_response(&self, url: Url) -> Result<Response> {
         retry(ExponentialBackoff::default(), || async {
-            let resp = self.client.get(url.clone()).send().await?;
+            let resp = self.http.get(url.clone()).send().await?;
 
             if resp.status() == StatusCode::TOO_MANY_REQUESTS || resp.status().is_server_error() {
                 resp.error_for_status().map_err(backoff::Error::transient)
@@ -174,7 +174,7 @@ impl Client {
                 .map_err(backoff::Error::Permanent)?;
 
             let resp = self
-                .client
+                .http
                 .get(url)
                 .header(ACCEPT, HeaderValue::from_static("application/json"))
                 .send()
@@ -231,7 +231,7 @@ impl Client {
         O: DeserializeOwned,
     {
         let resp = self
-            .client
+            .http
             .post(url)
             .json(body)
             .header(ACCEPT, HeaderValue::from_static("application/json"))
@@ -261,10 +261,9 @@ impl Client {
     pub fn get_password(&self, keyring: &keyring::Entry, force_prompt: bool) -> Result<String> {
         // If the user chooses to force new credentials, prompt them for them
         if force_prompt {
-            self.prompt_password().map_err(Into::into)
+            self.prompt_password()
         } else {
-            Self::get_cached_password(keyring)
-                .or_else(|_| self.prompt_password().map_err(Into::into))
+            Self::get_cached_password(keyring).or_else(|_| self.prompt_password())
         }
     }
 

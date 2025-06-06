@@ -1,7 +1,7 @@
 use eyre::Result;
-use lazy_static::lazy_static;
 use regex::Regex;
 use serde::Deserialize;
+use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::SystemTime;
 use tracing::{debug, trace};
@@ -157,25 +157,25 @@ impl Client {
     }
 }
 
+static ACCOUNT_NAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\((.+)\)").expect("Failed to compile account name regex"));
+
+static ACCOUNT_ID_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(\d+)").expect("Failed to compile account ID regex"));
+
 impl AppInstance {
     #[must_use]
     pub fn account_name(&self) -> Option<&str> {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"\((.+)\)").unwrap();
-        }
-
-        RE.captures(&self.name)
+        ACCOUNT_NAME_REGEX
+            .captures(&self.name)
             .and_then(|captures| captures.get(1))
             .map(|mat| mat.as_str())
     }
 
     #[must_use]
     pub fn account_id(&self) -> Option<&str> {
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"^(\d+)").unwrap();
-        }
-
-        RE.captures(&self.name)
+        ACCOUNT_ID_REGEX
+            .captures(&self.name)
             .and_then(|captures| captures.get(1))
             .map(|mat| mat.as_str())
     }
