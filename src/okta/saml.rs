@@ -23,7 +23,7 @@ impl Client {
                 .await?;
             self.get_saml_response(app_url).await
         } else {
-            extract_saml_response(&response).map_err(Into::into)
+            extract_saml_response(&response)
         }
     }
 }

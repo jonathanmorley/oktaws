@@ -63,7 +63,6 @@ impl Config {
                             format!("Choose Role for {}", link.label),
                             |role| role.role.clone(),
                         )
-                        .map_err(Into::into),
                     }
                 } else {
                     select(
@@ -71,7 +70,6 @@ impl Config {
                         format!("Choose Role for {}", link.label),
                         |role| role.role.clone(),
                     )
-                    .map_err(Into::into)
                 }
             }
         }?;
@@ -159,7 +157,7 @@ impl Profile {
 
         if let Some(app_link) = saml_app_link {
             return self.into_saml_credentials(client, app_link).await;
-        };
+        }
 
         let sso_app_link = client.app_links(None).await?.into_iter().find(|app_link| {
             app_link.app_name == "amazon_aws_sso" && app_link.label == self.application_name

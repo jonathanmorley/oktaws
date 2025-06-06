@@ -2,6 +2,7 @@ use aws_config_mod::{AwsCredentialsFile, Value};
 use aws_credential_types::Credentials;
 use dirs;
 use eyre::{eyre, Context, Result};
+use tracing::instrument;
 use std::env::var as env_var;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,7 +14,8 @@ pub struct Store {
 }
 
 impl Store {
-    pub async fn load(path: Option<&Path>) -> Result<Self> {
+    #[instrument]
+    pub fn load(path: Option<&Path>) -> Result<Self> {
         let path = match (path, env_var("AWS_SHARED_CREDENTIALS_FILE")) {
             (Some(path), _) => PathBuf::from(path),
             (_, Ok(path)) => PathBuf::from(path),
@@ -25,7 +27,7 @@ impl Store {
 
         let credentials_file = fs::read_to_string(&path)?
             .parse()
-            .wrap_err_with(|| format!("Failed to parse AWS credentials file {:?}", &path))?;
+            .wrap_err_with(|| format!("Failed to parse AWS credentials file {}", &path.display()))?;
 
         Ok(Self {
             path,
@@ -70,6 +72,7 @@ impl Store {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
@@ -112,8 +115,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
     fn insert_credential_no_file() -> Result<()> {
         let tempfile = NamedTempFile::new()?;
 
-        let mut store =
-            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store = Store::load(Some(tempfile.path()))?;
 
         store.upsert_credential(
             "foo",
@@ -153,8 +155,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
 
         write!(tempfile, "{}", CREDENTIALS)?;
 
-        let mut store =
-            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store = Store::load(Some(tempfile.path()))?;
 
         store.upsert_credential(
             "example",
@@ -194,8 +195,7 @@ aws_session_token = NEW_EXAMPLE_SESSION_TOKEN"#,
 
         write!(tempfile, "{}", CREDENTIALS)?;
 
-        let mut store =
-            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store = Store::load(Some(tempfile.path()))?;
 
         store.upsert_credential(
             "foo",
@@ -243,8 +243,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"#
 
         write!(tempfile, "{}", CREDENTIALS)?;
 
-        let mut store =
-            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.unwrap() });
+        let mut store = Store::load(Some(tempfile.path()))?;
 
         let err = store
             .upsert_credential(
@@ -265,7 +264,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"#
                 "The credentials for static are not STS. Refusing to overwrite them
 
 Location:
-    {}:43:24",
+    {}:53:24",
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             ),
         );
@@ -292,13 +291,12 @@ aws_secret_access_key=SECRET_ACCESS_KEY
 foo"#
         )?;
 
-        let err =
-            tokio_test::block_on(async { Store::load(Some(tempfile.path())).await.err().unwrap() });
+        let err = Store::load(Some(tempfile.path())).unwrap_err();
 
         assert_eq!(
             format!("{err:?}"),
             format!(
-                "Failed to parse AWS credentials file \"{}\"
+                "Failed to parse AWS credentials file {}
 
 Caused by:
    0: Failed to parse config file:
@@ -306,7 +304,7 @@ Caused by:
    1: Parsing Error: VerboseError {{ errors: [(\"foo\", Nom(Eof))] }}
 
 Location:
-    {}:26:67",
+    {}:30:14",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )
