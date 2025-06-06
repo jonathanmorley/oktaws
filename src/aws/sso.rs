@@ -157,25 +157,25 @@ impl Client {
     }
 }
 
-static ACCOUNT_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\((.+)\)").expect("Failed to compile account name regex")
-});
+static ACCOUNT_NAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\((.+)\)").expect("Failed to compile account name regex"));
 
-static ACCOUNT_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\d+)").expect("Failed to compile account ID regex")
-});
+static ACCOUNT_ID_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(\d+)").expect("Failed to compile account ID regex"));
 
 impl AppInstance {
     #[must_use]
     pub fn account_name(&self) -> Option<&str> {
-        ACCOUNT_NAME_REGEX.captures(&self.name)
+        ACCOUNT_NAME_REGEX
+            .captures(&self.name)
             .and_then(|captures| captures.get(1))
             .map(|mat| mat.as_str())
     }
 
     #[must_use]
     pub fn account_id(&self) -> Option<&str> {
-        ACCOUNT_ID_REGEX.captures(&self.name)
+        ACCOUNT_ID_REGEX
+            .captures(&self.name)
             .and_then(|captures| captures.get(1))
             .map(|mat| mat.as_str())
     }

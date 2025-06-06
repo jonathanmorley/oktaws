@@ -2,10 +2,10 @@ use aws_config_mod::{AwsCredentialsFile, Value};
 use aws_credential_types::Credentials;
 use dirs;
 use eyre::{eyre, Context, Result};
-use tracing::instrument;
 use std::env::var as env_var;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct Store {
@@ -25,9 +25,9 @@ impl Store {
             )?,
         };
 
-        let credentials_file = fs::read_to_string(&path)?
-            .parse()
-            .wrap_err_with(|| format!("Failed to parse AWS credentials file {}", &path.display()))?;
+        let credentials_file = fs::read_to_string(&path)?.parse().wrap_err_with(|| {
+            format!("Failed to parse AWS credentials file {}", &path.display())
+        })?;
 
         Ok(Self {
             path,
@@ -304,7 +304,7 @@ Caused by:
    1: Parsing Error: VerboseError {{ errors: [(\"foo\", Nom(Eof))] }}
 
 Location:
-    {}:30:14",
+    {}:28:67",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )

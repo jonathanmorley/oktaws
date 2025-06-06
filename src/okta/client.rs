@@ -263,8 +263,7 @@ impl Client {
         if force_prompt {
             self.prompt_password()
         } else {
-            Self::get_cached_password(keyring)
-                .or_else(|_| self.prompt_password())
+            Self::get_cached_password(keyring).or_else(|_| self.prompt_password())
         }
     }
 

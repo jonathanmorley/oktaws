@@ -62,7 +62,7 @@ impl Config {
                             roles.iter().collect(),
                             format!("Choose Role for {}", link.label),
                             |role| role.role.clone(),
-                        )
+                        ),
                     }
                 } else {
                     select(
