@@ -128,6 +128,17 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
             ),
         )?;
 
+        store.upsert_credential(
+            "bar",
+            &Credentials::new(
+                "NEW_BAR_ACCESS_KEY",
+                "NEW_BAR_SECRET_ACCESS_KEY",
+                Some("NEW_BAR_SESSION_TOKEN".to_string()),
+                None,
+                "oktaws",
+            ),
+        )?;
+
         store.save()?;
 
         let contents = fs::read_to_string(tempfile)?;
@@ -143,6 +154,16 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
         assert_eq!(
             lines.next(),
             Some("aws_session_token = NEW_FOO_SESSION_TOKEN")
+        );
+        assert_eq!(lines.next(), Some("[bar]"));
+        assert_eq!(lines.next(), Some("aws_access_key_id = NEW_BAR_ACCESS_KEY"));
+        assert_eq!(
+            lines.next(),
+            Some("aws_secret_access_key = NEW_BAR_SECRET_ACCESS_KEY")
+        );
+        assert_eq!(
+            lines.next(),
+            Some("aws_session_token = NEW_BAR_SESSION_TOKEN")
         );
         assert_eq!(lines.next(), None);
 
