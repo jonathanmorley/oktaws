@@ -25,9 +25,13 @@ impl Store {
             )?,
         };
 
-        let credentials_file = fs::read_to_string(&path)?.parse().wrap_err_with(|| {
-            format!("Failed to parse AWS credentials file {}", &path.display())
-        })?;
+        let credentials_file = if path.exists() {
+            fs::read_to_string(&path)?.parse().wrap_err_with(|| {
+                format!("Failed to parse AWS credentials file {}", &path.display())
+            })?
+        } else {
+            AwsCredentialsFile::default()
+        };
 
         Ok(Self {
             path,
@@ -112,7 +116,13 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
 "#;
 
     #[test]
-    fn insert_credential_no_file() -> Result<()> {
+    fn load_no_file() -> Result<()> {
+        Store::load(Some(&PathBuf::from("THIS PATH DOES NOT EXIST")))?;
+        Ok(())
+    }
+
+    #[test]
+    fn insert_credential_empty_file() -> Result<()> {
         let tempfile = NamedTempFile::new()?;
 
         let mut store = Store::load(Some(tempfile.path()))?;
@@ -123,6 +133,17 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
                 "NEW_FOO_ACCESS_KEY",
                 "NEW_FOO_SECRET_ACCESS_KEY",
                 Some("NEW_FOO_SESSION_TOKEN".to_string()),
+                None,
+                "oktaws",
+            ),
+        )?;
+
+        store.upsert_credential(
+            "bar",
+            &Credentials::new(
+                "NEW_BAR_ACCESS_KEY",
+                "NEW_BAR_SECRET_ACCESS_KEY",
+                Some("NEW_BAR_SESSION_TOKEN".to_string()),
                 None,
                 "oktaws",
             ),
@@ -143,6 +164,16 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY
         assert_eq!(
             lines.next(),
             Some("aws_session_token = NEW_FOO_SESSION_TOKEN")
+        );
+        assert_eq!(lines.next(), Some("[bar]"));
+        assert_eq!(lines.next(), Some("aws_access_key_id = NEW_BAR_ACCESS_KEY"));
+        assert_eq!(
+            lines.next(),
+            Some("aws_secret_access_key = NEW_BAR_SECRET_ACCESS_KEY")
+        );
+        assert_eq!(
+            lines.next(),
+            Some("aws_session_token = NEW_BAR_SESSION_TOKEN")
         );
         assert_eq!(lines.next(), None);
 
@@ -264,7 +295,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"
                 "The credentials for static are not STS. Refusing to overwrite them
 
 Location:
-    {}:53:24",
+    {}:57:24",
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             ),
         );
@@ -304,7 +335,7 @@ Caused by:
    1: Parsing Error: VerboseError {{ errors: [(\"foo\", Nom(Eof))] }}
 
 Location:
-    {}:28:67",
+    {}:29:48",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )

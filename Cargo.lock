@@ -476,7 +476,7 @@ dependencies = [
 [[package]]
 name = "aws_config_mod"
 version = "0.3.0"
-source = "git+https://github.com/jonathanmorley/aws_config_mod?branch=set-credentials#322976641b1c39f9c34decbec5663bf2fb83da26"
+source = "git+https://github.com/jonathanmorley/aws_config_mod?branch=set-credentials#f605b8cba73e6d8cff795e3a9a8d091aeb1b4f09"
 dependencies = [
  "nom",
  "thiserror 1.0.69",
