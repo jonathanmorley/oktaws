@@ -33,7 +33,10 @@ impl Store {
             AwsCredentialsFile::default()
         };
 
-        Ok(Self { path, credentials_file })
+        Ok(Self {
+            path,
+            credentials_file,
+        })
     }
 
     /// # Errors
@@ -292,7 +295,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"
                 "The credentials for static are not STS. Refusing to overwrite them
 
 Location:
-    {}:54:24",
+    {}:57:24",
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             ),
         );
