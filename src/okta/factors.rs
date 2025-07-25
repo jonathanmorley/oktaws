@@ -230,7 +230,7 @@ impl Factor {
             Self::Hotp { .. } => false,
             Self::Web { .. } => false,
             Self::WebAuthn { .. } => false,
-            _ => true
+            _ => true,
         }
     }
 }
