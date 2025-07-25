@@ -224,6 +224,17 @@ pub enum FactorVerificationRequest {
     WebAuthn { state_token: String },
 }
 
+impl Factor {
+    pub fn is_supported(&self) -> bool {
+        match self {
+            Self::Hotp { .. } => false,
+            Self::Web { .. } => false,
+            Self::WebAuthn { .. } => false,
+            _ => true
+        }
+    }
+}
+
 impl fmt::Display for Factor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {

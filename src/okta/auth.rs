@@ -145,15 +145,18 @@ impl Client {
                 let factors = response
                     .embedded
                     .map(|e| e.factors)
-                    .ok_or_else(|| eyre!("MFA required, but no factors found"))?;
+                    .ok_or_else(|| eyre!("MFA required, but no factors found"))?
+                    .into_iter()
+                    .filter(Factor::is_supported)
+                    .collect::<Vec<_>>();
 
                 let factor = match factors.len() {
                     0 => Err(eyre!(
-                        "MFA is required, but the user has no enrolled factors"
+                        "MFA is required, but the user has no supported factors"
                     )),
                     1 => {
                         info!(
-                            "Only one MFA option is available ({}), using it",
+                            "Only one MFA option is supported ({}), using it",
                             factors[0]
                         );
                         Ok(&factors[0])
