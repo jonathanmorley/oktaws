@@ -225,13 +225,12 @@ pub enum FactorVerificationRequest {
 }
 
 impl Factor {
-    pub fn is_supported(&self) -> bool {
-        match self {
-            Self::Hotp { .. } => false,
-            Self::Web { .. } => false,
-            Self::WebAuthn { .. } => false,
-            _ => true,
-        }
+    #[must_use]
+    pub const fn is_supported(&self) -> bool {
+        !matches!(
+            self,
+            Self::Hotp { .. } | Self::Web { .. } | Self::WebAuthn { .. }
+        )
     }
 }
 
