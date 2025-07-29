@@ -286,7 +286,9 @@ mockall::mock! {
     pub Client {
         pub fn base_url(&self) -> &Url;
         pub async fn app_links(&self, user_id: Option<()>) -> Result<Vec<crate::okta::applications::AppLink>>;
-        pub async fn all_roles(&self, links: Vec<crate::okta::applications::AppLink>) -> Result<Vec<crate::aws::role::SamlRole>>;
+        pub async fn get_all_account_mappings(&self, links: Vec<crate::okta::applications::AppLink>) -> Result<Vec<crate::okta::applications::AppLinkAccountRoleMapping>>;
         pub async fn get_saml_response(&self, url: Url) -> Result<crate::aws::saml::Response>;
+        pub async fn get_response(&self, url: Url) -> Result<Response>;
+        pub async fn get_org_id_and_auth_code_for_app_link(&self, app_link: crate::okta::applications::AppLink) -> Result<crate::okta::applications::SsoOrgAuth>;
     }
 }

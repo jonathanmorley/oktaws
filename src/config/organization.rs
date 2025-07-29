@@ -1,10 +1,10 @@
-use mockall_double::double;
-
 use crate::config::oktaws_home;
 use crate::config::profile::{self, Profile};
+use crate::okta::applications::IntegrationType;
 #[double]
 use crate::okta::client::Client as OktaClient;
-use crate::select_opt;
+use crate::select_multiple_opt;
+use mockall_double::double;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -17,6 +17,7 @@ use aws_credential_types::Credentials;
 use dialoguer::Input;
 use eyre::{eyre, Error, Result};
 use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml;
@@ -28,7 +29,7 @@ use whoami::username;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     pub username: Option<String>,
-    pub role: Option<String>,
+    pub role: Option<Vec<String>>,
     pub duration_seconds: Option<i32>,
     pub profiles: HashMap<String, profile::Config>,
 }
@@ -43,49 +44,119 @@ impl Config {
     /// or if there are errors during prompting of a default role.
     pub async fn from_organization(client: &OktaClient, username: String) -> Result<Self> {
         let app_links = client.app_links(None).await?;
+
         let aws_links = app_links
             .into_iter()
-            .filter(|link| link.app_name == "amazon_aws");
-        let selected_links = aws_links.collect::<Vec<_>>();
+            .filter(|link| link.app_name == "amazon_aws" || link.app_name == "amazon_aws_sso")
+            .collect::<Vec<_>>();
 
-        let roles = client.all_roles(selected_links.clone()).await?;
+        let all_account_role_mappings = client.get_all_account_mappings(aws_links.clone()).await?;
 
-        let mut role_names = roles
-            .into_iter()
-            .map(|r| r.role_name())
-            .collect::<Result<Vec<_>>>()?;
+        let mut role_names = all_account_role_mappings
+            .iter()
+            .flat_map(|mapping| mapping.role_names.clone())
+            .collect::<Vec<_>>();
         role_names.sort();
 
         // This is to try to remove any single-items from the list, then dedup
-        let default_role_names = role_names
+        let mut default_role_names = role_names
             .into_iter()
             .dedup_with_count()
             .filter(|&(i, _)| i > 1)
+            .collect::<Vec<_>>();
+
+        default_role_names.sort_by(|a, b| b.0.cmp(&a.0));
+
+        let default_role_names = default_role_names
+            .into_iter()
             .map(|(_, x)| x)
             .collect::<Vec<_>>();
 
-        let default_role = if default_role_names.is_empty() {
+        let default_roles = if default_role_names.is_empty() {
             None
         } else {
-            select_opt(
+            Some(select_multiple_opt(
                 default_role_names,
-                "Choose Default Role [None]",
+                "Choose Default Roles [None]",
                 ToOwned::to_owned,
-            )?
+            )?)
         };
 
-        let profile_futures = selected_links
+        let mut saml_account_names = std::collections::HashSet::new();
+        let mut sso_account_names = std::collections::HashSet::new();
+
+        for mapping in &all_account_role_mappings {
+            match mapping.integration_type {
+                IntegrationType::Federated => {
+                    saml_account_names.insert(mapping.account_name.clone());
+                }
+                IntegrationType::IdentityCenter => {
+                    sso_account_names.insert(mapping.account_name.clone());
+                }
+            }
+        }
+
+        let overlap: Vec<_> = saml_account_names
+            .intersection(&sso_account_names)
+            .cloned()
+            .collect();
+
+        let all_account_role_mappings = if !overlap.is_empty() {
+            let options = &["Identity Center", "Account Federation"];
+
+            let favored_integration = dialoguer::Select::new()
+                .with_prompt(
+                    "Overlapping accounts found in Identity Center and Federated AWS Account tiles. Which integration type do you want to favor?"
+                )
+                .items(options)
+                .default(0)
+                .interact()?;
+
+            match favored_integration {
+                0 => {
+                    // Favor Identity Center: remove overlapped account mappings with Federated type
+                    Ok::<_, Error>(
+                        all_account_role_mappings
+                            .clone()
+                            .into_iter()
+                            .filter(|mapping| {
+                                !(overlap.contains(&mapping.account_name)
+                                    && mapping.integration_type == IntegrationType::Federated)
+                            })
+                            .collect(),
+                    )
+                }
+                1 => {
+                    // Favor Account Federation: remove overlapped account mappings with Identity Center types
+                    Ok(all_account_role_mappings
+                        .clone()
+                        .into_iter()
+                        .filter(|mapping| {
+                            !(overlap.contains(&mapping.account_name)
+                                && mapping.integration_type == IntegrationType::IdentityCenter)
+                        })
+                        .collect())
+                }
+                _ => Ok(all_account_role_mappings),
+            }
+        } else {
+            Ok(all_account_role_mappings)
+        }?;
+
+        let profile_futures = all_account_role_mappings
             .into_iter()
-            .map(|link| profile::Config::from_app_link(client, link, default_role.clone()));
+            .map(|mapping| profile::Config::from_account_mapping(mapping, default_roles.clone()));
+
+        let profiles = join_all(profile_futures)
+            .await
+            .into_iter()
+            .collect::<Result<HashMap<String, profile::Config>, Error>>()?;
 
         Ok(Self {
             username: Some(username),
             duration_seconds: None,
-            role: default_role.clone(),
-            profiles: join_all(profile_futures)
-                .await
-                .into_iter()
-                .collect::<Result<_, _>>()?,
+            role: default_roles.clone(),
+            profiles,
         })
     }
 }
@@ -166,7 +237,9 @@ impl Organization {
             (profile.name.clone(), profile.into_credentials(client).await)
         });
 
-        join_all(futures)
+        stream::iter(futures)
+            .buffer_unordered(10) // Only run 10 concurrently at a time
+            .collect::<Vec<_>>()
             .await
             .into_iter()
             .filter_map(|cred_result| match cred_result {
@@ -219,7 +292,7 @@ impl Pattern {
 
 #[cfg(test)]
 mod tests {
-    use crate::aws::role::SamlRole;
+    use crate::okta::applications::AppLinkAccountRoleMapping;
 
     use super::*;
 
@@ -268,7 +341,7 @@ mod tests {
             r#"
 username = "mock_user"
 duration_seconds = 300
-role = "my_role"
+role = ["my_role"]
 [profiles]
 foo = "foo"
 bar = {{ application = "bar", duration_seconds = 600 }}
@@ -287,7 +360,7 @@ baz = {{ application = "baz", role = "baz_role" }}
             name: String::from("foo"),
             application_name: String::from("foo"),
             account: None,
-            role: String::from("my_role"),
+            role: vec![String::from("my_role")],
             duration_seconds: Some(300)
         }));
 
@@ -295,7 +368,7 @@ baz = {{ application = "baz", role = "baz_role" }}
             name: String::from("bar"),
             application_name: String::from("bar"),
             account: None,
-            role: String::from("my_role"),
+            role: vec![String::from("my_role")],
             duration_seconds: Some(600)
         }));
 
@@ -303,7 +376,7 @@ baz = {{ application = "baz", role = "baz_role" }}
             name: String::from("baz"),
             application_name: String::from("baz"),
             account: None,
-            role: String::from("baz_role"),
+            role: vec![String::from("baz_role")],
             duration_seconds: Some(300)
         }));
     }
@@ -364,7 +437,7 @@ foo = "foo"
             file,
             r#"
 username = "mock_user"
-role = "my_role"
+role = ["my_role"]
 [profiles]
 foo = "foo"
 "#
@@ -377,7 +450,7 @@ foo = "foo"
 
         assert_eq!(organization.profiles[0].name, "foo");
         assert_eq!(organization.profiles[0].application_name, "foo");
-        assert_eq!(organization.profiles[0].role, "my_role");
+        assert_eq!(organization.profiles[0].role, vec!["my_role".to_string()]);
         assert_eq!(organization.profiles[0].duration_seconds, None);
     }
 
@@ -428,23 +501,13 @@ foo = "foo"
         client.expect_app_links().returning(|_| Ok(Vec::new()));
 
         // With two (different) roles
-        client.expect_all_roles().returning(|_| {
-            Ok(vec![
-                SamlRole {
-                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
-                        .parse()
-                        .unwrap(),
-                    role: "arn:aws:iam::123456789012:role/mock-role".parse().unwrap(),
-                },
-                SamlRole {
-                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
-                        .parse()
-                        .unwrap(),
-                    role: "arn:aws:iam::123456789012:role/mock-role-2"
-                        .parse()
-                        .unwrap(),
-                },
-            ])
+        client.expect_get_all_account_mappings().returning(|_| {
+            Ok(vec![AppLinkAccountRoleMapping {
+                account_name: "foo".to_string(),
+                role_names: vec!["mock-role".to_string(), "mock-role-2".to_string()],
+                application_name: "blah".to_string(),
+                integration_type: IntegrationType::Federated,
+            }])
         });
 
         let config = Config::from_organization(&client, String::from("test_user"))

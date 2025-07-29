@@ -1,5 +1,7 @@
-use eyre::Result;
+use eyre::{eyre, Result};
 use regex::Regex;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -30,7 +32,7 @@ pub struct AppInstance {
     pub icon: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub id: String,
@@ -72,18 +74,35 @@ impl Client {
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn app_instances(&self) -> Result<Vec<AppInstance>> {
-        let response = reqwest::Client::new()
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_secs(1), Duration::from_secs(2))
+            .base(1)
+            .build_with_max_retries(5);
+
+        let client: ClientWithMiddleware = ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
+        let response = client
             .get(format!("{BASE_URL}/instance/appinstances"))
             .header("x-amz-sso_bearer_token", &self.token)
             .header("x-amz-sso-bearer-token", &self.token)
             .send()
             .await?;
 
+        let status = response.status();
         let text = response.text().await?;
-        trace!("Received {}", &text);
+        if !status.is_success() {
+            Err(eyre!(
+                "Error fetching app instances, StatusCode: {}, Response: {}",
+                status,
+                text
+            ))?;
+        }
 
+        trace!("Received {}", &text);
         let Page::<AppInstance> { result, .. } = serde_json::from_str(&text)?;
-        Ok(result)
+        return Ok(result);
     }
 
     /// # Errors
@@ -91,7 +110,16 @@ impl Client {
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn profiles(&self, app_instance_id: &str) -> Result<Vec<Profile>> {
-        let response = reqwest::Client::new()
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_secs(1), Duration::from_secs(2))
+            .base(2)
+            .build_with_max_retries(10);
+
+        let client: ClientWithMiddleware = ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
+        let response = client
             .get(format!(
                 "{BASE_URL}/instance/appinstance/{app_instance_id}/profiles"
             ))
@@ -100,11 +128,19 @@ impl Client {
             .send()
             .await?;
 
+        let status = response.status();
         let text = response.text().await?;
-        trace!("Received {}", &text);
+        if !status.is_success() {
+            Err(eyre!(
+                "Error fetching profiles, StatusCode: {}, Response: {}",
+                status,
+                text
+            ))?;
+        }
 
+        trace!("Received {}", &text);
         let Page::<Profile> { result, .. } = serde_json::from_str(&text)?;
-        Ok(result)
+        return Ok(result);
     }
 
     /// # Errors

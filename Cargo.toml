@@ -52,6 +52,8 @@ aws-smithy-types = "1"
 aws-runtime = "1"
 aws-types = "1"
 mockall_double = "0.3"
+reqwest-retry = "0.7.0"
+reqwest-middleware = "0.4.2"
 
 [dev-dependencies]
 aws-smithy-runtime = { version = "1", features = ["test-util"] }
