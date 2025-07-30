@@ -147,7 +147,7 @@ jobs:
         env:
           XWIN_CROSS_COMPILER: clang
       - name: Attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         if: github.event_name == 'push'
         with:
           subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}*"
