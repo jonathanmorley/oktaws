@@ -3,17 +3,15 @@ use mockall_double::double;
 #[double]
 use crate::okta::client::Client as OktaClient;
 use crate::{
-    aws::saml::extract_account_name,
-    aws::sso::Client as SsoClient,
-    aws::{get_account_alias, sts_client},
-    okta::applications::AppLink,
+    aws::{sso::Client as SsoClient, sts_client},
+    okta::applications::{AppLink, AppLinkAccountRoleMapping, IntegrationType},
     select,
 };
 
 use aws_credential_types::Credentials;
 use eyre::{eyre, Result};
 use serde::{Deserialize, Serialize};
-use tracing::{instrument, trace, warn};
+use tracing::{instrument, trace};
 
 /// This is an intentionally 'loose' struct,
 /// representing the potential various ways of providing a profile.
@@ -30,72 +28,63 @@ pub enum Config {
 }
 
 impl Config {
-    #[instrument(skip(client, link, default_role), fields(organization=%client.base_url(), application=%link.label))]
-    pub async fn from_app_link(
-        client: &OktaClient,
-        link: AppLink,
-        default_role: Option<String>,
+    #[instrument(skip(mapping, default_roles))]
+    pub fn from_account_mapping(
+        mapping: AppLinkAccountRoleMapping,
+        default_roles: &[String],
     ) -> Result<(String, Self)> {
-        let response = client.get_saml_response(link.link_url).await?;
-        let aws_response = match response.clone().post().await {
-            Err(e) => {
-                warn!("Caught error trying to login to AWS: {}, trying again", e);
-                response.clone().post().await
+        let default_roles_available = mapping
+            .role_names
+            .clone()
+            .into_iter()
+            .filter(|name| default_roles.contains(name))
+            .collect::<Vec<_>>();
+
+        let role_name = match mapping.role_names.len() {
+            0 => Err(eyre!(
+                "No profiles found for application {}",
+                mapping.account_name
+            )),
+            1 => Ok(mapping.role_names.first().unwrap().to_string()),
+            _ if default_roles_available.len() == 1 => {
+                Ok(default_roles_available.first().unwrap().to_string())
             }
-            ok => ok,
+            _ if default_roles_available.len() > 1 => Ok(select(
+                default_roles_available.clone(),
+                format!("Choose Role for {}", mapping.account_name),
+                std::clone::Clone::clone,
+            )?),
+            _ => Ok(select(
+                mapping.role_names.clone(),
+                format!("Choose Role for {}", mapping.account_name),
+                std::clone::Clone::clone,
+            )?),
         }?;
-        let aws_response_text = aws_response.text().await?;
-
-        let roles = response.clone().roles()?;
-
-        let saml_role = match roles.len() {
-            0 => Err(eyre!("No role found")),
-            1 => Ok(roles.first().unwrap()),
-            _ => {
-                if let Some(default_role) = default_role.clone() {
-                    match roles
-                        .iter()
-                        .find(|role| role.role_name().unwrap() == default_role)
-                    {
-                        Some(role) => Ok(role),
-                        None => select(
-                            roles.iter().collect(),
-                            format!("Choose Role for {}", link.label),
-                            |role| role.role.clone(),
-                        ),
-                    }
-                } else {
-                    select(
-                        roles.iter().collect(),
-                        format!("Choose Role for {}", link.label),
-                        |role| role.role.clone(),
-                    )
-                }
+        let profile_config = if default_roles_available.contains(&role_name)
+            && default_roles_available.len() == 1
+            && mapping.integration_type == IntegrationType::Federated
+        {
+            Self::Name(mapping.application_name)
+        } else if default_roles_available.contains(&role_name)
+            && default_roles_available.len() == 1
+            && mapping.integration_type == IntegrationType::IdentityCenter
+        {
+            Self::Detailed {
+                application: mapping.application_name.clone(),
+                account: Some(mapping.account_name.clone()),
+                role: None,
+                duration_seconds: None,
             }
-        }?;
-
-        let role_name = saml_role.role_name()?.to_string();
-
-        let account_name = get_account_alias(saml_role, &response)
-            .await
-            .or_else(|_| extract_account_name(&aws_response_text))
-            .unwrap_or_else(|_| {
-                warn!("No AWS account alias found. Falling back on Okta Application name");
-                link.label.clone()
-            });
-
-        let profile_config = if Some(role_name.clone()) == default_role {
-            Self::Name(link.label)
         } else {
             Self::Detailed {
-                application: link.label,
-                account: None,
+                application: mapping.application_name.clone(),
+                account: Some(mapping.account_name.clone()),
                 role: Some(role_name),
                 duration_seconds: None,
             }
         };
 
-        Ok((account_name, profile_config))
+        Ok((mapping.account_name, profile_config))
     }
 }
 
@@ -106,7 +95,7 @@ pub struct Profile {
     pub name: String,
     pub application_name: String,
     pub account: Option<String>,
-    pub role: String,
+    pub roles: Vec<String>,
     pub duration_seconds: Option<i32>,
 }
 
@@ -119,7 +108,7 @@ impl Profile {
     pub fn try_from_spec(
         profile_config: &Config,
         name: String,
-        default_role: Option<String>,
+        default_roles: Option<Vec<String>>,
         default_duration_seconds: Option<i32>,
     ) -> Result<Self> {
         Ok(Self {
@@ -133,11 +122,11 @@ impl Profile {
                 Config::Name(_) => None,
                 Config::Detailed { account, .. } => account.clone(),
             },
-            role: match profile_config {
+            roles: match profile_config {
                 Config::Name(_) => None,
-                Config::Detailed { role, .. } => role.clone(),
+                Config::Detailed { role, .. } => role.clone().map(|r| vec![r]),
             }
-            .or(default_role)
+            .or(default_roles)
             .ok_or_else(|| eyre!("No role found"))?,
             duration_seconds: match profile_config {
                 Config::Name(_) => None,
@@ -189,17 +178,27 @@ impl Profile {
                 )
             })?;
 
-        let saml_role = response
+        let saml_roles_available = response
             .roles()?
             .into_iter()
-            .find(|r| r.role_name().map(|r| r == self.role).unwrap_or(false))
-            .ok_or_else(|| {
-                eyre!(
-                    "No matching role ({}) found for profile {}",
-                    self.role,
-                    &self.name
-                )
-            })?;
+            .filter(|r| self.roles.contains(&r.role_name().unwrap()))
+            .collect::<Vec<_>>();
+
+        let saml_role = match saml_roles_available.len() {
+            0 => Err(eyre!(
+                "No roles found for profile {} in SAML response",
+                self.name
+            )),
+            1 => Ok(saml_roles_available[0].clone()),
+            _ => {
+                let selected = select(
+                    saml_roles_available,
+                    format!("Choose Role for profile {}", self.name),
+                    |role| role.role_name().unwrap(),
+                )?;
+                Ok(selected)
+            }
+        }?;
 
         trace!("Found role: {} for profile {}", saml_role.role, &self.name);
 
@@ -218,38 +217,11 @@ impl Profile {
         client: &OktaClient,
         app_link: AppLink,
     ) -> Result<Credentials> {
-        let response = client
-            .get_saml_response(app_link.link_url)
-            .await
-            .map_err(|e| {
-                eyre!(
-                    "Error getting SAML response for profile {} ({})",
-                    self.name,
-                    e
-                )
-            })?;
+        let org_auth = client
+            .get_org_id_and_auth_code_for_app_link(app_link)
+            .await?;
 
-        let response = response.post().await?;
-        let host = response
-            .url()
-            .host()
-            .ok_or_else(|| eyre!("No host found"))?;
-        let org_id = if let url::Host::Domain(domain) = host {
-            domain
-                .split_once('.')
-                .map(|(org, _)| org)
-                .ok_or_else(|| eyre!("No dots found in domain: {:?}", domain))
-        } else {
-            Err(eyre!("Host: {:?} is not a domain", host))
-        }?;
-        let auth_code = response
-            .url()
-            .query_pairs()
-            .find(|(k, _)| k.eq("workflowResultHandle"))
-            .ok_or_else(|| eyre!("No token found"))?
-            .1;
-
-        let client = SsoClient::new(org_id, &auth_code).await?;
+        let client = SsoClient::new(&org_auth.org_id, &org_auth.auth_code).await?;
 
         let app_instance = if let Some(account) = self.account {
             client
@@ -267,12 +239,29 @@ impl Profile {
             .account_id()
             .ok_or_else(|| eyre!("No account ID found"))?;
 
-        let profile = client
+        let profiles_available = client
             .profiles(&app_instance.id)
             .await?
             .into_iter()
-            .find(|profile| profile.name == self.role)
-            .ok_or_else(|| eyre!("Cound not find profile: {}", self.role))?;
+            .filter(|profile| self.roles.contains(&profile.name))
+            .collect::<Vec<_>>();
+
+        let profile = match profiles_available.len() {
+            0 => Err(eyre!(
+                "No profiles found for application {}",
+                app_instance.name
+            )),
+            1 => Ok(profiles_available[0].clone()),
+            _ => {
+                let selected = select(
+                    profiles_available,
+                    format!("Choose Profile for application {}", app_instance.name),
+                    |profile| profile.name.clone(),
+                )?;
+                Ok(selected)
+            }
+        }?;
+
         trace!("Found profile: {:?}", profile);
 
         let credentials = client.credentials(account_id, &profile.name).await?;

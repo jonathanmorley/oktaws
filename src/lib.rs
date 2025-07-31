@@ -28,21 +28,26 @@ where
     Ok(items.remove(index))
 }
 
-fn select_opt<T, P, F, S>(mut items: Vec<T>, prompt: P, displayer: F) -> Result<Option<T>>
+fn select_multiple_opt<T, P, F, S>(mut items: Vec<T>, prompt: P, displayer: F) -> Result<Vec<T>>
 where
     P: Into<String>,
     F: FnMut(&T) -> S,
     S: ToString,
 {
-    let index = match items.len() {
+    let indices = match items.len() {
         0 => Err(eyre!("No items found")),
-        _ => dialoguer::Select::new()
+        _ => dialoguer::MultiSelect::new()
             .with_prompt(prompt)
             .items(&items.iter().map(displayer).collect::<Vec<_>>())
-            .default(0)
-            .interact_opt()
+            .interact()
             .map_err(Into::into),
     }?;
 
-    Ok(index.map(|index| items.remove(index)))
+    // Remove selected items by index, highest index first to avoid shifting
+    let mut selected = Vec::new();
+    for &i in indices.iter().rev() {
+        selected.push(items.remove(i));
+    }
+    selected.reverse();
+    Ok(selected)
 }

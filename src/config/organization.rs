@@ -1,10 +1,9 @@
-use mockall_double::double;
-
 use crate::config::oktaws_home;
 use crate::config::profile::{self, Profile};
 #[double]
 use crate::okta::client::Client as OktaClient;
-use crate::select_opt;
+use crate::select_multiple_opt;
+use mockall_double::double;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -16,7 +15,7 @@ use std::str::FromStr;
 use aws_credential_types::Credentials;
 use dialoguer::Input;
 use eyre::{eyre, Error, Result};
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use toml;
@@ -28,6 +27,7 @@ use whoami::username;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     pub username: Option<String>,
+    pub roles: Option<Vec<String>>,
     pub role: Option<String>,
     pub duration_seconds: Option<i32>,
     pub profiles: HashMap<String, profile::Config>,
@@ -45,48 +45,76 @@ impl Config {
         let app_links = client.app_links(None).await?;
         let aws_links = app_links
             .into_iter()
-            .filter(|link| link.app_name == "amazon_aws");
-        let selected_links = aws_links.collect::<Vec<_>>();
+            .filter(|link| link.app_name == "amazon_aws" || link.app_name == "amazon_aws_sso")
+            .collect::<Vec<_>>();
 
-        let roles = client.all_roles(selected_links.clone()).await?;
+        let all_account_role_mappings = client.get_all_account_mappings(aws_links.clone()).await?;
 
-        let mut role_names = roles
-            .into_iter()
-            .map(|r| r.role_name())
-            .collect::<Result<Vec<_>>>()?;
+        let mut role_names = all_account_role_mappings
+            .iter()
+            .flat_map(|mapping| mapping.role_names.clone())
+            .collect::<Vec<_>>();
         role_names.sort();
 
         // This is to try to remove any single-items from the list, then dedup
-        let default_role_names = role_names
+        let mut default_role_names_with_count = role_names
             .into_iter()
             .dedup_with_count()
-            .filter(|&(i, _)| i > 1)
+            .filter(|&(count, _)| count > 1)
+            .collect::<Vec<_>>();
+
+        default_role_names_with_count.sort_by(|a, b| b.0.cmp(&a.0));
+
+        let default_role_names = default_role_names_with_count
+            .into_iter()
             .map(|(_, x)| x)
             .collect::<Vec<_>>();
 
-        let default_role = if default_role_names.is_empty() {
-            None
+        let default_roles = if default_role_names.is_empty() {
+            default_role_names
         } else {
-            select_opt(
+            select_multiple_opt(
                 default_role_names,
-                "Choose Default Role [None]",
+                "Choose Default Roles [None]",
                 ToOwned::to_owned,
             )?
         };
 
-        let profile_futures = selected_links
-            .into_iter()
-            .map(|link| profile::Config::from_app_link(client, link, default_role.clone()));
+        let all_account_role_mappings =
+            client.remove_overlapped_account_mappings(all_account_role_mappings)?;
 
-        Ok(Self {
-            username: Some(username),
-            duration_seconds: None,
-            role: default_role.clone(),
-            profiles: join_all(profile_futures)
-                .await
-                .into_iter()
-                .collect::<Result<_, _>>()?,
-        })
+        let profiles = all_account_role_mappings
+            .into_iter()
+            .map(|account_mapping| {
+                profile::Config::from_account_mapping(account_mapping, &default_roles)
+            })
+            .collect::<Result<HashMap<String, profile::Config>, Error>>()?;
+
+        if default_roles.is_empty() {
+            Ok(Self {
+                username: Some(username),
+                duration_seconds: None,
+                role: None,
+                roles: None,
+                profiles,
+            })
+        } else if default_roles.len() == 1 {
+            Ok(Self {
+                username: Some(username),
+                duration_seconds: None,
+                role: default_roles.first().cloned(),
+                roles: None,
+                profiles,
+            })
+        } else {
+            Ok(Self {
+                username: Some(username),
+                duration_seconds: None,
+                role: None,
+                roles: Some(default_roles),
+                profiles,
+            })
+        }
     }
 }
 
@@ -115,6 +143,18 @@ impl TryFrom<&Path> for Organization {
             None => prompt_username(&filename)?,
         };
 
+        if cfg.role.is_some() && cfg.roles.is_some() {
+            return Err(eyre!(
+                "Organization config has both 'role' and 'roles' fields set. Use of only one field is allowed."
+            ));
+        }
+
+        let default_roles = if let Some(role) = cfg.role {
+            Some(vec![role])
+        } else {
+            cfg.roles
+        };
+
         let profiles = cfg
             .profiles
             .iter()
@@ -122,7 +162,7 @@ impl TryFrom<&Path> for Organization {
                 Profile::try_from_spec(
                     profile_config,
                     name.to_string(),
-                    cfg.role.clone(),
+                    default_roles.clone(),
                     cfg.duration_seconds,
                 )
             })
@@ -166,7 +206,9 @@ impl Organization {
             (profile.name.clone(), profile.into_credentials(client).await)
         });
 
-        join_all(futures)
+        stream::iter(futures)
+            .buffer_unordered(10) // Only run 10 concurrently at a time
+            .collect::<Vec<_>>()
             .await
             .into_iter()
             .filter_map(|cred_result| match cred_result {
@@ -219,7 +261,7 @@ impl Pattern {
 
 #[cfg(test)]
 mod tests {
-    use crate::aws::role::SamlRole;
+    use crate::okta::applications::{AppLinkAccountRoleMapping, IntegrationType};
 
     use super::*;
 
@@ -257,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_organization() {
+    fn parse_organization_with_roles() {
         let tempdir = tempfile::tempdir().unwrap();
 
         let filepath = tempdir.path().join("mock_org.toml");
@@ -268,7 +310,7 @@ mod tests {
             r#"
 username = "mock_user"
 duration_seconds = 300
-role = "my_role"
+roles = ["my_role", "my_role_2"]
 [profiles]
 foo = "foo"
 bar = {{ application = "bar", duration_seconds = 600 }}
@@ -287,7 +329,7 @@ baz = {{ application = "baz", role = "baz_role" }}
             name: String::from("foo"),
             application_name: String::from("foo"),
             account: None,
-            role: String::from("my_role"),
+            roles: vec![String::from("my_role"), String::from("my_role_2")],
             duration_seconds: Some(300)
         }));
 
@@ -295,7 +337,7 @@ baz = {{ application = "baz", role = "baz_role" }}
             name: String::from("bar"),
             application_name: String::from("bar"),
             account: None,
-            role: String::from("my_role"),
+            roles: vec![String::from("my_role"), String::from("my_role_2")],
             duration_seconds: Some(600)
         }));
 
@@ -303,7 +345,41 @@ baz = {{ application = "baz", role = "baz_role" }}
             name: String::from("baz"),
             application_name: String::from("baz"),
             account: None,
-            role: String::from("baz_role"),
+            roles: vec![String::from("baz_role")],
+            duration_seconds: Some(300)
+        }));
+    }
+
+    #[test]
+    fn parse_organization_with_single_role() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let filepath = tempdir.path().join("mock_org.toml");
+        let mut file = File::create(filepath.clone()).unwrap();
+
+        write!(
+            file,
+            r#"
+username = "mock_user"
+duration_seconds = 300
+role = "my_role"
+[profiles]
+foo = "foo"
+"#
+        )
+        .unwrap();
+
+        let organization = Organization::try_from(filepath.as_path()).unwrap();
+
+        assert_eq!(organization.name, "mock_org");
+        assert_eq!(organization.username, "mock_user");
+        assert_eq!(organization.profiles.len(), 1);
+
+        assert!(organization.profiles.contains(&Profile {
+            name: String::from("foo"),
+            application_name: String::from("foo"),
+            account: None,
+            roles: vec![String::from("my_role")],
             duration_seconds: Some(300)
         }));
     }
@@ -364,7 +440,7 @@ foo = "foo"
             file,
             r#"
 username = "mock_user"
-role = "my_role"
+roles = ["my_role"]
 [profiles]
 foo = "foo"
 "#
@@ -377,8 +453,31 @@ foo = "foo"
 
         assert_eq!(organization.profiles[0].name, "foo");
         assert_eq!(organization.profiles[0].application_name, "foo");
-        assert_eq!(organization.profiles[0].role, "my_role");
+        assert_eq!(organization.profiles[0].roles, vec!["my_role".to_string()]);
         assert_eq!(organization.profiles[0].duration_seconds, None);
+    }
+
+    #[test]
+    fn profile_cant_use_role_and_roles() {
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let filepath = tempdir.path().join("mock_org.toml");
+        let mut file = File::create(filepath.clone()).unwrap();
+
+        write!(
+            file,
+            r#"
+username = "mock_user"
+role = "my_role"
+roles = ["my_role_2, my_role_3"]
+[profiles]
+foo = "foo"
+"#
+        )
+        .unwrap();
+
+        let err = Organization::try_from(filepath.as_path()).unwrap_err();
+        assert_eq!(err.to_string(), "Organization config has both 'role' and 'roles' fields set. Use of only one field is allowed.");
     }
 
     #[test]
@@ -428,29 +527,33 @@ foo = "foo"
         client.expect_app_links().returning(|_| Ok(Vec::new()));
 
         // With two (different) roles
-        client.expect_all_roles().returning(|_| {
+        client.expect_get_all_account_mappings().returning(|_| {
             Ok(vec![
-                SamlRole {
-                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
-                        .parse()
-                        .unwrap(),
-                    role: "arn:aws:iam::123456789012:role/mock-role".parse().unwrap(),
+                AppLinkAccountRoleMapping {
+                    account_name: "foo".to_string(),
+                    role_names: vec!["mock-role".to_string()],
+                    application_name: "blah".to_string(),
+                    integration_type: IntegrationType::Federated,
                 },
-                SamlRole {
-                    provider: "arn:aws:iam::123456789012:saml-provider/okta-idp"
-                        .parse()
-                        .unwrap(),
-                    role: "arn:aws:iam::123456789012:role/mock-role-2"
-                        .parse()
-                        .unwrap(),
+                AppLinkAccountRoleMapping {
+                    account_name: "bar".to_string(),
+                    role_names: vec!["mock-role-2".to_string()],
+                    application_name: "blah".to_string(),
+                    integration_type: IntegrationType::Federated,
                 },
             ])
         });
+
+        client
+            .expect_remove_overlapped_account_mappings()
+            .returning(Ok);
 
         let config = Config::from_organization(&client, String::from("test_user"))
             .await
             .unwrap();
 
         assert_eq!(config.role, None);
+        assert_eq!(config.roles, None);
+        assert_eq!(config.profiles.len(), 2);
     }
 }
