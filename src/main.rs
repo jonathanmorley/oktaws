@@ -73,6 +73,10 @@ struct RefreshArgs {
     #[clap(default_value = "*")]
     pub profiles: Pattern,
 
+    /// Role to override toml file with
+    #[clap(short, long = "role-override")]
+    pub role_override: Option<String>,
+
     /// Forces new credentials
     #[clap(short, long = "force-new")]
     pub force_new: bool,
@@ -101,7 +105,11 @@ async fn refresh(args: RefreshArgs) -> Result<()> {
         .await?;
 
         let credentials_map = organization
-            .into_credentials(&okta_client, args.profiles.clone())
+            .into_credentials(
+                &okta_client,
+                args.profiles.clone(),
+                args.role_override.as_ref(),
+            )
             .await;
 
         for (name, creds) in credentials_map {

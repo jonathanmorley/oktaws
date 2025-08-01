@@ -201,9 +201,13 @@ impl Organization {
         self,
         client: &OktaClient,
         filter: glob::Pattern,
+        role_override: Option<&String>,
     ) -> impl Iterator<Item = (String, Credentials)> {
         let futures = self.into_profiles(filter).map(|profile| async {
-            (profile.name.clone(), profile.into_credentials(client).await)
+            (
+                profile.name.clone(),
+                profile.into_credentials(client, role_override).await,
+            )
         });
 
         stream::iter(futures)

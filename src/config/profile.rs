@@ -139,13 +139,19 @@ impl Profile {
     }
 
     #[instrument(skip(self, client), fields(organization=%client.base_url(), profile=%self.name))]
-    pub async fn into_credentials(self, client: &OktaClient) -> Result<Credentials> {
+    pub async fn into_credentials(
+        self,
+        client: &OktaClient,
+        role_override: Option<&String>,
+    ) -> Result<Credentials> {
         let saml_app_link = client.app_links(None).await?.into_iter().find(|app_link| {
             app_link.app_name == "amazon_aws" && app_link.label == self.application_name
         });
 
         if let Some(app_link) = saml_app_link {
-            return self.into_saml_credentials(client, app_link).await;
+            return self
+                .into_saml_credentials(client, app_link, role_override)
+                .await;
         }
 
         let sso_app_link = client.app_links(None).await?.into_iter().find(|app_link| {
@@ -153,7 +159,9 @@ impl Profile {
         });
 
         if let Some(app_link) = sso_app_link {
-            return self.into_sso_credentials(client, app_link).await;
+            return self
+                .into_sso_credentials(client, app_link, role_override)
+                .await;
         }
 
         Err(eyre!(
@@ -166,6 +174,7 @@ impl Profile {
         self,
         client: &OktaClient,
         app_link: AppLink,
+        role_override: Option<&String>,
     ) -> Result<Credentials> {
         let response = client
             .get_saml_response(app_link.link_url)
@@ -178,17 +187,35 @@ impl Profile {
                 )
             })?;
 
-        let saml_roles_available = response
-            .roles()?
-            .into_iter()
-            .filter(|r| self.roles.contains(&r.role_name().unwrap()))
-            .collect::<Vec<_>>();
+        let saml_roles = response.roles()?;
+
+        let saml_roles_available = if let Some(role_override) = role_override {
+            saml_roles
+                .into_iter()
+                .filter(|r| r.role_name().unwrap() == *role_override)
+                .collect::<Vec<_>>()
+        } else {
+            saml_roles
+                .into_iter()
+                .filter(|r| self.roles.contains(&r.role_name().unwrap()))
+                .collect::<Vec<_>>()
+        };
 
         let saml_role = match saml_roles_available.len() {
-            0 => Err(eyre!(
-                "No roles found for profile {} in SAML response",
-                self.name
-            )),
+            0 => {
+                if role_override.is_some() {
+                    Err(eyre!(
+                        "Role override, {}, does not exist for profile {}",
+                        role_override.unwrap(),
+                        self.name
+                    ))
+                } else {
+                    Err(eyre!(
+                        "No roles found for profile {} in SAML response",
+                        self.name
+                    ))
+                }
+            }
             1 => Ok(saml_roles_available[0].clone()),
             _ => {
                 let selected = select(
@@ -216,6 +243,7 @@ impl Profile {
         self,
         client: &OktaClient,
         app_link: AppLink,
+        role_override: Option<&String>,
     ) -> Result<Credentials> {
         let org_auth = client
             .get_org_id_and_auth_code_for_app_link(app_link)
@@ -239,18 +267,35 @@ impl Profile {
             .account_id()
             .ok_or_else(|| eyre!("No account ID found"))?;
 
-        let profiles_available = client
-            .profiles(&app_instance.id)
-            .await?
-            .into_iter()
-            .filter(|profile| self.roles.contains(&profile.name))
-            .collect::<Vec<_>>();
+        let profiles = client.profiles(&app_instance.id).await?;
+
+        let profiles_available = if let Some(role_override) = role_override {
+            profiles
+                .into_iter()
+                .filter(|profile| profile.name == *role_override)
+                .collect::<Vec<_>>()
+        } else {
+            profiles
+                .into_iter()
+                .filter(|profile| self.roles.contains(&profile.name))
+                .collect::<Vec<_>>()
+        };
 
         let profile = match profiles_available.len() {
-            0 => Err(eyre!(
-                "No profiles found for application {}",
-                app_instance.name
-            )),
+            0 => {
+                if role_override.is_some() {
+                    Err(eyre!(
+                        "Role override, {}, does not exist for profile {}",
+                        role_override.unwrap(),
+                        self.name
+                    ))
+                } else {
+                    Err(eyre!(
+                        "No profiles found for application {}",
+                        app_instance.name
+                    ))
+                }
+            }
             1 => Ok(profiles_available[0].clone()),
             _ => {
                 let selected = select(
