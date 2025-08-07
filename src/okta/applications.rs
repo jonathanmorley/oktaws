@@ -206,14 +206,18 @@ impl Client {
         let sso_client = SsoClient::new(&org_auth.org_id, &org_auth.auth_code).await?;
 
         let app_instances = sso_client.app_instances().await?;
+        let app_aws_accounts = app_instances
+            .iter()
+            .filter(|app_instance| app_instance.application_name == "AWS Account")
+            .collect::<Vec<_>>();
 
         let mut all_account_role_mappings = Vec::new();
         let batch_size = 5;
-        for chunk in app_instances.chunks(batch_size) {
+        for chunk in app_aws_accounts.chunks(batch_size) {
             let mut futures = Vec::new();
-            for app_instance in chunk {
+            for app_aws_account in chunk {
                 futures.push(self.get_sso_account_role_mapping(
-                    app_instance,
+                    app_aws_account,
                     app_name.clone(),
                     &sso_client,
                 ));
