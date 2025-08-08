@@ -176,14 +176,12 @@ impl Client {
 
         let mut role_names = profiles.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
         role_names.sort();
-        let account_name = app_instance
-            .account_name()
-            .ok_or_else(|| {
-                eyre!(
-                    "No account name found for app instance: {}",
-                    app_instance.name
-                )
-            })?;
+        let account_name = app_instance.account_name().ok_or_else(|| {
+            eyre!(
+                "No account name found for app instance: {}",
+                app_instance.name
+            )
+        })?;
 
         Ok(AppLinkAccountRoleMapping {
             account_name,
