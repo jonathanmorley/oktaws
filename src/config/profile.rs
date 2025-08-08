@@ -256,7 +256,7 @@ impl Profile {
                 .app_instances()
                 .await?
                 .into_iter()
-                .find(|app| app.account_name() == Some(&account))
+                .find(|app| app.account_name() == Some(account.clone()))
                 .ok_or_else(|| eyre!("Could not find account: {account}"))
         } else {
             Err(eyre!("AWS SSO Applications must specify `account`"))

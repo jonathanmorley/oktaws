@@ -124,7 +124,7 @@ impl Client {
             return Err(eyre!("No roles found for app link: {}", link.label));
         }
 
-        let role_names = roles
+        let mut role_names = roles
             .clone()
             .into_iter()
             .map(|role| {
@@ -134,6 +134,7 @@ impl Client {
                 })
             })
             .collect::<Vec<_>>();
+        role_names.sort();
 
         let account_name = get_account_alias(&roles[0].clone(), &response)
             .await
@@ -173,16 +174,14 @@ impl Client {
             ));
         }
 
-        let role_names = profiles.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
-        let account_name = app_instance
-            .account_name()
-            .ok_or_else(|| {
-                eyre!(
-                    "No account name found for app instance: {}",
-                    app_instance.name
-                )
-            })?
-            .to_string();
+        let mut role_names = profiles.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+        role_names.sort();
+        let account_name = app_instance.account_name().ok_or_else(|| {
+            eyre!(
+                "No account name found for app instance: {}",
+                app_instance.name
+            )
+        })?;
 
         Ok(AppLinkAccountRoleMapping {
             account_name,
