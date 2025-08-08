@@ -201,11 +201,11 @@ static ACCOUNT_ID_REGEX: LazyLock<Regex> =
 
 impl AppInstance {
     #[must_use]
-    pub fn account_name(&self) -> Option<&str> {
+    pub fn account_name(&self) -> Option<String> {
         ACCOUNT_NAME_REGEX
             .captures(&self.name)
             .and_then(|captures| captures.get(1))
-            .map(|mat| mat.as_str())
+            .map(|mat| mat.as_str().to_lowercase().replace([' ', '_'], "-"))
     }
 
     #[must_use]

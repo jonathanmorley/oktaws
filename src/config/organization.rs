@@ -5,7 +5,7 @@ use crate::okta::client::Client as OktaClient;
 use crate::select_multiple_opt;
 use mockall_double::double;
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fs::read_to_string;
@@ -30,7 +30,7 @@ pub struct Config {
     pub roles: Option<Vec<String>>,
     pub role: Option<String>,
     pub duration_seconds: Option<i32>,
-    pub profiles: HashMap<String, profile::Config>,
+    pub profiles: IndexMap<String, profile::Config>,
 }
 
 impl Config {
@@ -48,7 +48,9 @@ impl Config {
             .filter(|link| link.app_name == "amazon_aws" || link.app_name == "amazon_aws_sso")
             .collect::<Vec<_>>();
 
-        let all_account_role_mappings = client.get_all_account_mappings(aws_links.clone()).await?;
+        let mut all_account_role_mappings =
+            client.get_all_account_mappings(aws_links.clone()).await?;
+        all_account_role_mappings.sort_by(|a, b| a.account_name.cmp(&b.account_name));
 
         let mut role_names = all_account_role_mappings
             .iter()
@@ -88,7 +90,7 @@ impl Config {
             .map(|account_mapping| {
                 profile::Config::from_account_mapping(account_mapping, &default_roles)
             })
-            .collect::<Result<HashMap<String, profile::Config>, Error>>()?;
+            .collect::<Result<IndexMap<String, profile::Config>, Error>>()?;
 
         if default_roles.is_empty() {
             Ok(Self {
