@@ -203,10 +203,10 @@ impl Profile {
 
         let saml_role = match saml_roles_available.len() {
             0 => {
-                if role_override.is_some() {
+                if let Some(role_override) = role_override {
                     Err(eyre!(
                         "Role override, {}, does not exist for profile {}",
-                        role_override.unwrap(),
+                        role_override,
                         self.name
                     ))
                 } else {
@@ -283,10 +283,10 @@ impl Profile {
 
         let profile = match profiles_available.len() {
             0 => {
-                if role_override.is_some() {
+                if let Some(role_override) = role_override {
                     Err(eyre!(
                         "Role override, {}, does not exist for profile {}",
-                        role_override.unwrap(),
+                        role_override,
                         self.name
                     ))
                 } else {
