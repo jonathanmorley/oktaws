@@ -71,6 +71,16 @@
             }
           );
         };
+
+        devShells.default = craneLib.devShell {
+          # Inherit inputs from checks.
+          inherit checks;
+
+          # Extra inputs can be added here; cargo and rustc are provided by default.
+          packages = [
+            pkgs.cargo-dist
+          ];
+        };
       };
     };
 }
