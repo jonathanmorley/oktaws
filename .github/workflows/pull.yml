@@ -33,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
+        if: matrix.runner != 'macos-15-intel'
       - uses: DeterminateSystems/nix-installer-action@v17
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
