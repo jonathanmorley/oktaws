@@ -9,8 +9,8 @@ jobs:
     strategy:
       matrix:
         runner:
-          - windows-latest     # x86_64-windows
-          - windows-11-arm    # aarch64-windows
+          - windows-latest    # x86_64-windows
+          # - windows-11-arm    # aarch64-windows
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
