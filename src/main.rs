@@ -11,12 +11,12 @@ use std::convert::{TryFrom, TryInto};
 
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{Result, eyre};
 use glob::Pattern;
 use tracing::instrument;
 use tracing_log::AsTrace;
 use tracing_subscriber::filter::Targets;
-use tracing_subscriber::{prelude::*, Registry};
+use tracing_subscriber::{Registry, prelude::*};
 use tracing_tree::HierarchicalLayer;
 use whoami::username;
 
