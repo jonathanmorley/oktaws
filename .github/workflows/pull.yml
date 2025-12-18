@@ -25,13 +25,16 @@ jobs:
           - macos-latest    # aarch64-darwin
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
       - uses: DeterminateSystems/nix-installer-action@v17
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
       - name: Check
         run: nix flake check --print-build-logs --no-update-lock-file
       - name: Build
-        run: nix build
+        run: nix build --print-build-logs
   verify:
     needs: [cargo, nix]
     runs-on: ubuntu-latest
