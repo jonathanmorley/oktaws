@@ -1,7 +1,5 @@
-[workspace]
-members = ["cargo:."]
-
 # Config for 'dist'
+
 [dist]
 allow-dirty = ["ci"]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
@@ -16,7 +14,7 @@ targets = [
   "x86_64-apple-darwin",
   "x86_64-pc-windows-msvc",
   # Disable for now
-  #"aarch64-pc-windows-msvc",
+  # "aarch64-pc-windows-msvc",
   "x86_64-unknown-linux-gnu",
   "x86_64-unknown-linux-musl",
   "aarch64-unknown-linux-gnu",
@@ -28,16 +26,22 @@ install-updater = false
 pr-run-mode = "upload"
 github-attestations = true
 
+[dist.github-custom-runners.aarch64-pc-windows-msvc]
+runner = "windows-11-arm"
+
+[dist.github-custom-runners.aarch64-unknown-linux-gnu]
+runner = "ubuntu-24.04-arm"
+
 # Force the builds onto the best runners for their architecture
 [dist.github-custom-runners.x86_64-pc-windows-msvc]
 runner = "windows-latest"
-[dist.github-custom-runners.aarch64-pc-windows-msvc]
-runner = "windows-11-arm"
-[dist.github-custom-runners.aarch64-unknown-linux-gnu]
-runner = "ubuntu-24.04-arm"
+
+[dist.github-custom-runners.x86_64-unknown-linux-gnu]
+runner = "ubuntu-latest"
 
 # Remove ubuntu-20.04
 [dist.github-custom-runners.x86_64-unknown-linux-musl]
 runner = "ubuntu-latest"
-[dist.github-custom-runners.x86_64-unknown-linux-gnu]
-runner = "ubuntu-latest"
+
+[workspace]
+members = ["cargo:."]

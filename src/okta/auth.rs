@@ -2,7 +2,7 @@ use crate::okta::client::Client;
 use crate::okta::factors::{Factor, FactorResult};
 
 use dialoguer;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use serde::{Deserialize, Serialize};

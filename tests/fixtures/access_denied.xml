@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
   <Error>
     <Type>Sender</Type>

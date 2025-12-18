@@ -9,7 +9,7 @@ use crate::{
 };
 
 use aws_credential_types::Credentials;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, trace};
 
@@ -45,9 +45,9 @@ impl Config {
                 "No profiles found for application {}",
                 mapping.account_name
             )),
-            1 => Ok(mapping.role_names.first().unwrap().to_string()),
+            1 => Ok(mapping.role_names.first().unwrap().clone()),
             _ if default_roles_available.len() == 1 => {
-                Ok(default_roles_available.first().unwrap().to_string())
+                Ok(default_roles_available.first().unwrap().clone())
             }
             _ if default_roles_available.len() > 1 => Ok(select(
                 default_roles_available.clone(),

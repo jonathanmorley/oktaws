@@ -9,7 +9,7 @@ use crate::aws::saml::Response;
 use aws_sdk_iam::{Client as IamClient, Config as IamConfig};
 use aws_sdk_sts::config::Region as StsRegion;
 use aws_sdk_sts::{Client as StsClient, Config as StsConfig};
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 
 /// Get the AWS account alias via IAM SDK calls
 ///

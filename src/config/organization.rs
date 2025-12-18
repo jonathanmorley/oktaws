@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 use aws_credential_types::Credentials;
 use dialoguer::Input;
-use eyre::{eyre, Error, Result};
+use eyre::{Error, Result, eyre};
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -163,7 +163,7 @@ impl TryFrom<&Path> for Organization {
             .map(|(name, profile_config)| {
                 Profile::try_from_spec(
                     profile_config,
-                    name.to_string(),
+                    name.clone(),
                     default_roles.clone(),
                     cfg.duration_seconds,
                 )
@@ -483,7 +483,10 @@ foo = "foo"
         .unwrap();
 
         let err = Organization::try_from(filepath.as_path()).unwrap_err();
-        assert_eq!(err.to_string(), "Organization config has both 'role' and 'roles' fields set. Use of only one field is allowed.");
+        assert_eq!(
+            err.to_string(),
+            "Organization config has both 'role' and 'roles' fields set. Use of only one field is allowed."
+        );
     }
 
     #[test]

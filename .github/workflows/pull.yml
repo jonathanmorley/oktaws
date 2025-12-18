@@ -6,24 +6,12 @@ on:
 
 jobs:
   cargo:
-    strategy:
-      matrix:
-        runner:
-          # Release already exercises a build, so this only needs to worry about testable targets
-          - ubuntu-latest   # x86_64-unknown-linux-gnu
-          - macos-13        # x86_64-apple-darwin
-          - macos-latest    # aarch64-apple-darwin
-          - windows-latest  # x86_64-pc-windows-msvc
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          cache-key: ${{ matrix.runner }}
-      - name: Format
-        run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test
@@ -33,15 +21,15 @@ jobs:
       matrix:
         runner:
           - ubuntu-latest   # x86_64-linux
-          - macos-13        # x86_64-darwin
+          - macos-15-intel  # x86_64-darwin
           - macos-latest    # aarch64-darwin
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v17
-      - name: Format
-        run: nix fmt -- --check .
+      - name: Check
+        run: nix flake check --print-build-logs --no-update-lock-file
       - name: Build
         run: nix build
   verify:

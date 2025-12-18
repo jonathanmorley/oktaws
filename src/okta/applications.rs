@@ -3,7 +3,7 @@ use crate::{
     okta::client::Client,
 };
 
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use futures::future::join_all;
 use serde::Deserialize;
 use tracing::warn;
