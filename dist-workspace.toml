@@ -43,5 +43,11 @@ runner = "ubuntu-latest"
 [dist.github-custom-runners.x86_64-unknown-linux-musl]
 runner = "ubuntu-latest"
 
+[dist.github-custom-runners.x86_64-apple-darwin]
+runner = "macos-15-intel"
+
+[dist.github-custom-runners.aarch64-apple-darwin]
+runner = "macos-15"
+
 [workspace]
 members = ["cargo:."]
