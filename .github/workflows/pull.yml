@@ -6,7 +6,12 @@ on:
 
 jobs:
   cargo:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        runner:
+          - windows-latest     # x86_64-windows
+          - windows-11-arm    # aarch64-windows
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,9 +25,10 @@ jobs:
     strategy:
       matrix:
         runner:
-          - ubuntu-latest   # x86_64-linux
-          - macos-15-intel  # x86_64-darwin
-          - macos-latest    # aarch64-darwin
+          - ubuntu-latest     # x86_64-linux
+          - macos-15-intel    # x86_64-darwin
+          - macos-latest      # aarch64-darwin
+          - ubuntu-24.04-arm  # aarch64-linux
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
