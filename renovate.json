@@ -1,3 +1,5 @@
 {
-  "excludeCommitPaths": [".github/workflows/release.yml"]
+  "excludeCommitPaths": [
+    ".github/workflows/release.yml"
+  ]
 }

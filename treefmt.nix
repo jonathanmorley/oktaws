@@ -1,5 +1,4 @@
 # See available programs from https://github.com/numtide/treefmt-nix/tree/main/programs
-
 {inputs, ...}: {
   imports = [inputs.treefmt-nix.flakeModule];
   perSystem = {
