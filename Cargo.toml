@@ -53,7 +53,7 @@ indexmap = { version = "2.10", features = ["serde"] }
 [dev-dependencies]
 aws-smithy-runtime = { version = "1", features = ["test-util"] }
 http = "1"
-mockall = "0.13"
+mockall = "0.14"
 serial_test = "3"
 tempfile = "3"
 tokio-test = "0.4"
