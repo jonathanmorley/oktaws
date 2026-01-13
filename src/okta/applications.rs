@@ -129,7 +129,7 @@ impl Client {
 
                 (workflow_state.presentation_context.identity_pool_id, auth_code)
             } else {
-                // Fallback: Extract from response URL (old approach)
+                // If the 'platform-workflow-state' cookie is not found, fall back to the old method of extraction from the query params
                 trace!("platform-workflow-state cookie not found, using fallback extraction from response URL");
                 
                 let host = aws_response
@@ -156,7 +156,7 @@ impl Client {
                 (org_id, auth_code)
             }
         } else {
-            // Fallback: Extract from response URL (old approach)
+            // If no cookies exist then fall back to the old method of extraction from the query params
             trace!("No cookies found, using fallback extraction from response URL");
             
             let host = aws_response
