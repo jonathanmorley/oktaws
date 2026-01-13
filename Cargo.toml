@@ -49,6 +49,7 @@ mockall_double = "0.3"
 reqwest-retry = "0.7.0"
 reqwest-middleware = "0.4.2"
 indexmap = { version = "2.10", features = ["serde"] }
+cookie = "0.18.1"
 
 [dev-dependencies]
 aws-smithy-runtime = { version = "1", features = ["test-util"] }

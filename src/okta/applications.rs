@@ -1,13 +1,17 @@
+use std::sync::Arc;
+
 use crate::{
     aws::{get_account_alias, saml::extract_account_name},
     okta::client::Client,
 };
 
-use eyre::{Result, eyre};
+use eyre::{ContextCompat, Result, eyre};
 use futures::future::join_all;
-use serde::Deserialize;
-use tracing::warn;
+use serde::{Deserialize};
+use tracing::{trace, warn};
 use url::Url;
+use reqwest::cookie::{CookieStore, Jar};
+use cookie::Cookie;
 
 use crate::aws::sso::{AppInstance, Client as SsoClient};
 
@@ -38,6 +42,37 @@ pub struct SsoOrgAuth {
     pub auth_code: String,
 }
 
+#[derive(Clone, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct RedirectState {
+    pub url: Url,
+    pub method: String
+}
+
+#[derive(Clone, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct PresentationContext {
+    pub client_id: String,
+    pub identity_pool_id: String,
+    pub username: String,
+    pub identity_pool_type: String,
+    pub application_type: String,
+    pub arn_partition: String,
+    pub locale: String,
+    pub airport_code: String
+}
+
+#[derive(Clone, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct WorkflowState {
+    pub request_id: String,
+    pub step_id: String,
+    pub redirect: RedirectState,
+    pub presentation_context: PresentationContext,
+    pub workflow_response_data: serde_json::Value,
+    pub ping_location: Url,
+}
+
 impl Client {
     /// Given an `AppLink`, return the org Id and auth code needed to create an SSO client
     ///
@@ -59,29 +94,98 @@ impl Client {
                 )
             })?;
 
-        let response = response.post().await?;
-        let host = response
-            .url()
-            .host()
-            .ok_or_else(|| eyre!("No host found"))?;
-        let org_id = if let url::Host::Domain(domain) = host {
-            domain
-                .split_once('.')
-                .map(|(org, _)| org)
-                .ok_or_else(|| eyre!("No dots found in domain: {:?}", domain))
+        let cookies = Arc::from(Jar::default());
+        let aws_response = reqwest::Client::builder()
+            .cookie_provider(cookies.clone())
+            .build()?
+            .post(response.url.clone())
+            .form(&[
+                ("SAMLResponse", response.saml.clone()),
+                ("RelayState", response.relay_state.clone()),
+            ])
+            .send()
+            .await?;
+
+        // Try to get org_id and auth_code from platform-workflow-state cookie
+        let (org_id, auth_code) = if let Some(cookie_str) = cookies
+            .cookies(&Url::parse("https://us-east-1.signin.aws.amazon.com/platform")?) {
+            
+            let workflow_state_cookie = Cookie::split_parse_encoded(cookie_str.to_str()?)
+                .find(|c| c.as_ref().map(|c| c.name()) == Ok("platform-workflow-state"))
+                .transpose()?;
+
+            if let Some(cookie) = workflow_state_cookie {
+                // Extract from cookie (new approach)
+                let workflow_state_str = cookie.value();
+                let workflow_state: WorkflowState = serde_json::from_str(workflow_state_str)?;
+
+                trace!("Using workflow state from cookie: {:?}", workflow_state);
+
+                let auth_code = workflow_state.redirect.url
+                    .query_pairs()
+                    .find(|(k, _)| k.eq("workflowResultHandle"))
+                    .ok_or_else(|| eyre!("No token found in workflow state"))?
+                    .1.to_string();
+
+                (workflow_state.presentation_context.identity_pool_id, auth_code)
+            } else {
+                // Fallback: Extract from response URL (old approach)
+                trace!("platform-workflow-state cookie not found, using fallback extraction from response URL");
+                
+                let host = aws_response
+                    .url()
+                    .host()
+                    .ok_or_else(|| eyre!("No host found"))?;
+                
+                let org_id = if let url::Host::Domain(domain) = host {
+                    domain
+                        .split_once('.')
+                        .map(|(org, _)| org.to_string())
+                        .ok_or_else(|| eyre!("No dots found in domain: {:?}", domain))
+                } else {
+                    Err(eyre!("Host: {:?} is not a domain", host))
+                }?;
+                
+                let auth_code = aws_response
+                    .url()
+                    .query_pairs()
+                    .find(|(k, _)| k.eq("workflowResultHandle"))
+                    .ok_or_else(|| eyre!("No token found in response URL"))?
+                    .1.to_string();
+
+                (org_id, auth_code)
+            }
         } else {
-            Err(eyre!("Host: {:?} is not a domain", host))
-        }?;
-        let auth_code = response
-            .url()
-            .query_pairs()
-            .find(|(k, _)| k.eq("workflowResultHandle"))
-            .ok_or_else(|| eyre!("No token found"))?
-            .1;
+            // Fallback: Extract from response URL (old approach)
+            trace!("No cookies found, using fallback extraction from response URL");
+            
+            let host = aws_response
+                .url()
+                .host()
+                .ok_or_else(|| eyre!("No host found"))?;
+            
+            let org_id = if let url::Host::Domain(domain) = host {
+                domain
+                    .split_once('.')
+                    .map(|(org, _)| org.to_string())
+                    .ok_or_else(|| eyre!("No dots found in domain: {:?}", domain))
+            } else {
+                Err(eyre!("Host: {:?} is not a domain", host))
+            }?;
+            
+            let auth_code = aws_response
+                .url()
+                .query_pairs()
+                .find(|(k, _)| k.eq("workflowResultHandle"))
+                .ok_or_else(|| eyre!("No token found in response URL"))?
+                .1.to_string();
+
+            (org_id, auth_code)
+        };
 
         Ok(SsoOrgAuth {
-            org_id: (org_id.to_string()),
-            auth_code: (auth_code.to_string()),
+            org_id,
+            auth_code
         })
     }
 
