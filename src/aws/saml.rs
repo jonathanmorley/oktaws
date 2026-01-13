@@ -82,7 +82,9 @@ impl Response {
     ///
     /// Will return `Err` if there are any errors encountered while sending the request
     pub async fn post(self) -> Result<reqwest::Response> {
-        reqwest::Client::new()
+        reqwest::Client::builder()
+            .cookie_store(true)
+            .build()?
             .post(self.url)
             .form(&[
                 ("SAMLResponse", self.saml),
