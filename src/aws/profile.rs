@@ -14,6 +14,10 @@ pub struct Store {
 }
 
 impl Store {
+    /// # Errors
+    ///
+    /// Will return `Err` if the HOME environment variable is not set.
+    /// Will return `Err` if the aws credentials file cannot be read or parsed.
     #[instrument]
     pub fn load(path: Option<&Path>) -> Result<Self> {
         let path = match (path, env_var("AWS_SHARED_CREDENTIALS_FILE")) {
@@ -76,6 +80,10 @@ impl Store {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the parent directory cannot be created.
+    /// Will return `Err` if the credentials file cannot be written.
     #[instrument(skip_all)]
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {
@@ -295,7 +303,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"
                 "The credentials for static are not STS. Refusing to overwrite them
 
 Location:
-    {}:57:24",
+    {}:61:24",
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             ),
         );
@@ -335,7 +343,7 @@ Caused by:
    1: Parsing Error: VerboseError {{ errors: [(\"foo\", Nom(Eof))] }}
 
 Location:
-    {}:29:48",
+    {}:33:48",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )

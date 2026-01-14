@@ -28,6 +28,14 @@ pub enum Config {
 }
 
 impl Config {
+    /// # Errors
+    ///
+    /// Will return `Err` if no profiles are found for the application.
+    /// Will return `Err` if the user fails to select a role.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `role_names` vector has exactly 1 element but `first()` returns `None`.
     #[instrument(skip(mapping, default_roles))]
     pub fn from_account_mapping(
         mapping: AppLinkAccountRoleMapping,
@@ -138,6 +146,11 @@ impl Profile {
         })
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the Okta application for the profile cannot be found.
+    /// Will return `Err` if the SAML response or SSO credentials cannot be obtained.
+    /// Will return `Err` if the role cannot be assumed.
     #[instrument(skip(self, client), fields(organization=%client.base_url(), profile=%self.name))]
     pub async fn into_credentials(
         self,

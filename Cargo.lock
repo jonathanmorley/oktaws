@@ -2078,6 +2078,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "color-eyre",
+ "cookie",
  "dialoguer",
  "dirs",
  "eyre",

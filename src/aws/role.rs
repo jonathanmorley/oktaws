@@ -47,6 +47,10 @@ impl SamlRole {
             .map(ToString::to_string)
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the STS assume role call fails.
+    /// Will return `Err` if no credentials are returned from STS.
     #[instrument(level = "trace", skip(client))]
     pub async fn assume(
         &self,
