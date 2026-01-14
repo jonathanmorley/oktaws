@@ -14,6 +14,10 @@ pub struct Store {
 }
 
 impl Store {
+    /// # Errors
+    ///
+    /// Will return `Err` if the HOME environment variable is not set.
+    /// Will return `Err` if the aws credentials file cannot be read or parsed.
     #[instrument]
     pub fn load(path: Option<&Path>) -> Result<Self> {
         let path = match (path, env_var("AWS_SHARED_CREDENTIALS_FILE")) {
@@ -76,6 +80,10 @@ impl Store {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Will return `Err` if the parent directory cannot be created.
+    /// Will return `Err` if the credentials file cannot be written.
     #[instrument(skip_all)]
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {
