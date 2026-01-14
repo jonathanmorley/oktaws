@@ -303,7 +303,7 @@ aws_secret_access_key = STATIC_SECRET_ACCESS_KEY"
                 "The credentials for static are not STS. Refusing to overwrite them
 
 Location:
-    {}:57:24",
+    {}:61:24",
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             ),
         );
@@ -343,7 +343,7 @@ Caused by:
    1: Parsing Error: VerboseError {{ errors: [(\"foo\", Nom(Eof))] }}
 
 Location:
-    {}:29:48",
+    {}:33:48",
                 tempfile.path().display(),
                 PathBuf::from_iter(["src", "aws", "profile.rs"]).display()
             )
