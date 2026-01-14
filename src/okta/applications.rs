@@ -46,31 +46,31 @@ pub struct SsoOrgAuth {
 #[serde(rename_all = "camelCase")]
 struct RedirectState {
     pub url: Url,
-    pub method: String
+    // pub method: String
 }
 
 #[derive(Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct PresentationContext {
-    pub client_id: String,
+    // pub client_id: String,
     pub identity_pool_id: String,
-    pub username: String,
-    pub identity_pool_type: String,
-    pub application_type: String,
-    pub arn_partition: String,
-    pub locale: String,
-    pub airport_code: String
+    // pub username: String,
+    // pub identity_pool_type: String,
+    // pub application_type: String,
+    // pub arn_partition: String,
+    // pub locale: String,
+    // pub airport_code: String
 }
 
 #[derive(Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct WorkflowState {
-    pub request_id: String,
-    pub step_id: String,
+    // pub request_id: String,
+    // pub step_id: String,
     pub redirect: RedirectState,
     pub presentation_context: PresentationContext,
-    pub workflow_response_data: serde_json::Value,
-    pub ping_location: Url,
+    // pub workflow_response_data: serde_json::Value,
+    // pub ping_location: Url,
 }
 
 impl Client {
