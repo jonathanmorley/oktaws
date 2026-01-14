@@ -5,13 +5,14 @@ use crate::{
     okta::client::Client,
 };
 
+use cookie::Cookie;
+
 use eyre::{Result, eyre};
 use futures::future::join_all;
-use serde::{Deserialize};
+use reqwest::cookie::{CookieStore, Jar};
+use serde::Deserialize;
 use tracing::{trace, warn};
 use url::Url;
-use reqwest::cookie::{CookieStore, Jar};
-use cookie::Cookie;
 
 use crate::aws::sso::{AppInstance, Client as SsoClient};
 
@@ -79,13 +80,13 @@ impl Client {
     /// # Errors
     ///
     /// Will return `Err` if the cookie is not found or cannot be parsed
-    fn extract_org_auth_from_cookie(
-        cookies: &Arc<Jar>,
-    ) -> Result<(String, String)> {
+    fn extract_org_auth_from_cookie(cookies: &Arc<Jar>) -> Result<(String, String)> {
         let cookie_str = cookies
-            .cookies(&Url::parse("https://us-east-1.signin.aws.amazon.com/platform")?)
+            .cookies(&Url::parse(
+                "https://us-east-1.signin.aws.amazon.com/platform",
+            )?)
             .ok_or_else(|| eyre!("No cookies found"))?;
-        
+
         let workflow_state_cookie = Cookie::split_parse_encoded(cookie_str.to_str()?)
             .find(|c| c.as_ref().map(Cookie::name) == Ok("platform-workflow-state"))
             .transpose()?
@@ -94,15 +95,24 @@ impl Client {
         let workflow_state_str = workflow_state_cookie.value();
         let workflow_state: WorkflowState = serde_json::from_str(workflow_state_str)?;
 
-        trace!("Extracted org_id and auth_code from workflow state cookie: {:?}", workflow_state);
+        trace!(
+            "Extracted org_id and auth_code from workflow state cookie: {:?}",
+            workflow_state
+        );
 
-        let auth_code = workflow_state.redirect.url
+        let auth_code = workflow_state
+            .redirect
+            .url
             .query_pairs()
             .find(|(k, _)| k.eq("workflowResultHandle"))
             .ok_or_else(|| eyre!("No workflowResultHandle found in workflow state"))?
-            .1.to_string();
+            .1
+            .to_string();
 
-        Ok((workflow_state.presentation_context.identity_pool_id, auth_code))
+        Ok((
+            workflow_state.presentation_context.identity_pool_id,
+            auth_code,
+        ))
     }
 
     /// Extract `org_id` and `auth_code` from the AWS response URL
@@ -110,14 +120,12 @@ impl Client {
     /// # Errors
     ///
     /// Will return `Err` if the URL doesn't contain the required information
-    fn extract_org_auth_from_url(
-        aws_response: &reqwest::Response,
-    ) -> Result<(String, String)> {
+    fn extract_org_auth_from_url(aws_response: &reqwest::Response) -> Result<(String, String)> {
         let host = aws_response
             .url()
             .host()
             .ok_or_else(|| eyre!("No host found in response URL"))?;
-        
+
         let org_id = if let url::Host::Domain(domain) = host {
             domain
                 .split_once('.')
@@ -126,13 +134,14 @@ impl Client {
         } else {
             Err(eyre!("Host: {:?} is not a domain", host))
         }?;
-        
+
         let auth_code = aws_response
             .url()
             .query_pairs()
             .find(|(k, _)| k.eq("workflowResultHandle"))
             .ok_or_else(|| eyre!("No workflowResultHandle found in response URL"))?
-            .1.to_string();
+            .1
+            .to_string();
 
         trace!("Extracted org_id and auth_code from response URL");
 
@@ -172,16 +181,16 @@ impl Client {
             .await?;
 
         // Try cookie-based extraction first (newer AWS flow)
-        let (org_id, auth_code) = Self::extract_org_auth_from_cookie(&cookies)
-            .or_else(|cookie_err| {
-                trace!("Cookie extraction failed: {}, falling back to URL extraction", cookie_err);
+        let (org_id, auth_code) =
+            Self::extract_org_auth_from_cookie(&cookies).or_else(|cookie_err| {
+                trace!(
+                    "Cookie extraction failed: {}, falling back to URL extraction",
+                    cookie_err,
+                );
                 Self::extract_org_auth_from_url(&aws_response)
             })?;
 
-        Ok(SsoOrgAuth {
-            org_id,
-            auth_code
-        })
+        Ok(SsoOrgAuth { org_id, auth_code })
     }
 
     /// Return all the `AppLink`s for a given user.
