@@ -5,7 +5,7 @@ use crate::{
     okta::client::Client,
 };
 
-use eyre::{ContextCompat, Result, eyre};
+use eyre::{Result, eyre};
 use futures::future::join_all;
 use serde::{Deserialize};
 use tracing::{trace, warn};
@@ -74,7 +74,7 @@ struct WorkflowState {
 }
 
 impl Client {
-    /// Extract org_id and auth_code from the platform-workflow-state cookie
+    /// Extract `org_id` and `auth_code` from the platform-workflow-state cookie
     ///
     /// # Errors
     ///
@@ -87,7 +87,7 @@ impl Client {
             .ok_or_else(|| eyre!("No cookies found"))?;
         
         let workflow_state_cookie = Cookie::split_parse_encoded(cookie_str.to_str()?)
-            .find(|c| c.as_ref().map(|c| c.name()) == Ok("platform-workflow-state"))
+            .find(|c| c.as_ref().map(Cookie::name) == Ok("platform-workflow-state"))
             .transpose()?
             .ok_or_else(|| eyre!("platform-workflow-state cookie not found"))?;
 
@@ -105,7 +105,7 @@ impl Client {
         Ok((workflow_state.presentation_context.identity_pool_id, auth_code))
     }
 
-    /// Extract org_id and auth_code from the AWS response URL
+    /// Extract `org_id` and `auth_code` from the AWS response URL
     ///
     /// # Errors
     ///
