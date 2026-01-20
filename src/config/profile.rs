@@ -3,8 +3,8 @@ use mockall_double::double;
 #[double]
 use crate::okta::client::Client as OktaClient;
 use crate::{
-    aws::{sso::Client as SsoClient, sts_client},
-    okta::applications::{AppLink, AppLinkAccountRoleMapping, IntegrationType},
+    aws::sts_client,
+    okta::applications::{AppLink, AppLinkAccountRoleMapping},
     select,
 };
 
@@ -24,6 +24,8 @@ pub enum Config {
         account: Option<String>,
         role: Option<String>,
         duration_seconds: Option<i32>,
+        #[serde(skip_serializing, skip_deserializing)]
+        account_id: Option<String>,
     },
 }
 
@@ -70,25 +72,30 @@ impl Config {
         }?;
         let profile_config = if default_roles_available.contains(&role_name)
             && default_roles_available.len() == 1
-            && mapping.integration_type == IntegrationType::Federated
+            && mapping.account_id.is_none()
         {
+            // Federated profile with single default role - use simplified format
             Self::Name(mapping.application_name)
         } else if default_roles_available.contains(&role_name)
             && default_roles_available.len() == 1
-            && mapping.integration_type == IntegrationType::IdentityCenter
+            && mapping.account_id.is_some()
         {
+            // Identity Center profile with single default role - use detailed format without explicit role
             Self::Detailed {
                 application: mapping.application_name.clone(),
                 account: Some(mapping.account_name.clone()),
                 role: None,
                 duration_seconds: None,
+                account_id: mapping.account_id.clone(),
             }
         } else {
+            // Multiple roles or no default role - use detailed format with explicit role
             Self::Detailed {
                 application: mapping.application_name.clone(),
                 account: Some(mapping.account_name.clone()),
                 role: Some(role_name),
                 duration_seconds: None,
+                account_id: mapping.account_id.clone(),
             }
         };
 
@@ -167,16 +174,6 @@ impl Profile {
                 .await;
         }
 
-        let sso_app_link = client.app_links(None).await?.into_iter().find(|app_link| {
-            app_link.app_name == "amazon_aws_sso" && app_link.label == self.application_name
-        });
-
-        if let Some(app_link) = sso_app_link {
-            return self
-                .into_sso_credentials(client, app_link, role_override)
-                .await;
-        }
-
         Err(eyre!(
             "Could not find Okta application for profile {}",
             self.name
@@ -251,80 +248,304 @@ impl Profile {
 
         Ok(credentials)
     }
+}
 
-    async fn into_sso_credentials(
-        self,
-        client: &OktaClient,
-        app_link: AppLink,
-        role_override: Option<&String>,
-    ) -> Result<Credentials> {
-        let org_auth = client
-            .get_org_id_and_auth_code_for_app_link(app_link)
-            .await?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        let client = SsoClient::new(&org_auth.org_id, &org_auth.auth_code).await?;
+    // Helper to create test mapping
+    fn create_test_mapping(
+        account_name: &str,
+        application_name: &str,
+        role_names: Vec<String>,
+        account_id: Option<String>,
+    ) -> AppLinkAccountRoleMapping {
+        AppLinkAccountRoleMapping {
+            account_name: account_name.to_string(),
+            role_names,
+            application_name: application_name.to_string(),
+            account_id,
+        }
+    }
 
-        let app_instance = if let Some(account) = self.account {
-            client
-                .app_instances()
-                .await?
-                .into_iter()
-                .find(|app| app.account_name() == Some(account.clone()))
-                .ok_or_else(|| eyre!("Could not find account: {account}"))
-        } else {
-            Err(eyre!("AWS SSO Applications must specify `account`"))
-        }?;
-        trace!("Found application: {:?}", app_instance);
+    // Tests for Config::from_account_mapping()
+    #[test]
+    fn test_single_role_federated() -> Result<()> {
+        let mapping = create_test_mapping(
+            "prod-account",
+            "Production",
+            vec!["AdminRole".to_string()],
+            None,
+        );
+        let (account, config) = Config::from_account_mapping(mapping, &[])?;
 
-        let account_id = app_instance
-            .account_id()
-            .ok_or_else(|| eyre!("No account ID found"))?;
+        assert_eq!(account, "prod-account");
+        match config {
+            Config::Detailed {
+                application,
+                account: acc,
+                role,
+                ..
+            } => {
+                assert_eq!(application, "Production");
+                assert_eq!(acc, Some("prod-account".to_string()));
+                assert_eq!(role, Some("AdminRole".to_string()));
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+        Ok(())
+    }
 
-        let profiles = client.profiles(&app_instance.id).await?;
+    #[test]
+    fn test_single_role_with_default_federated() -> Result<()> {
+        let mapping = create_test_mapping(
+            "prod-account",
+            "Production",
+            vec!["AdminRole".to_string()],
+            None,
+        );
+        let (account, config) = Config::from_account_mapping(mapping, &["AdminRole".to_string()])?;
 
-        let profiles_available = if let Some(role_override) = role_override {
-            profiles
-                .into_iter()
-                .filter(|profile| profile.name == *role_override)
-                .collect::<Vec<_>>()
-        } else {
-            profiles
-                .into_iter()
-                .filter(|profile| self.roles.contains(&profile.name))
-                .collect::<Vec<_>>()
+        assert_eq!(account, "prod-account");
+        match config {
+            Config::Name(name) => {
+                assert_eq!(name, "Production");
+            }
+            _ => panic!("Expected Name variant for single default role"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_single_role_with_default_identity_center() -> Result<()> {
+        let mapping = create_test_mapping(
+            "prod-account",
+            "Production",
+            vec!["AdminRole".to_string()],
+            Some("123456789012".to_string()),
+        );
+        let (account, config) = Config::from_account_mapping(mapping, &["AdminRole".to_string()])?;
+
+        assert_eq!(account, "prod-account");
+        match config {
+            Config::Detailed {
+                application,
+                account: acc,
+                role,
+                account_id,
+                ..
+            } => {
+                assert_eq!(application, "Production");
+                assert_eq!(acc, Some("prod-account".to_string()));
+                assert_eq!(role, None);
+                assert_eq!(account_id, Some("123456789012".to_string()));
+            }
+            _ => panic!("Expected Detailed variant without explicit role"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_roles_returns_error() {
+        let mapping = create_test_mapping("prod-account", "Production", vec![], None);
+        let result = Config::from_account_mapping(mapping, &[]);
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No profiles found")
+        );
+    }
+
+    #[test]
+    fn test_account_id_field_preserved() -> Result<()> {
+        let mapping = create_test_mapping(
+            "prod-account",
+            "Production",
+            vec!["Role1".to_string(), "Role2".to_string()],
+            Some("999888777666".to_string()),
+        );
+        let (_account, config) = Config::from_account_mapping(mapping, &["Role1".to_string()])?;
+
+        match config {
+            Config::Detailed { account_id, .. } => {
+                assert_eq!(account_id, Some("999888777666".to_string()));
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_account_id_none_for_federated() -> Result<()> {
+        let mapping = create_test_mapping(
+            "prod-account",
+            "Production",
+            vec!["Role1".to_string()],
+            None,
+        );
+        let (_account, config) = Config::from_account_mapping(mapping, &[])?;
+
+        match config {
+            Config::Detailed { account_id, .. } => {
+                assert_eq!(account_id, None);
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+        Ok(())
+    }
+
+    // Tests for Profile::try_from_spec()
+    #[test]
+    fn test_try_from_spec_name_variant() -> Result<()> {
+        let config = Config::Name("Production".to_string());
+        let profile = Profile::try_from_spec(
+            &config,
+            "my-profile".to_string(),
+            Some(vec!["AdminRole".to_string()]),
+            None,
+        )?;
+
+        assert_eq!(profile.name, "my-profile");
+        assert_eq!(profile.application_name, "Production");
+        assert_eq!(profile.account, None);
+        assert_eq!(profile.roles, vec!["AdminRole".to_string()]);
+        assert_eq!(profile.duration_seconds, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_try_from_spec_detailed_variant() -> Result<()> {
+        let config = Config::Detailed {
+            application: "Production".to_string(),
+            account: Some("prod-account".to_string()),
+            role: Some("AdminRole".to_string()),
+            duration_seconds: Some(3600),
+            account_id: None,
+        };
+        let profile = Profile::try_from_spec(&config, "my-profile".to_string(), None, None)?;
+
+        assert_eq!(profile.name, "my-profile");
+        assert_eq!(profile.application_name, "Production");
+        assert_eq!(profile.account, Some("prod-account".to_string()));
+        assert_eq!(profile.roles, vec!["AdminRole".to_string()]);
+        assert_eq!(profile.duration_seconds, Some(3600));
+        Ok(())
+    }
+
+    #[test]
+    fn test_try_from_spec_uses_default_role() -> Result<()> {
+        let config = Config::Detailed {
+            application: "Production".to_string(),
+            account: Some("prod-account".to_string()),
+            role: None,
+            duration_seconds: None,
+            account_id: None,
+        };
+        let profile = Profile::try_from_spec(
+            &config,
+            "my-profile".to_string(),
+            Some(vec!["DefaultRole".to_string()]),
+            None,
+        )?;
+
+        assert_eq!(profile.roles, vec!["DefaultRole".to_string()]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_try_from_spec_uses_default_duration() -> Result<()> {
+        let config = Config::Detailed {
+            application: "Production".to_string(),
+            account: Some("prod-account".to_string()),
+            role: Some("AdminRole".to_string()),
+            duration_seconds: None,
+            account_id: None,
+        };
+        let profile = Profile::try_from_spec(&config, "my-profile".to_string(), None, Some(7200))?;
+
+        assert_eq!(profile.duration_seconds, Some(7200));
+        Ok(())
+    }
+
+    #[test]
+    fn test_try_from_spec_no_role_returns_error() {
+        let config = Config::Detailed {
+            application: "Production".to_string(),
+            account: Some("prod-account".to_string()),
+            role: None,
+            duration_seconds: None,
+            account_id: None,
+        };
+        let result = Profile::try_from_spec(&config, "my-profile".to_string(), None, None);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No role found"));
+    }
+
+    #[test]
+    fn test_try_from_spec_explicit_role_overrides_default() -> Result<()> {
+        let config = Config::Detailed {
+            application: "Production".to_string(),
+            account: Some("prod-account".to_string()),
+            role: Some("ExplicitRole".to_string()),
+            duration_seconds: None,
+            account_id: None,
+        };
+        let profile = Profile::try_from_spec(
+            &config,
+            "my-profile".to_string(),
+            Some(vec!["DefaultRole".to_string()]),
+            None,
+        )?;
+
+        assert_eq!(profile.roles, vec!["ExplicitRole".to_string()]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_try_from_spec_explicit_duration_overrides_default() -> Result<()> {
+        let config = Config::Detailed {
+            application: "Production".to_string(),
+            account: Some("prod-account".to_string()),
+            role: Some("AdminRole".to_string()),
+            duration_seconds: Some(1800),
+            account_id: None,
+        };
+        let profile = Profile::try_from_spec(&config, "my-profile".to_string(), None, Some(7200))?;
+
+        assert_eq!(profile.duration_seconds, Some(1800));
+        Ok(())
+    }
+
+    #[test]
+    fn test_profile_equality() {
+        let profile1 = Profile {
+            name: "test".to_string(),
+            application_name: "App".to_string(),
+            account: Some("account".to_string()),
+            roles: vec!["Role1".to_string()],
+            duration_seconds: Some(3600),
+        };
+        let profile2 = Profile {
+            name: "test".to_string(),
+            application_name: "App".to_string(),
+            account: Some("account".to_string()),
+            roles: vec!["Role1".to_string()],
+            duration_seconds: Some(3600),
+        };
+        let profile3 = Profile {
+            name: "different".to_string(),
+            application_name: "App".to_string(),
+            account: Some("account".to_string()),
+            roles: vec!["Role1".to_string()],
+            duration_seconds: Some(3600),
         };
 
-        let profile = match profiles_available.len() {
-            0 => {
-                if let Some(role_override) = role_override {
-                    Err(eyre!(
-                        "Role override, {}, does not exist for profile {}",
-                        role_override,
-                        self.name
-                    ))
-                } else {
-                    Err(eyre!(
-                        "No profiles found for application {}",
-                        app_instance.name
-                    ))
-                }
-            }
-            1 => Ok(profiles_available[0].clone()),
-            _ => {
-                let selected = select(
-                    profiles_available,
-                    format!("Choose Profile for application {}", app_instance.name),
-                    |profile| profile.name.clone(),
-                )?;
-                Ok(selected)
-            }
-        }?;
-
-        trace!("Found profile: {:?}", profile);
-
-        let credentials = client.credentials(account_id, &profile.name).await?;
-        trace!("Credentials: {:?}", credentials);
-
-        Ok(credentials)
+        assert_eq!(profile1, profile2);
+        assert_ne!(profile1, profile3);
     }
 }
