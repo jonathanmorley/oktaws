@@ -292,7 +292,7 @@ mod tests {
                 assert_eq!(acc, Some("prod-account".to_string()));
                 assert_eq!(role, Some("AdminRole".to_string()));
             }
-            _ => panic!("Expected Detailed variant"),
+            Config::Name(_) => panic!("Expected Detailed variant"),
         }
         Ok(())
     }
@@ -312,7 +312,7 @@ mod tests {
             Config::Name(name) => {
                 assert_eq!(name, "Production");
             }
-            _ => panic!("Expected Name variant for single default role"),
+            Config::Detailed { .. } => panic!("Expected Name variant for single default role"),
         }
         Ok(())
     }
@@ -341,7 +341,7 @@ mod tests {
                 assert_eq!(role, None);
                 assert_eq!(account_id, Some("123456789012".to_string()));
             }
-            _ => panic!("Expected Detailed variant without explicit role"),
+            Config::Name(_) => panic!("Expected Detailed variant without explicit role"),
         }
         Ok(())
     }
@@ -374,7 +374,7 @@ mod tests {
             Config::Detailed { account_id, .. } => {
                 assert_eq!(account_id, Some("999888777666".to_string()));
             }
-            _ => panic!("Expected Detailed variant"),
+            Config::Name(_) => panic!("Expected Detailed variant"),
         }
         Ok(())
     }
@@ -393,7 +393,7 @@ mod tests {
             Config::Detailed { account_id, .. } => {
                 assert_eq!(account_id, None);
             }
-            _ => panic!("Expected Detailed variant"),
+            Config::Name(_) => panic!("Expected Detailed variant"),
         }
         Ok(())
     }

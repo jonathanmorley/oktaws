@@ -310,7 +310,7 @@ mod tests {
 
     use tempfile::NamedTempFile;
 
-    static CONFIG: &str = r#"[profile existing]
+    static CONFIG: &str = r"[profile existing]
 region = us-west-2
 output = json
 
@@ -318,7 +318,7 @@ output = json
 sso_start_url = https://existing.awsapps.com/start
 sso_region = us-east-1
 sso_registration_scopes = sso:account:access
-"#;
+";
 
     #[test]
     fn load_no_file() -> Result<()> {
@@ -337,7 +337,7 @@ sso_registration_scopes = sso:account:access
         store.save()?;
 
         let contents = fs::read_to_string(tempfile)?;
-        eprintln!("Contents: {}", contents);
+        eprintln!("Contents: {contents}");
 
         assert!(contents.contains("[sso-session my-sso]"));
         assert!(contents.contains("sso_start_url"));
@@ -581,35 +581,35 @@ sso_registration_scopes = sso:account:access
         let contents = fs::read_to_string(tempfile.path())?;
 
         // Verify sessions are present and alphabetically ordered
-        let session_a_pos = contents
+        let session_alpha_pos = contents
             .find("[sso-session session-a]")
             .expect("session-a not found");
-        let session_b_pos = contents
+        let session_beta_pos = contents
             .find("[sso-session session-b]")
             .expect("session-b not found");
         assert!(
-            session_a_pos < session_b_pos,
+            session_alpha_pos < session_beta_pos,
             "Sessions not in alphabetical order"
         );
 
         // Verify profiles are grouped with their sessions
-        let profile_a1_pos = contents
+        let profile_alpha1_pos = contents
             .find("[profile profile-a1]")
             .expect("profile-a1 not found");
-        let profile_a2_pos = contents
+        let profile_alpha2_pos = contents
             .find("[profile profile-a2]")
             .expect("profile-a2 not found");
-        let profile_b1_pos = contents
+        let profile_beta1_pos = contents
             .find("[profile profile-b1]")
             .expect("profile-b1 not found");
 
         // Profiles for session-a should come after session-a but before session-b
-        assert!(session_a_pos < profile_a1_pos);
-        assert!(profile_a1_pos < profile_a2_pos);
-        assert!(profile_a2_pos < session_b_pos);
+        assert!(session_alpha_pos < profile_alpha1_pos);
+        assert!(profile_alpha1_pos < profile_alpha2_pos);
+        assert!(profile_alpha2_pos < session_beta_pos);
 
         // Profile for session-b should come after session-b
-        assert!(session_b_pos < profile_b1_pos);
+        assert!(session_beta_pos < profile_beta1_pos);
 
         // Verify blank lines between groups
         let lines: Vec<&str> = contents.lines().collect();
