@@ -3,6 +3,7 @@ use dirs;
 use eyre::{Result, eyre};
 use std::collections::HashMap;
 use std::env::var as env_var;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
@@ -51,9 +52,10 @@ impl ConfigStore {
 
     /// Check if a profile is an SSO profile
     ///
-    /// Returns true if the profile exists and has an sso_session field
+    /// Returns true if the profile exists and has an `sso_session` field
+    #[must_use]
     pub fn is_sso_profile(&self, profile_name: &str) -> bool {
-        let section_name = format!("profile {}", profile_name);
+        let section_name = format!("profile {profile_name}");
         self.config
             .get_map_ref()
             .get(&section_name)
@@ -64,9 +66,10 @@ impl ConfigStore {
 
     /// Get the role for an existing profile
     ///
-    /// Returns the current sso_role_name for the profile if it exists
+    /// Returns the current `sso_role_name` for the profile if it exists
+    #[must_use]
     pub fn get_profile_role(&self, profile_name: &str) -> Option<String> {
-        let section_name = format!("profile {}", profile_name);
+        let section_name = format!("profile {profile_name}");
         self.config
             .get_map_ref()
             .get(&section_name)?
@@ -85,7 +88,7 @@ impl ConfigStore {
         sso_start_url: &str,
         sso_region: &str,
     ) -> Result<()> {
-        let section_name = format!("sso-session {}", session_name);
+        let section_name = format!("sso-session {session_name}");
 
         self.config.set(
             &section_name,
@@ -116,7 +119,7 @@ impl ConfigStore {
         role_name: &str,
         available_roles: Vec<String>,
     ) -> Result<()> {
-        let section_name = format!("profile {}", profile_name);
+        let section_name = format!("profile {profile_name}");
 
         self.config
             .set(&section_name, "sso_session", Some(session_name.to_string()));
@@ -137,6 +140,66 @@ impl ConfigStore {
         Ok(())
     }
 
+    /// Write a section (sso-session or profile) to the output string
+    fn write_section(&self, output: &mut String, section_name: &str) -> Result<()> {
+        if let Some(section_map) = self.config.get_map_ref().get(section_name) {
+            let mut keys: Vec<&String> = section_map.keys().collect();
+            keys.sort();
+            for key in keys {
+                if let Some(Some(value)) = section_map.get(key) {
+                    writeln!(output, "{key} = {value}")?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Write profile alternative roles as comments
+    fn write_alternative_roles(
+        &self,
+        output: &mut String,
+        profile_section: &str,
+        current_role: &str,
+    ) -> Result<()> {
+        let profile_name = profile_section
+            .strip_prefix("profile ")
+            .unwrap_or(profile_section);
+        if let Some(available_roles) = self.profile_roles.get(profile_name) {
+            let other_roles: Vec<&String> = available_roles
+                .iter()
+                .filter(|role| role.as_str() != current_role)
+                .collect();
+
+            for role in other_roles {
+                writeln!(output, "# sso_role_name = {role}")?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Write a profile section with its configuration and alternative role comments
+    fn write_profile(&self, output: &mut String, profile_section: &str) -> Result<()> {
+        writeln!(output)?;
+        writeln!(output, "[{profile_section}]")?;
+
+        if let Some(section_map) = self.config.get_map_ref().get(profile_section) {
+            let mut keys: Vec<&String> = section_map.keys().collect();
+            keys.sort();
+
+            for key in keys {
+                if let Some(Some(value)) = section_map.get(key) {
+                    writeln!(output, "{key} = {value}")?;
+
+                    // If this is sso_role_name, add commented alternatives
+                    if key == "sso_role_name" {
+                        self.write_alternative_roles(output, profile_section, value)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Save the config file to disk with smart formatting.
     ///
     /// The output is organized as follows:
@@ -145,7 +208,7 @@ impl ConfigStore {
     /// - Profiles within a session are sorted alphabetically
     /// - Non-SSO profiles are written at the end
     /// - Blank lines separate session groups
-    /// - Alternative roles are shown as comments after sso_role_name
+    /// - Alternative roles are shown as comments after `sso_role_name`
     ///
     /// # Errors
     ///
@@ -185,7 +248,7 @@ impl ConfigStore {
                 if let Some(Some(session_name)) = section_map.get("sso_session") {
                     session_profiles
                         .entry(session_name.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(profile_section.clone());
                 } else {
                     non_sso_profiles.push(profile_section.clone());
@@ -209,16 +272,8 @@ impl ConfigStore {
                 .unwrap_or(sso_session_section);
 
             // Write the sso-session section
-            output.push_str(&format!("[{}]\n", sso_session_section));
-            if let Some(section_map) = self.config.get_map_ref().get(sso_session_section) {
-                let mut keys: Vec<&String> = section_map.keys().collect();
-                keys.sort();
-                for key in keys {
-                    if let Some(Some(value)) = section_map.get(key) {
-                        output.push_str(&format!("{} = {}\n", key, value));
-                    }
-                }
-            }
+            writeln!(output, "[{sso_session_section}]")?;
+            self.write_section(&mut output, sso_session_section)?;
 
             // Write all profiles for this session
             if let Some(profiles) = session_profiles.get(session_name) {
@@ -226,43 +281,7 @@ impl ConfigStore {
                 sorted_profiles.sort();
 
                 for profile_section in sorted_profiles {
-                    output.push('\n');
-                    output.push_str(&format!("[{}]\n", profile_section));
-
-                    if let Some(section_map) = self.config.get_map_ref().get(&profile_section) {
-                        let mut keys: Vec<&String> = section_map.keys().collect();
-                        keys.sort();
-
-                        for key in keys {
-                            if let Some(Some(value)) = section_map.get(key) {
-                                output.push_str(&format!("{} = {}\n", key, value));
-
-                                // If this is sso_role_name, add commented alternatives
-                                if key == "sso_role_name" {
-                                    let profile_name = profile_section
-                                        .strip_prefix("profile ")
-                                        .unwrap_or(&profile_section);
-                                    if let Some(available_roles) =
-                                        self.profile_roles.get(profile_name)
-                                    {
-                                        let other_roles: Vec<&String> = available_roles
-                                            .iter()
-                                            .filter(|role| role.as_str() != value)
-                                            .collect();
-
-                                        if !other_roles.is_empty() {
-                                            for role in other_roles {
-                                                output.push_str(&format!(
-                                                    "# sso_role_name = {}\n",
-                                                    role
-                                                ));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    self.write_profile(&mut output, &profile_section)?;
                 }
             }
         }
@@ -270,20 +289,12 @@ impl ConfigStore {
         // Write non-SSO profiles at the end
         for profile_section in non_sso_profiles {
             if !first {
-                output.push('\n');
+                writeln!(output)?;
             }
             first = false;
 
-            output.push_str(&format!("[{}]\n", profile_section));
-            if let Some(section_map) = self.config.get_map_ref().get(&profile_section) {
-                let mut keys: Vec<&String> = section_map.keys().collect();
-                keys.sort();
-                for key in keys {
-                    if let Some(Some(value)) = section_map.get(key) {
-                        output.push_str(&format!("{} = {}\n", key, value));
-                    }
-                }
-            }
+            writeln!(output, "[{profile_section}]")?;
+            self.write_section(&mut output, &profile_section)?;
         }
 
         fs::write(&self.path, output).map_err(|e| eyre!("Failed to write AWS config file: {}", e))

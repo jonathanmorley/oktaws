@@ -199,7 +199,9 @@ impl Client {
             account_name,
             role_names,
             application_name,
-            account_id: app_instance.account_id().map(|id| id.to_string()),
+            account_id: app_instance
+                .account_id()
+                .map(std::string::ToString::to_string),
         })
     }
 
@@ -233,10 +235,7 @@ impl Client {
             let batch_start = batch_num * batch_size + 1;
             let batch_end = std::cmp::min(batch_start + chunk.len() - 1, total_accounts);
 
-            eprint!(
-                "\r  Processing accounts {}-{}/{}... ",
-                batch_start, batch_end, total_accounts
-            );
+            eprint!("\r  Processing accounts {batch_start}-{batch_end}/{total_accounts}... ");
             std::io::Write::flush(&mut std::io::stderr()).ok();
 
             let mut futures = Vec::new();
@@ -254,10 +253,7 @@ impl Client {
             all_account_role_mappings.extend(account_role_mappings);
         }
 
-        eprintln!(
-            "\r  Processed {}/{} accounts        ",
-            total_accounts, total_accounts
-        );
+        eprintln!("\r  Processed {total_accounts}/{total_accounts} accounts        ");
         Ok(all_account_role_mappings)
     }
 

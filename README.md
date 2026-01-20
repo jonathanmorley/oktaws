@@ -3,6 +3,7 @@
 # oktaws
 
 This program authenticates with Okta to provide temporary AWS credentials. It supports both:
+
 - **Federated AWS access** (SAML-based, using `amazon_aws` Okta apps)
 - **AWS Identity Center/SSO** (using `amazon_aws_sso` Okta apps)
 
@@ -43,11 +44,12 @@ oktaws init-sso
 ```
 
 This command will:
+
 1. Discover all AWS SSO applications in your Okta account
-2. Fetch all available accounts and roles for each SSO application
-3. Create SSO sessions in `~/.aws/config` for each application
-4. Create SSO profiles for each account with intelligent role selection
-5. Preserve your existing role selections when re-running
+1. Fetch all available accounts and roles for each SSO application
+1. Create SSO sessions in `~/.aws/config` for each application
+1. Create SSO profiles for each account with intelligent role selection
+1. Preserve your existing role selections when re-running
 
 The command handles profile name collisions across multiple SSO applications by automatically prefixing profiles with the session name when needed.
 
