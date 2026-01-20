@@ -99,10 +99,14 @@ impl Client {
         })
     }
 
-    /// Given a list of `AppLink`s, visit each of them to get a list of all account names and roles that can be assumed
+    /// Given a list of `AppLink`s, visit each of them to get a list of all account names and roles that can be assumed.
     ///
     /// Supports both `amazon_aws` (federated) and `amazon_aws_sso` (identity center) apps.
-    /// For best performance, pass only one app type at a time.
+    ///
+    /// Processing strategy:
+    /// - `amazon_aws` apps are processed in parallel (lightweight SAML requests)
+    /// - `amazon_aws_sso` apps are processed sequentially to respect rate limits,
+    ///   but each app's accounts are fetched in parallel batches internally
     ///
     /// # Errors
     ///
@@ -112,7 +116,7 @@ impl Client {
         links: Vec<AppLink>,
     ) -> Result<Vec<AppLinkAccountRoleMapping>> {
         let mut saml_role_futures = Vec::new();
-        let mut all_role_names = Vec::new(); // We don't want to run sso app links concurrently due to rate limiting
+        let mut all_role_names = Vec::new(); // SSO apps processed sequentially to respect rate limits
         for link in links {
             match link.app_name.as_str() {
                 "amazon_aws" => {

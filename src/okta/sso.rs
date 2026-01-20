@@ -203,7 +203,10 @@ impl Client {
         })
     }
 
-    /// Given an `amazon_aws_sso` identity center `AppLink`, iterate through all app instances to get a list of all account names and roles that can be assumed
+    /// Given an `amazon_aws_sso` identity center `AppLink`, iterate through all app instances to get a list of all account names and roles that can be assumed.
+    ///
+    /// This function processes accounts in parallel batches of 10 to improve performance while avoiding rate limits.
+    /// Progress is displayed to stderr showing which accounts are being processed (e.g., "Processing accounts 1-10/50...").
     ///
     /// # Errors
     ///
@@ -224,7 +227,7 @@ impl Client {
 
         let total_accounts = app_aws_accounts.len();
         let mut all_account_role_mappings = Vec::new();
-        let batch_size = 10; // Increased from 5 for better performance
+        let batch_size = 10; // Process 10 accounts in parallel to balance speed with rate limiting
 
         for (batch_num, chunk) in app_aws_accounts.chunks(batch_size).enumerate() {
             let batch_start = batch_num * batch_size + 1;

@@ -137,7 +137,15 @@ impl ConfigStore {
         Ok(())
     }
 
-    /// Save the config file to disk
+    /// Save the config file to disk with smart formatting.
+    ///
+    /// The output is organized as follows:
+    /// - SSO sessions are written first, sorted alphabetically
+    /// - Each SSO session is followed by its associated profiles
+    /// - Profiles within a session are sorted alphabetically
+    /// - Non-SSO profiles are written at the end
+    /// - Blank lines separate session groups
+    /// - Alternative roles are shown as comments after sso_role_name
     ///
     /// # Errors
     ///
@@ -149,7 +157,7 @@ impl ConfigStore {
             fs::create_dir_all(parent)?;
         }
 
-        // Write to a string first so we can add blank lines between sections
+        // Write to a string first so we can add blank lines between sections and comment alternative roles
         let mut output = String::new();
 
         // Get all sections

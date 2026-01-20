@@ -266,7 +266,8 @@ async fn init(options: Init) -> Result<()> {
     let organization_config =
         OrganizationConfig::from_organization(&okta_client, options.username).await?;
 
-    // Filter to only federated profiles
+    // Filter to only federated profiles (exclude Identity Center profiles which have account_id)
+    // This command only writes federated profiles to the oktaws config file
     let federated_profiles: indexmap::IndexMap<_, _> = organization_config
         .profiles
         .into_iter()
@@ -308,8 +309,19 @@ async fn init(options: Init) -> Result<()> {
     Ok(())
 }
 
-/// Sanitize a session name to be safe for filesystem and CLI usage
-/// Replaces spaces with hyphens, removes special chars, and converts to lowercase
+/// Sanitize a session name to be safe for filesystem and CLI usage.
+///
+/// - Replaces spaces with hyphens
+/// - Removes special characters (except alphanumerics, underscores, and hyphens)
+/// - Collapses consecutive hyphens into a single hyphen
+/// - Removes trailing hyphens
+/// - Converts to lowercase
+///
+/// # Examples
+/// ```
+/// assert_eq!(sanitize_session_name("My SSO App"), "my-sso-app");
+/// assert_eq!(sanitize_session_name("Test--App"), "test-app");
+/// ```
 fn sanitize_session_name(name: &str) -> String {
     let mut result = String::new();
     let mut last_was_hyphen = false;
@@ -360,7 +372,15 @@ fn determine_final_profile_name(
     }
 }
 
-/// Check if a profile needs role selection based on available roles and existing configuration
+/// Check if a profile needs role selection based on available roles and existing configuration.
+///
+/// Returns `false` (no selection needed) if:
+/// - Only one role is available (automatic selection)
+/// - Multiple roles available and existing role is still valid
+///
+/// Returns `true` (selection needed) if:
+/// - Multiple roles available and no existing role configured
+/// - Multiple roles available but existing role is no longer valid
 fn profile_needs_role_selection(available_roles: &[String], existing_role: Option<String>) -> bool {
     if available_roles.len() == 1 {
         false // Only one role, no selection needed
@@ -371,7 +391,20 @@ fn profile_needs_role_selection(available_roles: &[String], existing_role: Optio
     }
 }
 
-/// Select the appropriate role for a profile based on available options and defaults
+/// Select the appropriate role for a profile based on available options and defaults.
+///
+/// Role selection priority:
+/// 1. If only one role available: use it automatically
+/// 2. If existing valid role: reuse it
+/// 3. If existing invalid role: prompt user (with notification)
+/// 4. If default role is valid: use it
+/// 5. Otherwise: prompt user interactively
+///
+/// # Arguments
+/// * `profile_name` - Name of the profile (for display in prompts)
+/// * `available_roles` - List of roles available for this profile
+/// * `existing_role` - Previously configured role (if any)
+/// * `default_role` - User's default role choice for the session (if any)
 fn select_role_for_profile(
     profile_name: &str,
     available_roles: &[String],
@@ -422,7 +455,17 @@ fn select_role_for_profile(
     Ok(available_roles[selection].clone())
 }
 
-/// Generate AWS SSO configuration only
+/// Generate AWS SSO (Identity Center) configuration in ~/.aws/config.
+///
+/// This command:
+/// 1. Authenticates to Okta and discovers AWS SSO applications
+/// 2. For each SSO app, fetches all accounts and available roles
+/// 3. Creates SSO sessions in AWS config for each application
+/// 4. Creates SSO profiles for each account, prompting for role selection when needed
+/// 5. Handles profile name collisions by prefixing with session name
+/// 6. Preserves existing role selections when re-running
+///
+/// Progress is displayed for long-running operations (authentication, account fetching).
 async fn init_sso(options: InitSso) -> Result<()> {
     let okta_client = OktaClient::new(
         options.organization.clone(),
@@ -446,6 +489,8 @@ async fn init_sso(options: InitSso) -> Result<()> {
     let mut total_profiles = 0;
 
     // First pass: collect all profile data from all sessions
+    // We do this in two passes to detect profile name collisions across sessions
+    // before prompting the user for role selections
     let mut sessions = Vec::new();
 
     // Process each SSO app as a separate SSO session
@@ -489,6 +534,7 @@ async fn init_sso(options: InitSso) -> Result<()> {
         }
 
         // Collect SSO profiles with account IDs (don't select roles yet)
+        // Only Identity Center profiles have account_id - federated profiles are handled by init-config
         let mut sso_profiles = indexmap::IndexMap::new();
         for mapping in all_account_mappings {
             if let Some(account_id) = mapping.account_id {
@@ -521,9 +567,10 @@ async fn init_sso(options: InitSso) -> Result<()> {
     }
 
     // Second pass: detect collisions and write profiles
+    // Build a map of sanitized profile names to the sessions they appear in
     let mut profile_name_sessions = std::collections::HashMap::new();
 
-    // Count occurrences of each SANITIZED profile name across all sessions
+    // Count occurrences of each sanitized profile name across all sessions
     for (session_name, _, _, _, sso_profiles) in &sessions {
         for profile_name in sso_profiles.keys() {
             let sanitized = sanitize_session_name(profile_name);
