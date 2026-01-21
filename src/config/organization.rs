@@ -43,9 +43,10 @@ impl Config {
     /// or if there are errors during prompting of a default role.
     pub async fn from_organization(client: &OktaClient, username: String) -> Result<Self> {
         let app_links = client.app_links(None).await?;
+        // Only use federated AWS apps (amazon_aws), not SSO apps
         let aws_links = app_links
             .into_iter()
-            .filter(|link| link.app_name == "amazon_aws" || link.app_name == "amazon_aws_sso")
+            .filter(|link| link.app_name == "amazon_aws")
             .collect::<Vec<_>>();
 
         let mut all_account_role_mappings =
@@ -81,9 +82,6 @@ impl Config {
                 ToOwned::to_owned,
             )?
         };
-
-        let all_account_role_mappings =
-            client.remove_overlapped_account_mappings(all_account_role_mappings)?;
 
         let profiles = all_account_role_mappings
             .into_iter()
@@ -267,7 +265,7 @@ impl Pattern {
 
 #[cfg(test)]
 mod tests {
-    use crate::okta::applications::{AppLinkAccountRoleMapping, IntegrationType};
+    use crate::okta::applications::AppLinkAccountRoleMapping;
 
     use super::*;
 
@@ -542,20 +540,16 @@ foo = "foo"
                     account_name: "foo".to_string(),
                     role_names: vec!["mock-role".to_string()],
                     application_name: "blah".to_string(),
-                    integration_type: IntegrationType::Federated,
+                    account_id: None,
                 },
                 AppLinkAccountRoleMapping {
                     account_name: "bar".to_string(),
                     role_names: vec!["mock-role-2".to_string()],
                     application_name: "blah".to_string(),
-                    integration_type: IntegrationType::Federated,
+                    account_id: None,
                 },
             ])
         });
-
-        client
-            .expect_remove_overlapped_account_mappings()
-            .returning(Ok);
 
         let config = Config::from_organization(&client, String::from("test_user"))
             .await

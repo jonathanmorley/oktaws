@@ -4,6 +4,7 @@ pub mod client;
 pub mod factors;
 pub mod saml;
 pub mod sessions;
+pub mod sso;
 
 use serde::Deserialize;
 use url::Url;
