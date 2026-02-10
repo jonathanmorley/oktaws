@@ -41,7 +41,7 @@ tracing-log = "0.2"
 tracing-subscriber = "0.3"
 tracing-tree = "0.4"
 url = { version = "2", features = ["serde"] }
-whoami = "1"
+whoami = "2"
 eyre = "0.6"
 aws-smithy-types = "1"
 aws-runtime = "1"
