@@ -53,12 +53,12 @@ indexmap = { version = "2.10", features = ["serde"] }
 cookie = "0.18.1"
 
 [dev-dependencies]
-aws-smithy-runtime = { version = "1", features = ["test-util"] }
-http = "1"
-mockall = "0.14"
-serial_test = "3"
-tempfile = "3"
-tokio-test = "0.4"
+aws-smithy-runtime = { version = "=1.10.1", features = ["test-util"] }
+http = "=1.4.0"
+mockall = "=0.14.0"
+serial_test = "=3.3.1"
+tempfile = "=3.25.0"
+tokio-test = "=0.4.5"
 
 [package]
 authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
