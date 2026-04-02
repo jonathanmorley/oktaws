@@ -56,7 +56,7 @@ cookie = "0.18.1"
 aws-smithy-runtime = { version = "1.0.3", features = ["test-util"] }
 http = "1"
 mockall = "0.14"
-serial_test = "3"
+serial_test = "3.4.0"
 tempfile = "3"
 tokio-test = "0.4"
 
