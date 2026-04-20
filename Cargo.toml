@@ -3,8 +3,8 @@ async-recursion = "1"
 aws-arn = "0.3"
 aws_config_mod = { git = "https://github.com/jonathanmorley/aws_config_mod", branch = "set-credentials" }
 aws-credential-types = "1"
-aws-sdk-sts = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-iam = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-sts = { version = "1.103.0", features = ["behavior-version-latest"] }
+aws-sdk-iam = { version = "1.108.0", features = ["behavior-version-latest"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.22"
 clap = { version = "4.6.1", features = ["derive"] }
