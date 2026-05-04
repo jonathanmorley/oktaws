@@ -15,12 +15,12 @@ use std::convert::{TryFrom, TryInto};
 
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::{eyre, Result};
 use glob::Pattern;
 use tracing::instrument;
 use tracing_log::AsTrace;
 use tracing_subscriber::filter::Targets;
-use tracing_subscriber::{Registry, prelude::*};
+use tracing_subscriber::{prelude::*, Registry};
 use tracing_tree::HierarchicalLayer;
 use whoami::username;
 
@@ -887,8 +887,8 @@ mod tests {
     fn test_select_role_uses_default_when_no_existing() {
         let roles = vec!["NewRole".to_string(), "ReadOnly".to_string()];
         let default_role = "NewRole".to_string();
-        let result = select_role_for_profile("test-account", &roles, None, Some(&default_role))
-            .unwrap();
+        let result =
+            select_role_for_profile("test-account", &roles, None, Some(&default_role)).unwrap();
         assert_eq!(result, "NewRole");
     }
 
@@ -911,13 +911,8 @@ mod tests {
     fn test_select_role_single_role_ignores_default() {
         let roles = vec!["OnlyRole".to_string()];
         let default_role = "SomethingElse".to_string();
-        let result = select_role_for_profile(
-            "test-account",
-            &roles,
-            None,
-            Some(&default_role),
-        )
-        .unwrap();
+        let result =
+            select_role_for_profile("test-account", &roles, None, Some(&default_role)).unwrap();
         assert_eq!(result, "OnlyRole");
     }
 }

@@ -6,7 +6,7 @@ pub mod aws;
 pub mod config;
 pub mod okta;
 
-use eyre::{Result, eyre};
+use eyre::{eyre, Result};
 
 fn select<T, P, F, S>(mut items: Vec<T>, prompt: P, displayer: F) -> Result<T>
 where

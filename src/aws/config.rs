@@ -1,6 +1,6 @@
 use configparser::ini::Ini;
 use dirs;
-use eyre::{Result, eyre};
+use eyre::{eyre, Result};
 use std::collections::HashMap;
 use std::env::var as env_var;
 use std::fmt::Write as _;
