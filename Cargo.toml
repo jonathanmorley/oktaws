@@ -16,7 +16,7 @@ futures = "0.3"
 configparser = "3"
 glob = "0.3"
 itertools = "0.14"
-keyring = { version = "3", features = [
+keyring = { version = "4.0.0", features = [
   "apple-native",
   "windows-native",
   "sync-secret-service",
