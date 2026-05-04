@@ -546,19 +546,14 @@ fn select_role_for_profile(
             // Existing role is still valid, use it
             return Ok(existing);
         }
-        // Existing role is no longer available, prompt user
+        // Existing role is no longer available; fall through to try the default role
         println!(
             "  Note: Previously selected role '{existing}' is no longer available for {profile_name}"
         );
-        let selection = dialoguer::Select::new()
-            .with_prompt(format!("Choose Role for {profile_name}"))
-            .items(available_roles)
-            .interact()?;
-        return Ok(available_roles[selection].clone());
     }
 
     if let Some(default) = default_role {
-        // No existing profile, check if default role is available
+        // Use the session default role if it is available for this profile
         if available_roles.contains(default) {
             return Ok(default.clone());
         }
@@ -870,5 +865,59 @@ mod tests {
             &roles,
             Some("OldRole".to_string())
         ));
+    }
+
+    #[test]
+    fn test_select_role_uses_default_when_existing_is_invalid() {
+        // Regression test: when an existing role is no longer available, the session
+        // default role should be used rather than prompting the user.
+        let roles = vec!["NewRole".to_string(), "ReadOnly".to_string()];
+        let default_role = "NewRole".to_string();
+        let result = select_role_for_profile(
+            "test-account",
+            &roles,
+            Some("OldRole".to_string()),
+            Some(&default_role),
+        )
+        .unwrap();
+        assert_eq!(result, "NewRole");
+    }
+
+    #[test]
+    fn test_select_role_uses_default_when_no_existing() {
+        let roles = vec!["NewRole".to_string(), "ReadOnly".to_string()];
+        let default_role = "NewRole".to_string();
+        let result = select_role_for_profile("test-account", &roles, None, Some(&default_role))
+            .unwrap();
+        assert_eq!(result, "NewRole");
+    }
+
+    #[test]
+    fn test_select_role_preserves_valid_existing_over_default() {
+        // A valid existing role should be kept even when a different default is set.
+        let roles = vec!["Admin".to_string(), "ReadOnly".to_string()];
+        let default_role = "ReadOnly".to_string();
+        let result = select_role_for_profile(
+            "test-account",
+            &roles,
+            Some("Admin".to_string()),
+            Some(&default_role),
+        )
+        .unwrap();
+        assert_eq!(result, "Admin");
+    }
+
+    #[test]
+    fn test_select_role_single_role_ignores_default() {
+        let roles = vec!["OnlyRole".to_string()];
+        let default_role = "SomethingElse".to_string();
+        let result = select_role_for_profile(
+            "test-account",
+            &roles,
+            None,
+            Some(&default_role),
+        )
+        .unwrap();
+        assert_eq!(result, "OnlyRole");
     }
 }
