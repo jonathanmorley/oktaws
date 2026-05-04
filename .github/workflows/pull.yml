@@ -33,7 +33,6 @@ jobs:
       matrix:
         runner:
           - ubuntu-latest     # x86_64-linux
-          - macos-15-intel    # x86_64-darwin
           - macos-latest      # aarch64-darwin
           - ubuntu-24.04-arm  # aarch64-linux
     runs-on: ${{ matrix.runner }}
@@ -42,7 +41,6 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
-        if: matrix.runner != 'macos-15-intel'
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
