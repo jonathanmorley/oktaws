@@ -66,7 +66,7 @@ impl Config {
             .filter(|&(count, _)| count > 1)
             .collect::<Vec<_>>();
 
-        default_role_names_with_count.sort_by(|a, b| b.0.cmp(&a.0));
+        default_role_names_with_count.sort_by_key(|b| std::cmp::Reverse(b.0));
 
         let default_role_names = default_role_names_with_count
             .into_iter()

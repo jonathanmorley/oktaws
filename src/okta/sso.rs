@@ -229,7 +229,7 @@ impl Client {
 
         let total_accounts = app_aws_accounts.len();
         let mut all_account_role_mappings = Vec::new();
-        let batch_size = 10; // Process 10 accounts in parallel to balance speed with rate limiting
+        let batch_size = 3; // Keep concurrency low to avoid AWS SSO Portal rate limits (429)
 
         for (batch_num, chunk) in app_aws_accounts.chunks(batch_size).enumerate() {
             let batch_start = batch_num * batch_size + 1;
