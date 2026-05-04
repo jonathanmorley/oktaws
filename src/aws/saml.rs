@@ -2,8 +2,8 @@ use crate::aws::role::SamlRole;
 
 use std::str::FromStr;
 
-use base64::engine::{general_purpose::STANDARD as b64, Engine};
-use eyre::{eyre, Error, Result};
+use base64::engine::{Engine, general_purpose::STANDARD as b64};
+use eyre::{Error, Result, eyre};
 use kuchiki::traits::TendrilSink;
 use regex::Regex;
 use samuel::assertion::{Assertions, AttributeStatement};

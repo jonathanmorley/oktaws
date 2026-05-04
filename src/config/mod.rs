@@ -4,7 +4,7 @@ pub mod profile;
 use std::env::var as env_var;
 use std::path::PathBuf;
 
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 
 /// Return the location for the Oktaws config directory.
 ///

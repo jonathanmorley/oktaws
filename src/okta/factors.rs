@@ -1,8 +1,8 @@
-use crate::okta::auth::LoginResponse;
-use crate::okta::client::Client;
 use crate::okta::Links;
 use crate::okta::Links::Multi;
 use crate::okta::Links::Single;
+use crate::okta::auth::LoginResponse;
+use crate::okta::client::Client;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -10,7 +10,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use dialoguer::Password;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]

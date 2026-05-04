@@ -9,7 +9,7 @@ use crate::{
 };
 
 use aws_credential_types::Credentials;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use tracing::{instrument, trace};
 
@@ -352,10 +352,12 @@ mod tests {
         let result = Config::from_account_mapping(mapping, &[]);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No profiles found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No profiles found")
+        );
     }
 
     #[test]

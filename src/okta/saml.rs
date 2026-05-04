@@ -5,7 +5,7 @@ use crate::okta::client::Client;
 use std::str;
 
 use async_recursion::async_recursion;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use kuchiki::traits::TendrilSink;
 use tracing::{debug, instrument};
 use url::Url;

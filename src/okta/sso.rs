@@ -6,7 +6,7 @@ use crate::{
 };
 
 use cookie::Cookie;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use reqwest::cookie::{CookieStore, Jar};
 use serde::Deserialize;
 use tracing::trace;

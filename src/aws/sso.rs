@@ -1,7 +1,7 @@
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use regex::Regex;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use serde::Deserialize;
 use std::sync::LazyLock;
 use std::time::Duration;

@@ -1,7 +1,7 @@
 use aws_config_mod::{AwsCredentialsFile, Value};
 use aws_credential_types::Credentials;
 use dirs;
-use eyre::{eyre, Context, Result};
+use eyre::{Context, Result, eyre};
 use std::env::var as env_var;
 use std::fs;
 use std::path::{Path, PathBuf};
