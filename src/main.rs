@@ -557,7 +557,7 @@ fn select_role_for_profile(
         if available_roles.contains(default) {
             return Ok(default.clone());
         }
-        // Default role not available, prompt user
+        // No usable default role, prompt user
         let selection = dialoguer::Select::new()
             .with_prompt(format!("Choose Role for {profile_name}"))
             .items(available_roles)
