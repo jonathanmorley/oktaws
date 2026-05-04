@@ -4,6 +4,7 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     crane.url = "github:ipetkov/crane";
     treefmt-nix.url = "github:numtide/treefmt-nix";
+    fenix.url = "github:nix-community/fenix";
   };
 
   outputs = inputs @ {
@@ -24,9 +25,15 @@
         pkgs,
         lib,
         system,
+        inputs',
         ...
       }: let
-        craneLib = crane.mkLib pkgs;
+        fenixLib = inputs'.fenix.packages;
+        toolchain = fenixLib.fromToolchainFile {
+          file = ./rust-toolchain.toml;
+          sha256 = "sha256-zC8E38iDVJ1oPIzCqTk/Ujo9+9kx9dXq7wAwPMpkpg0=";
+        };
+        craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
         commonArgs = let
           # Only keeps xml files
