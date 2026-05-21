@@ -321,11 +321,9 @@ fn sanitize_session_name(name: &str) -> String {
 
     for c in name.chars() {
         match c {
-            ' ' | '-' => {
-                if !last_was_hyphen && !result.is_empty() {
-                    result.push('-');
-                    last_was_hyphen = true;
-                }
+            ' ' | '-' if !last_was_hyphen && !result.is_empty() => {
+                result.push('-');
+                last_was_hyphen = true;
             }
             'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                 result.push(c);
