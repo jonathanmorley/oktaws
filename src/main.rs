@@ -547,6 +547,61 @@ fn profile_needs_role_selection(available_roles: &[String], existing_role: Optio
     }
 }
 
+/// Choose which role should back the bare `account-name` profile.
+///
+/// Candidates are restricted to `api_roles` — never `extra_roles` — so the bare
+/// profile is always always-on (the whole point of the multi-profile model).
+///
+/// Returns `None` if `api_roles` is empty (account only has JIT roles available);
+/// the caller should skip emitting a bare profile in that case.
+///
+/// Priority:
+/// 1. Single API role available → use it (no prompt).
+/// 2. Existing role from `~/.aws/config` that is still in `api_roles` → reuse it.
+/// 3. Session default role that is in `api_roles` → use it.
+/// 4. Otherwise → prompt interactively over `api_roles`.
+#[allow(dead_code)]
+fn compute_account_default_role(
+    account_name: &str,
+    api_roles: &[String],
+    existing_role: Option<String>,
+    session_default_role: Option<&String>,
+) -> Result<Option<String>> {
+    if api_roles.is_empty() {
+        return Ok(None);
+    }
+
+    if api_roles.len() == 1 {
+        return Ok(Some(api_roles[0].clone()));
+    }
+
+    if let Some(existing) = existing_role {
+        if api_roles.contains(&existing) {
+            return Ok(Some(existing));
+        }
+        println!(
+            "  Note: Previously selected role '{existing}' is no longer always-on for {account_name}"
+        );
+        let selection = dialoguer::Select::new()
+            .with_prompt(format!("Choose default (always-on) role for {account_name}"))
+            .items(api_roles)
+            .interact()?;
+        return Ok(Some(api_roles[selection].clone()));
+    }
+
+    if let Some(default) = session_default_role {
+        if api_roles.contains(default) {
+            return Ok(Some(default.clone()));
+        }
+    }
+
+    let selection = dialoguer::Select::new()
+        .with_prompt(format!("Choose default (always-on) role for {account_name}"))
+        .items(api_roles)
+        .interact()?;
+    Ok(Some(api_roles[selection].clone()))
+}
+
 /// Select the appropriate role for a profile based on available options and defaults.
 ///
 /// Role selection priority:
@@ -930,5 +985,65 @@ mod tests {
     fn test_sanitize_role_suffix_preserves_case() {
         assert_eq!(sanitize_role_suffix("AdminAccess"), "AdminAccess");
         assert_ne!(sanitize_role_suffix("AdminAccess"), "adminaccess");
+    }
+
+    #[test]
+    fn test_compute_account_default_role_single_api_role() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["AdminAccess".to_string()],
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(result, Some("AdminAccess".to_string()));
+    }
+
+    #[test]
+    fn test_compute_account_default_role_existing_still_valid() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            Some("ReadOnly".to_string()),
+            Some(&"AdminAccess".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, Some("ReadOnly".to_string()));
+    }
+
+    #[test]
+    fn test_compute_account_default_role_session_default_valid() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            None,
+            Some(&"AdminAccess".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, Some("AdminAccess".to_string()));
+    }
+
+    #[test]
+    fn test_compute_account_default_role_no_api_roles_returns_none() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &[],
+            None,
+            Some(&"AdminAccess".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_compute_account_default_role_session_default_not_in_api_roles() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["ReadOnly".to_string()],
+            None,
+            Some(&"AdminJIT".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, Some("ReadOnly".to_string()));
     }
 }
