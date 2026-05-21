@@ -343,6 +343,38 @@ fn sanitize_session_name(name: &str) -> String {
     result.to_lowercase()
 }
 
+/// Sanitize a role name for use as a profile-name suffix.
+///
+/// Unlike `sanitize_session_name`, this preserves case (so `AdminAccess` and
+/// `adminaccess` remain distinguishable). It keeps alphanumerics, underscores,
+/// and hyphens; turns spaces into hyphens; and strips other characters — including
+/// `/`, which is reserved as the account/role separator.
+#[allow(dead_code)]
+fn sanitize_role_suffix(name: &str) -> String {
+    let mut result = String::new();
+    let mut last_was_hyphen = false;
+
+    for c in name.chars() {
+        match c {
+            ' ' | '-' if !last_was_hyphen && !result.is_empty() => {
+                result.push('-');
+                last_was_hyphen = true;
+            }
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
+                result.push(c);
+                last_was_hyphen = false;
+            }
+            _ => {}
+        }
+    }
+
+    if result.ends_with('-') {
+        result.pop();
+    }
+
+    result
+}
+
 /// Determine the final profile name, adding session prefix if needed to avoid collisions
 fn determine_final_profile_name(
     profile_name: &str,
@@ -870,5 +902,33 @@ mod tests {
             &roles,
             Some("OldRole".to_string())
         ));
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_simple() {
+        assert_eq!(sanitize_role_suffix("AdminAccess"), "AdminAccess");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_with_dashes_and_underscores() {
+        assert_eq!(sanitize_role_suffix("Read-Only_Power"), "Read-Only_Power");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_spaces_become_dashes() {
+        assert_eq!(sanitize_role_suffix("Power User"), "Power-User");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_strips_special_chars() {
+        // Includes `/` — the suffix must never contain another `/`, since
+        // `/` is the separator between account and role.
+        assert_eq!(sanitize_role_suffix("Admin/JIT!"), "AdminJIT");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_preserves_case() {
+        assert_eq!(sanitize_role_suffix("AdminAccess"), "AdminAccess");
+        assert_ne!(sanitize_role_suffix("AdminAccess"), "adminaccess");
     }
 }
