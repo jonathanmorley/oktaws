@@ -74,8 +74,8 @@ impl Client {
     ///
     pub async fn app_instances(&self) -> Result<Vec<AppInstance>> {
         let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(Duration::from_secs(1), Duration::from_secs(2))
-            .base(1)
+            .retry_bounds(Duration::from_secs(1), Duration::from_secs(32))
+            .base(2)
             .build_with_max_retries(5);
 
         let client: ClientWithMiddleware = ClientBuilder::new(reqwest::Client::new())
@@ -110,7 +110,7 @@ impl Client {
     ///
     pub async fn profiles(&self, app_instance_id: &str) -> Result<Vec<Profile>> {
         let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(Duration::from_secs(1), Duration::from_secs(2))
+            .retry_bounds(Duration::from_secs(1), Duration::from_secs(32))
             .base(2)
             .build_with_max_retries(10);
 

@@ -565,7 +565,9 @@ fn profile_needs_role_selection(available_roles: &[String], existing_role: Optio
 /// Priority:
 /// 1. Single API role available → use it (no prompt).
 /// 2. Existing role from `~/.aws/config` that is still in `api_roles` → reuse it.
-/// 3. Session default role that is in `api_roles` → use it.
+/// 3. Session default role that is in `api_roles` → use it. Also covers the case
+///    where the existing role is present in config but no longer always-on (e.g., it
+///    became JIT-gated) — we print a note and fall through to try the session default.
 /// 4. Otherwise → prompt interactively over `api_roles`.
 fn compute_account_default_role(
     account_name: &str,
@@ -585,14 +587,11 @@ fn compute_account_default_role(
         if api_roles.contains(&existing) {
             return Ok(Some(existing));
         }
+        // Existing role is no longer always-on; fall through to try the session default
+        // before re-prompting.
         println!(
             "  Note: Previously selected role '{existing}' is no longer always-on for {account_name}"
         );
-        let selection = dialoguer::Select::new()
-            .with_prompt(format!("Choose default (always-on) role for {account_name}"))
-            .items(api_roles)
-            .interact()?;
-        return Ok(Some(api_roles[selection].clone()));
     }
 
     if let Some(default) = session_default_role {
@@ -1218,5 +1217,20 @@ mod tests {
             .map(|p| p.profile_name.as_str())
             .collect();
         assert_eq!(suffixed_names, vec!["prod/Admin", "prod/BreakGlass"]);
+    }
+
+    #[test]
+    fn test_compute_account_default_role_existing_invalid_falls_through_to_session_default() {
+        // When the existing role from ~/.aws/config is no longer in api_roles (e.g.
+        // it became JIT-gated), use a valid session default instead of immediately
+        // re-prompting the user.
+        let result = compute_account_default_role(
+            "prod-account",
+            &["NewAdmin".to_string(), "ReadOnly".to_string()],
+            Some("OldAdmin".to_string()),
+            Some(&"NewAdmin".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, Some("NewAdmin".to_string()));
     }
 }
