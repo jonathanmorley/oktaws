@@ -41,10 +41,7 @@ impl ConfigStore {
                 .map_err(|e| eyre!("Failed to load AWS config file: {}", e))?;
         }
 
-        Ok(Self {
-            path,
-            config,
-        })
+        Ok(Self { path, config })
     }
 
     /// Check if a profile is an SSO profile
@@ -321,12 +318,7 @@ sso_registration_scopes = sso:account:access
 
         // Need to create the session first, then the profile
         store.upsert_sso_session("my-sso", "https://my-org.awsapps.com/start", "us-east-1")?;
-        store.upsert_sso_profile(
-            "my-profile",
-            "my-sso",
-            "123456789012",
-            "MyRole",
-        )?;
+        store.upsert_sso_profile("my-profile", "my-sso", "123456789012", "MyRole")?;
 
         store.save()?;
 
@@ -352,12 +344,7 @@ sso_registration_scopes = sso:account:access
         let mut store = ConfigStore::load(Some(tempfile.path()))?;
 
         store.upsert_sso_session("my-sso", "https://my-org.awsapps.com/start", "us-east-1")?;
-        store.upsert_sso_profile(
-            "my-profile",
-            "my-sso",
-            "123456789012",
-            "MyRole",
-        )?;
+        store.upsert_sso_profile("my-profile", "my-sso", "123456789012", "MyRole")?;
 
         store.save()?;
 
@@ -412,12 +399,7 @@ sso_registration_scopes = sso:account:access
 
         // Create the SSO session first
         store.upsert_sso_session("my-sso", "https://my-sso.awsapps.com/start", "us-east-1")?;
-        store.upsert_sso_profile(
-            "new-profile",
-            "my-sso",
-            "123456789012",
-            "MyRole",
-        )?;
+        store.upsert_sso_profile("new-profile", "my-sso", "123456789012", "MyRole")?;
 
         store.save()?;
 
@@ -514,24 +496,9 @@ sso_registration_scopes = sso:account:access
         store.upsert_sso_session("session-b", "https://b.awsapps.com/start", "us-west-2")?;
 
         // Add profiles to each session
-        store.upsert_sso_profile(
-            "profile-a1",
-            "session-a",
-            "111111111111",
-            "Admin",
-        )?;
-        store.upsert_sso_profile(
-            "profile-a2",
-            "session-a",
-            "222222222222",
-            "ReadOnly",
-        )?;
-        store.upsert_sso_profile(
-            "profile-b1",
-            "session-b",
-            "333333333333",
-            "PowerUser",
-        )?;
+        store.upsert_sso_profile("profile-a1", "session-a", "111111111111", "Admin")?;
+        store.upsert_sso_profile("profile-a2", "session-a", "222222222222", "ReadOnly")?;
+        store.upsert_sso_profile("profile-b1", "session-b", "333333333333", "PowerUser")?;
 
         store.save()?;
 

@@ -601,7 +601,9 @@ fn compute_account_default_role(
     }
 
     let selection = dialoguer::Select::new()
-        .with_prompt(format!("Choose default (always-on) role for {account_name}"))
+        .with_prompt(format!(
+            "Choose default (always-on) role for {account_name}"
+        ))
         .items(api_roles)
         .interact()?;
     Ok(Some(api_roles[selection].clone()))
@@ -710,7 +712,12 @@ fn write_sso_session_profiles(
     let session_default_role = if needs_selection_profiles.is_empty() {
         None
     } else {
-        prompt_for_default_role(display_name, needs_selection_profiles.len(), sso_profiles, extra_roles)?
+        prompt_for_default_role(
+            display_name,
+            needs_selection_profiles.len(),
+            sso_profiles,
+            extra_roles,
+        )?
     };
 
     // Expand and write profiles.
@@ -745,8 +752,13 @@ fn write_sso_session_profiles(
             }
         }
 
-        let expanded =
-            expand_account_profiles(&base_profile_name, account_id, &true_api_roles, extra_roles, default_role.as_ref());
+        let expanded = expand_account_profiles(
+            &base_profile_name,
+            account_id,
+            &true_api_roles,
+            extra_roles,
+            default_role.as_ref(),
+        );
 
         let sanitized = sanitize_session_name(account_name);
         let prefixed_note = if needs_prefix.contains(&sanitized) {
@@ -1050,13 +1062,9 @@ mod tests {
 
     #[test]
     fn test_compute_account_default_role_single_api_role() {
-        let result = compute_account_default_role(
-            "prod-account",
-            &["AdminAccess".to_string()],
-            None,
-            None,
-        )
-        .unwrap();
+        let result =
+            compute_account_default_role("prod-account", &["AdminAccess".to_string()], None, None)
+                .unwrap();
         assert_eq!(result, Some("AdminAccess".to_string()));
     }
 
@@ -1154,13 +1162,8 @@ mod tests {
 
     #[test]
     fn test_expand_account_profiles_no_api_roles_only_extras() {
-        let result = expand_account_profiles(
-            "prod",
-            "111111111111",
-            &[],
-            &["AdminJIT".to_string()],
-            None,
-        );
+        let result =
+            expand_account_profiles("prod", "111111111111", &[], &["AdminJIT".to_string()], None);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].profile_name, "prod/AdminJIT");
         assert_eq!(result[0].role, "AdminJIT");

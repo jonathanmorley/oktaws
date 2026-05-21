@@ -5,6 +5,7 @@
 **Goal:** Generate one AWS CLI profile per (account, role) pair in `oktaws init-sso`, including profiles for JIT-gated permission sets declared in the oktaws config file.
 
 **Architecture:**
+
 - Today, `init-sso` emits exactly one profile per AWS account, with the user selecting a single "default role" interactively. We flip this to emit a profile for *every* role visible on each account. One role per account remains "default" and gets the bare `account-name` profile (preserving the existing convention); all other roles get a suffixed `account-name/RoleName` profile using `/` as the separator.
 - JIT-gated permission sets are invisible to the IAMIC API during inactive windows. To declare profiles speculatively, oktaws reads a new `[sso] extra_roles = [...]` field from `~/.oktaws/<org>.toml`. These roles are presumed JIT and are *excluded* from default-role candidacy so the bare `account-name` profile always points at an always-on role.
 - For each account, the final role set is `api_roles ∪ extra_roles`. The default-role choice considers only `api_roles`. If `api_roles` is empty for an account (only JIT roles visible), no bare profile is emitted — only suffixed ones — and a warning is printed.
@@ -12,21 +13,25 @@
 **Tech Stack:** Rust, `serde` + `toml` (already deps) for oktaws config, `configparser` (already a dep) for the `~/.aws/config` INI file, `dialoguer` for prompts, `tempfile`/`mockall` for tests.
 
 **Files touched:**
+
 - Create: [src/config/sso.rs](src/config/sso.rs) — new `SsoConfig` struct and `load_sso_config` loader (separate from federated `Organization` loader so init-sso-only users don't need a `[profiles]` table).
 - Modify: [src/config/mod.rs](src/config/mod.rs) — `pub mod sso;`.
 - Modify: [src/main.rs](src/main.rs) — add `sanitize_role_suffix`, `compute_account_default_role`, `expand_account_profiles`; rewire `init_sso`; remove dead `select_role_for_profile`.
 - Modify: [README.md](README.md) — document multi-profile output and the `[sso]` section.
 
----
+______________________________________________________________________
 
 ### Task 1: Add `SsoConfig` struct + loader for `~/.oktaws/<org>.toml`
 
 **Files:**
+
 - Create: [src/config/sso.rs](src/config/sso.rs)
 - Modify: [src/config/mod.rs](src/config/mod.rs) — register the new module.
 
 The existing `Config` in [src/config/organization.rs:27](src/config/organization.rs:27) requires a `profiles` table and runs federated-flow validation in `Organization::try_from` — overkill (and breaking for init-sso-only users) just to read `extra_roles`. Use a dedicated minimal deserializer that:
+
 - Ignores all federated fields via serde's default permissive behavior.
+
 - Treats a missing file or missing `[sso]` section as `Default::default()`.
 
 - [ ] **Step 1: Register the new module**
@@ -188,6 +193,7 @@ Wait — Step 2 already shipped a full implementation. To honor the TDD discipli
 # (do this by editing src/config/sso.rs)
 cargo test --lib config::sso::tests
 ```
+
 Expected: all 6 tests fail/panic with `not yet implemented`.
 
 - [ ] **Step 4: Restore the implementation and verify tests pass**
@@ -209,11 +215,12 @@ git add src/config/mod.rs src/config/sso.rs
 git commit -m "feat(config): add [sso] table loader for extra_roles"
 ```
 
----
+______________________________________________________________________
 
 ### Task 2: Sanitize role-name suffixes for AWS profile names
 
 **Files:**
+
 - Modify: [src/main.rs](src/main.rs) — add `sanitize_role_suffix` helper + tests.
 
 Unlike `sanitize_session_name` (which lowercases for filesystem-safe session names), this one preserves case because roles like `AdminAccess` and `adminaccess` should remain distinguishable in profile names.
@@ -308,11 +315,12 @@ git add src/main.rs
 git commit -m "feat(init-sso): add sanitize_role_suffix for profile name suffixes"
 ```
 
----
+______________________________________________________________________
 
 ### Task 3: Compute the bare-profile default role per account
 
 **Files:**
+
 - Modify: [src/main.rs](src/main.rs) — add `compute_account_default_role` helper + tests.
 
 This replaces the role-selection logic from `select_role_for_profile`, but constrained to API-discovered (always-on) roles only. The bare `account-name` profile must never point at a JIT-gated role.
@@ -460,11 +468,12 @@ git add src/main.rs
 git commit -m "feat(init-sso): compute bare-profile default role from API roles only"
 ```
 
----
+______________________________________________________________________
 
 ### Task 4: Expand an account into (profile, role) pairs
 
 **Files:**
+
 - Modify: [src/main.rs](src/main.rs) — add `expand_account_profiles` + tests.
 
 This function produces the full list of profiles to write for one account, using `/` as the account/role separator.
@@ -665,11 +674,12 @@ git add src/main.rs
 git commit -m "feat(init-sso): expand each account into multiple (profile, role) pairs"
 ```
 
----
+______________________________________________________________________
 
 ### Task 5: Wire `init_sso` to load oktaws SSO config + use new helpers
 
 **Files:**
+
 - Modify: [src/main.rs](src/main.rs) — load `extra_roles` from `~/.oktaws/<org>.toml`; rewire profile-writing loop; reword default-role prompt.
 
 - [ ] **Step 1: Import the new module**
@@ -802,11 +812,12 @@ git add src/main.rs
 git commit -m "feat(init-sso): emit one profile per (account, role) pair with JIT-aware default"
 ```
 
----
+______________________________________________________________________
 
 ### Task 6: Remove dead code (`select_role_for_profile`)
 
 **Files:**
+
 - Modify: [src/main.rs](src/main.rs) — remove the now-unused function and its tests (if any).
 
 - [ ] **Step 1: Verify it's actually dead**
@@ -827,6 +838,7 @@ cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
+
 Expected: all green.
 
 - [ ] **Step 4: Commit**
@@ -836,16 +848,17 @@ git add src/main.rs
 git commit -m "refactor(init-sso): remove unused select_role_for_profile"
 ```
 
----
+______________________________________________________________________
 
 ### Task 7: Document the new behavior
 
 **Files:**
+
 - Modify: [README.md](README.md) — add sections for multi-profile output and the oktaws `[sso]` config table.
 
 - [ ] **Step 1: Add documentation**
 
-In `README.md`, locate the line `**Note:** \`~/.aws/config\` is modified by \`init-sso\` but only read by other commands.` (in the "For AWS Identity Center/SSO" setup section). Immediately after that line, append:
+In `README.md`, locate the line `**Note:** \`~/.aws/config\` is modified by \`init-sso\` but only read by other commands.\` (in the "For AWS Identity Center/SSO" setup section). Immediately after that line, append:
 
 ````markdown
 #### Multiple Profiles Per Account
@@ -893,11 +906,12 @@ git add README.md
 git commit -m "docs: document multi-profile-per-account and [sso].extra_roles"
 ```
 
----
+______________________________________________________________________
 
 ## Self-Review
 
 **Spec coverage:** Every design point from the conversation is covered —
+
 - Multi-profile-per-account (Tasks 2, 4, 5)
 - Bare `account-name` for default role, preserving convention (Tasks 3, 4)
 - `/` separator between account and role (Tasks 2, 4)
@@ -912,12 +926,13 @@ git commit -m "docs: document multi-profile-per-account and [sso].extra_roles"
 **Type/name consistency:** `SsoConfig` (Task 1) has field `extra_roles: Vec<String>` — consumed by Task 5 as `sso_config.extra_roles`. `ExpandedProfile` (Task 4) has fields `profile_name`, `account_id`, `role`, `available_roles` — consumed by Task 5's `aws_config.upsert_sso_profile(..., profile.available_roles)` matching the existing signature. `compute_account_default_role` returns `Result<Option<String>>` — consumed by Task 5 as `default_role.as_ref()` passed into `expand_account_profiles`.
 
 **Notable behavioral choices baked into the plan:**
-1. `extra_roles` is org-wide (every SSO session in the org gets every extra role applied to every account). Per-session and per-account scoping deferred — most orgs have a single SSO app and a small JIT role count.
-2. The bare profile's `available_roles` (used for `# sso_role_name = X` comment alternatives in `~/.aws/config`) lists only API roles. Comment-swapping is therefore always to another always-on role.
-3. Role-suffix sanitization preserves case (`AdminAccess` ≠ `adminaccess`) and strips `/` (the reserved separator). Account-name portion is still lowercased via the existing `sanitize_session_name`.
-4. Per-session re-load of `extra_roles` inside the loop is mildly redundant; acceptable for clarity.
 
----
+1. `extra_roles` is org-wide (every SSO session in the org gets every extra role applied to every account). Per-session and per-account scoping deferred — most orgs have a single SSO app and a small JIT role count.
+1. The bare profile's `available_roles` (used for `# sso_role_name = X` comment alternatives in `~/.aws/config`) lists only API roles. Comment-swapping is therefore always to another always-on role.
+1. Role-suffix sanitization preserves case (`AdminAccess` ≠ `adminaccess`) and strips `/` (the reserved separator). Account-name portion is still lowercased via the existing `sanitize_session_name`.
+1. Per-session re-load of `extra_roles` inside the loop is mildly redundant; acceptable for clarity.
+
+______________________________________________________________________
 
 ## Execution
 
