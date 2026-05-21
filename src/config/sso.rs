@@ -30,10 +30,11 @@ struct OktawsFile {
 ///
 /// Will return `Err` if the file exists but cannot be parsed as TOML.
 pub fn load_sso_config(path: &Path) -> Result<SsoConfig> {
-    if !path.exists() {
-        return Ok(SsoConfig::default());
-    }
-    let raw = std::fs::read_to_string(path)?;
+    let raw = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(SsoConfig::default()),
+        Err(e) => return Err(e.into()),
+    };
     let parsed: OktawsFile = toml::from_str(&raw)?;
     Ok(parsed.sso.unwrap_or_default())
 }
