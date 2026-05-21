@@ -758,10 +758,15 @@ fn write_sso_session_profiles(
     // Determine which accounts need a default-role prompt.
     let mut needs_selection_profiles = Vec::new();
     for (account_name, (_, api_roles)) in *sso_profiles {
+        let true_api_roles: Vec<String> = api_roles
+            .iter()
+            .filter(|r| !extra_roles.contains(r))
+            .cloned()
+            .collect();
         let base_profile_name =
             determine_final_profile_name(account_name, session_name, needs_prefix);
         let existing_role = aws_config.get_profile_role(&base_profile_name);
-        if profile_needs_role_selection(api_roles, existing_role) {
+        if profile_needs_role_selection(&true_api_roles, existing_role) {
             needs_selection_profiles.push(account_name.clone());
         }
     }
@@ -776,13 +781,18 @@ fn write_sso_session_profiles(
     println!("\nSSO profiles for {display_name} (session: {session_name}):");
     let mut count = 0;
     for (account_name, (account_id, api_roles)) in *sso_profiles {
+        let true_api_roles: Vec<String> = api_roles
+            .iter()
+            .filter(|r| !extra_roles.contains(r))
+            .cloned()
+            .collect();
         let base_profile_name =
             determine_final_profile_name(account_name, session_name, needs_prefix);
         let existing_role = aws_config.get_profile_role(&base_profile_name);
 
         let default_role = compute_account_default_role(
             account_name,
-            api_roles,
+            &true_api_roles,
             existing_role,
             session_default_role.as_ref(),
         )?;
@@ -794,7 +804,7 @@ fn write_sso_session_profiles(
         }
 
         let expanded =
-            expand_account_profiles(&base_profile_name, account_id, api_roles, extra_roles, default_role.as_ref());
+            expand_account_profiles(&base_profile_name, account_id, &true_api_roles, extra_roles, default_role.as_ref());
 
         let sanitized = sanitize_session_name(account_name);
         let prefixed_note = if needs_prefix.contains(&sanitized) {
@@ -1260,5 +1270,34 @@ mod tests {
         let suffixed = &result[1];
         assert_eq!(suffixed.profile_name, "prod/Power-User");
         assert_eq!(suffixed.role, "Power User"); // role string verbatim; only profile name is sanitized
+    }
+
+    #[test]
+    fn test_expand_account_profiles_caller_filters_overlap_from_api_roles() {
+        // The caller (init_sso) is responsible for ensuring api_roles excludes
+        // anything in extra_roles. This test pins the post-filter expectation.
+        let filtered_api: Vec<String> = ["Admin".to_string(), "ReadOnly".to_string()]
+            .into_iter()
+            .filter(|r| !["Admin".to_string()].contains(r))
+            .collect();
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &filtered_api,
+            &["Admin".to_string(), "BreakGlass".to_string()],
+            Some(&"ReadOnly".to_string()),
+        );
+        let bare = result.iter().find(|p| p.profile_name == "prod").unwrap();
+        // The bare profile must only list always-on roles for comment alternatives.
+        assert_eq!(bare.available_roles, vec!["ReadOnly".to_string()]);
+
+        // Suffixed profiles exist for Admin (JIT) and BreakGlass (JIT), but not for
+        // a duplicate of ReadOnly.
+        let suffixed_names: Vec<&str> = result
+            .iter()
+            .filter(|p| p.profile_name != "prod")
+            .map(|p| p.profile_name.as_str())
+            .collect();
+        assert_eq!(suffixed_names, vec!["prod/Admin", "prod/BreakGlass"]);
     }
 }
