@@ -614,10 +614,6 @@ struct ExpandedProfile {
     profile_name: String,
     account_id: String,
     role: String,
-    /// Roles to render as `# sso_role_name = X` comment alternatives in the AWS config.
-    /// For the bare profile this is the full API-role set; for suffixed profiles it is
-    /// just the single role.
-    available_roles: Vec<String>,
 }
 
 /// Expand one account into the full set of profiles to write.
@@ -650,7 +646,6 @@ fn expand_account_profiles(
             profile_name: base_profile_name.to_string(),
             account_id: account_id.to_string(),
             role: default.clone(),
-            available_roles: api_roles.to_vec(),
         });
     }
 
@@ -662,7 +657,6 @@ fn expand_account_profiles(
             profile_name: format!("{base_profile_name}/{}", sanitize_role_suffix(role)),
             account_id: account_id.to_string(),
             role: role.clone(),
-            available_roles: vec![role.clone()],
         });
     }
 
@@ -768,7 +762,6 @@ fn write_sso_session_profiles(
                 session_name,
                 &profile.account_id,
                 &profile.role,
-                profile.available_roles,
             )?;
             println!("  - {}{prefixed_note}", profile.profile_name);
             count += 1;
@@ -1128,7 +1121,6 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].profile_name, "prod");
         assert_eq!(result[0].role, "AdminAccess");
-        assert_eq!(result[0].available_roles, vec!["AdminAccess".to_string()]);
     }
 
     #[test]
@@ -1145,7 +1137,6 @@ mod tests {
         assert_eq!(result[0].role, "AdminAccess");
         assert_eq!(result[1].profile_name, "prod/ReadOnly");
         assert_eq!(result[1].role, "ReadOnly");
-        assert_eq!(result[1].available_roles, vec!["ReadOnly".to_string()]);
     }
 
     #[test]
@@ -1191,24 +1182,6 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_account_profiles_bare_profile_lists_api_roles_for_comments() {
-        // The bare profile's available_roles drives the "# sso_role_name = X" alternative comments.
-        // Only API roles should appear — comment-swapping to a JIT role would silently fail.
-        let result = expand_account_profiles(
-            "prod",
-            "111111111111",
-            &["AdminAccess".to_string(), "ReadOnly".to_string()],
-            &["AdminJIT".to_string()],
-            Some(&"AdminAccess".to_string()),
-        );
-        let bare = result.iter().find(|p| p.profile_name == "prod").unwrap();
-        assert_eq!(
-            bare.available_roles,
-            vec!["AdminAccess".to_string(), "ReadOnly".to_string()]
-        );
-    }
-
-    #[test]
     fn test_expand_account_profiles_sanitizes_role_suffix() {
         let result = expand_account_profiles(
             "prod",
@@ -1237,10 +1210,6 @@ mod tests {
             &["Admin".to_string(), "BreakGlass".to_string()],
             Some(&"ReadOnly".to_string()),
         );
-        let bare = result.iter().find(|p| p.profile_name == "prod").unwrap();
-        // The bare profile must only list always-on roles for comment alternatives.
-        assert_eq!(bare.available_roles, vec!["ReadOnly".to_string()]);
-
         // Suffixed profiles exist for Admin (JIT) and BreakGlass (JIT), but not for
         // a duplicate of ReadOnly.
         let suffixed_names: Vec<&str> = result

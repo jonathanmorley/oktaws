@@ -14,8 +14,6 @@ use tracing::instrument;
 pub struct ConfigStore {
     path: PathBuf,
     config: Ini,
-    /// Maps profile names to their available roles (for commenting)
-    profile_roles: HashMap<String, Vec<String>>,
 }
 
 impl ConfigStore {
@@ -46,7 +44,6 @@ impl ConfigStore {
         Ok(Self {
             path,
             config,
-            profile_roles: HashMap::new(),
         })
     }
 
@@ -117,7 +114,6 @@ impl ConfigStore {
         session_name: &str,
         account_id: &str,
         role_name: &str,
-        available_roles: Vec<String>,
     ) -> Result<()> {
         let section_name = format!("profile {profile_name}");
 
@@ -132,10 +128,6 @@ impl ConfigStore {
             .set(&section_name, "sso_role_name", Some(role_name.to_string()));
         self.config
             .set(&section_name, "region", Some("us-east-1".to_string()));
-
-        // Store available roles for this profile
-        self.profile_roles
-            .insert(profile_name.to_string(), available_roles);
 
         Ok(())
     }
@@ -154,30 +146,7 @@ impl ConfigStore {
         Ok(())
     }
 
-    /// Write profile alternative roles as comments
-    fn write_alternative_roles(
-        &self,
-        output: &mut String,
-        profile_section: &str,
-        current_role: &str,
-    ) -> Result<()> {
-        let profile_name = profile_section
-            .strip_prefix("profile ")
-            .unwrap_or(profile_section);
-        if let Some(available_roles) = self.profile_roles.get(profile_name) {
-            let other_roles: Vec<&String> = available_roles
-                .iter()
-                .filter(|role| role.as_str() != current_role)
-                .collect();
-
-            for role in other_roles {
-                writeln!(output, "# sso_role_name = {role}")?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Write a profile section with its configuration and alternative role comments
+    /// Write a profile section with its configuration
     fn write_profile(&self, output: &mut String, profile_section: &str) -> Result<()> {
         writeln!(output)?;
         writeln!(output, "[{profile_section}]")?;
@@ -189,11 +158,6 @@ impl ConfigStore {
             for key in keys {
                 if let Some(Some(value)) = section_map.get(key) {
                     writeln!(output, "{key} = {value}")?;
-
-                    // If this is sso_role_name, add commented alternatives
-                    if key == "sso_role_name" {
-                        self.write_alternative_roles(output, profile_section, value)?;
-                    }
                 }
             }
         }
@@ -208,7 +172,6 @@ impl ConfigStore {
     /// - Profiles within a session are sorted alphabetically
     /// - Non-SSO profiles are written at the end
     /// - Blank lines separate session groups
-    /// - Alternative roles are shown as comments after `sso_role_name`
     ///
     /// # Errors
     ///
@@ -363,7 +326,6 @@ sso_registration_scopes = sso:account:access
             "my-sso",
             "123456789012",
             "MyRole",
-            vec!["MyRole".to_string()],
         )?;
 
         store.save()?;
@@ -395,7 +357,6 @@ sso_registration_scopes = sso:account:access
             "my-sso",
             "123456789012",
             "MyRole",
-            vec!["MyRole".to_string(), "OtherRole".to_string()],
         )?;
 
         store.save()?;
@@ -456,7 +417,6 @@ sso_registration_scopes = sso:account:access
             "my-sso",
             "123456789012",
             "MyRole",
-            vec!["MyRole".to_string()],
         )?;
 
         store.save()?;
@@ -559,21 +519,18 @@ sso_registration_scopes = sso:account:access
             "session-a",
             "111111111111",
             "Admin",
-            vec!["Admin".to_string()],
         )?;
         store.upsert_sso_profile(
             "profile-a2",
             "session-a",
             "222222222222",
             "ReadOnly",
-            vec!["ReadOnly".to_string()],
         )?;
         store.upsert_sso_profile(
             "profile-b1",
             "session-b",
             "333333333333",
             "PowerUser",
-            vec!["PowerUser".to_string()],
         )?;
 
         store.save()?;
@@ -624,65 +581,6 @@ sso_registration_scopes = sso:account:access
             found_blank_between_groups,
             "No blank line between session groups"
         );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_role_alternatives_shown() -> Result<()> {
-        let tempfile = NamedTempFile::new()?;
-        let mut store = ConfigStore::load(Some(tempfile.path()))?;
-
-        store.upsert_sso_session("my-sso", "https://my.awsapps.com/start", "us-east-1")?;
-        store.upsert_sso_profile(
-            "multi-role",
-            "my-sso",
-            "123456789012",
-            "Admin",
-            vec![
-                "Admin".to_string(),
-                "ReadOnly".to_string(),
-                "PowerUser".to_string(),
-            ],
-        )?;
-
-        store.save()?;
-
-        let contents = fs::read_to_string(tempfile.path())?;
-
-        // Should have active role
-        assert!(contents.contains("sso_role_name = Admin"));
-        // Should have commented alternatives
-        assert!(contents.contains("# sso_role_name = PowerUser"));
-        assert!(contents.contains("# sso_role_name = ReadOnly"));
-        // Should NOT have the active role as a comment
-        assert!(!contents.contains("# sso_role_name = Admin"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_single_role_no_alternatives() -> Result<()> {
-        let tempfile = NamedTempFile::new()?;
-        let mut store = ConfigStore::load(Some(tempfile.path()))?;
-
-        store.upsert_sso_session("my-sso", "https://my.awsapps.com/start", "us-east-1")?;
-        store.upsert_sso_profile(
-            "single-role",
-            "my-sso",
-            "123456789012",
-            "Admin",
-            vec!["Admin".to_string()],
-        )?;
-
-        store.save()?;
-
-        let contents = fs::read_to_string(tempfile.path())?;
-
-        // Should have active role
-        assert!(contents.contains("sso_role_name = Admin"));
-        // Should NOT have any commented alternatives
-        assert!(!contents.contains("# sso_role_name"));
 
         Ok(())
     }

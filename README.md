@@ -64,7 +64,6 @@ Example: an account `prod` with roles `AdminAccess` and `ReadOnly`, where you se
 ```
 [profile prod]
 sso_role_name = AdminAccess
-# sso_role_name = ReadOnly
 ...
 
 [profile prod/ReadOnly]
