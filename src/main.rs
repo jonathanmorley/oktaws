@@ -6,6 +6,7 @@ use oktaws::aws::config::ConfigStore;
 use oktaws::aws::profile::Store as ProfileStore;
 use oktaws::config::oktaws_home;
 use oktaws::config::organization::{Config as OrganizationConfig, Pattern as OrganizationPattern};
+use oktaws::config::sso::load_sso_config;
 use oktaws::okta::client::Client as OktaClient;
 // Import sso module to make its Client impl methods available
 #[allow(unused_imports)]
@@ -349,7 +350,6 @@ fn sanitize_session_name(name: &str) -> String {
 /// `adminaccess` remain distinguishable). It keeps alphanumerics, underscores,
 /// and hyphens; turns spaces into hyphens; and strips other characters — including
 /// `/`, which is reserved as the account/role separator.
-#[allow(dead_code)]
 fn sanitize_role_suffix(name: &str) -> String {
     let mut result = String::new();
     let mut last_was_hyphen = false;
@@ -510,7 +510,7 @@ fn prompt_for_default_role(
 
             let selection = dialoguer::Select::new()
                 .with_prompt(format!(
-                    "Choose default role for {display_name} ({needs_selection_count} profile{} need role selection)",
+                    "Choose default (always-on) role for {display_name} ({needs_selection_count} account{} need a default)",
                     if needs_selection_count == 1 { "" } else { "s" }
                 ))
                 .items(&options)
@@ -560,7 +560,6 @@ fn profile_needs_role_selection(available_roles: &[String], existing_role: Optio
 /// 2. Existing role from `~/.aws/config` that is still in `api_roles` → reuse it.
 /// 3. Session default role that is in `api_roles` → use it.
 /// 4. Otherwise → prompt interactively over `api_roles`.
-#[allow(dead_code)]
 fn compute_account_default_role(
     account_name: &str,
     api_roles: &[String],
@@ -604,7 +603,6 @@ fn compute_account_default_role(
 
 /// One profile to write for an account, produced by `expand_account_profiles`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 struct ExpandedProfile {
     profile_name: String,
     account_id: String,
@@ -624,7 +622,6 @@ struct ExpandedProfile {
 ///
 /// `base_profile_name` is the account's profile-name *after* collision-prefix resolution
 /// has been applied by the caller — both bare and suffixed profiles share that base.
-#[allow(dead_code)]
 fn expand_account_profiles(
     base_profile_name: &str,
     account_id: &str,
@@ -679,6 +676,7 @@ fn expand_account_profiles(
 /// * `available_roles` - List of roles available for this profile
 /// * `existing_role` - Previously configured role (if any)
 /// * `default_role` - User's default role choice for the session (if any)
+#[allow(dead_code)]
 fn select_role_for_profile(
     profile_name: &str,
     available_roles: &[String],
@@ -728,6 +726,98 @@ fn select_role_for_profile(
     Ok(available_roles[selection].clone())
 }
 
+/// Context for a single SSO session, passed to `write_sso_session_profiles`.
+struct SsoSessionContext<'a> {
+    session_name: &'a str,
+    display_name: &'a str,
+    start_url: &'a str,
+    region: &'a str,
+    sso_profiles: &'a indexmap::IndexMap<String, (String, Vec<String>)>,
+    extra_roles: &'a [String],
+    needs_prefix: &'a std::collections::HashSet<String>,
+}
+
+/// Write all expanded profiles for one SSO session into `aws_config`.
+///
+/// Returns the number of profiles written.
+fn write_sso_session_profiles(
+    aws_config: &mut ConfigStore,
+    ctx: &SsoSessionContext<'_>,
+) -> Result<usize> {
+    let SsoSessionContext {
+        session_name,
+        display_name,
+        start_url,
+        region,
+        sso_profiles,
+        extra_roles,
+        needs_prefix,
+    } = ctx;
+    aws_config.upsert_sso_session(session_name, start_url, region)?;
+
+    // Determine which accounts need a default-role prompt.
+    let mut needs_selection_profiles = Vec::new();
+    for (account_name, (_, api_roles)) in *sso_profiles {
+        let base_profile_name =
+            determine_final_profile_name(account_name, session_name, needs_prefix);
+        let existing_role = aws_config.get_profile_role(&base_profile_name);
+        if profile_needs_role_selection(api_roles, existing_role) {
+            needs_selection_profiles.push(account_name.clone());
+        }
+    }
+
+    let session_default_role = if needs_selection_profiles.is_empty() {
+        None
+    } else {
+        prompt_for_default_role(display_name, needs_selection_profiles.len(), sso_profiles)?
+    };
+
+    // Expand and write profiles.
+    println!("\nSSO profiles for {display_name} (session: {session_name}):");
+    let mut count = 0;
+    for (account_name, (account_id, api_roles)) in *sso_profiles {
+        let base_profile_name =
+            determine_final_profile_name(account_name, session_name, needs_prefix);
+        let existing_role = aws_config.get_profile_role(&base_profile_name);
+
+        let default_role = compute_account_default_role(
+            account_name,
+            api_roles,
+            existing_role,
+            session_default_role.as_ref(),
+        )?;
+
+        if default_role.is_none() && !extra_roles.is_empty() {
+            println!(
+                "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
+            );
+        }
+
+        let expanded =
+            expand_account_profiles(&base_profile_name, account_id, api_roles, extra_roles, default_role.as_ref());
+
+        let sanitized = sanitize_session_name(account_name);
+        let prefixed_note = if needs_prefix.contains(&sanitized) {
+            " (prefixed due to collision with other session)"
+        } else {
+            ""
+        };
+
+        for profile in expanded {
+            aws_config.upsert_sso_profile(
+                &profile.profile_name,
+                session_name,
+                &profile.account_id,
+                &profile.role,
+                profile.available_roles,
+            )?;
+            println!("  - {}{prefixed_note}", profile.profile_name);
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
 /// Generate AWS SSO (Identity Center) configuration in ~/.aws/config.
 ///
 /// This command:
@@ -759,14 +849,10 @@ async fn init_sso(options: InitSso) -> Result<()> {
     }
 
     let mut aws_config = ConfigStore::load(None)?;
-    let mut total_profiles = 0;
 
-    // First pass: collect all profile data from all sessions
-    // We do this in two passes to detect profile name collisions across sessions
-    // before prompting the user for role selections
+    // First pass: collect all session data so we can detect profile-name collisions
+    // across sessions before prompting for role selections.
     let mut sessions = Vec::new();
-
-    // Process each SSO app as a separate SSO session
     for sso_link in sso_links {
         if let Some(session_data) = collect_sso_session_data(&okta_client, sso_link).await? {
             sessions.push(session_data);
@@ -777,85 +863,45 @@ async fn init_sso(options: InitSso) -> Result<()> {
         return Err(eyre!("No SSO profiles were configured"));
     }
 
-    // Second pass: detect collisions and write profiles
-    // Build a map of sanitized profile names to the sessions they appear in
-    let mut profile_name_sessions = std::collections::HashMap::new();
-
-    // Count occurrences of each sanitized profile name across all sessions
+    // Count occurrences of each sanitized profile name across all sessions.
+    let mut profile_name_sessions: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for (session_name, _, _, _, sso_profiles) in &sessions {
         for profile_name in sso_profiles.keys() {
             let sanitized = sanitize_session_name(profile_name);
             profile_name_sessions
                 .entry(sanitized)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(session_name.clone());
         }
     }
 
-    // Determine which profiles need session prefix (those that appear in multiple sessions)
+    // Profiles that appear in more than one session need a session prefix.
     let needs_prefix: std::collections::HashSet<String> = profile_name_sessions
         .iter()
         .filter(|(_, sessions)| sessions.len() > 1)
         .map(|(name, _)| name.clone())
         .collect();
 
-    // Write sessions and profiles with appropriate names
+    // Load JIT-gated extra roles from the oktaws config once (same file for all sessions).
+    let oktaws_config_path = oktaws_home()?.join(format!("{}.toml", options.organization));
+    let extra_roles = load_sso_config(&oktaws_config_path)?.extra_roles;
+
+    // Second pass: write sessions and profiles.
+    let mut total_profiles = 0;
     for (session_name, display_name, start_url, region, sso_profiles) in sessions {
-        // Create SSO session
-        aws_config.upsert_sso_session(&session_name, &start_url, &region)?;
-
-        // First, check which profiles need role selection (don't have valid existing roles)
-        let mut needs_selection_profiles = Vec::new();
-        for (profile_name, (_, available_roles)) in &sso_profiles {
-            let final_profile_name =
-                determine_final_profile_name(profile_name, &session_name, &needs_prefix);
-            let existing_role = aws_config.get_profile_role(&final_profile_name);
-
-            if profile_needs_role_selection(available_roles, existing_role) {
-                needs_selection_profiles.push(profile_name.clone());
-            }
-        }
-
-        // Only prompt for default role if there are profiles that need selection
-        let default_role = if needs_selection_profiles.is_empty() {
-            None
-        } else {
-            prompt_for_default_role(&display_name, needs_selection_profiles.len(), &sso_profiles)?
-        };
-
-        // Create SSO profiles
-        println!("\nSSO profiles for {display_name} (session: {session_name}):");
-        for (profile_name, (account_id, available_roles)) in &sso_profiles {
-            let final_profile_name =
-                determine_final_profile_name(profile_name, &session_name, &needs_prefix);
-            let existing_role = aws_config.get_profile_role(&final_profile_name);
-
-            // Determine which role to use
-            let role = select_role_for_profile(
-                profile_name,
-                available_roles,
-                existing_role,
-                default_role.as_ref(),
-            )?;
-
-            aws_config.upsert_sso_profile(
-                &final_profile_name,
-                &session_name,
-                account_id,
-                &role,
-                available_roles.clone(),
-            )?;
-
-            // Only show "renamed from" if we added a session prefix (collision resolution)
-            // Don't show it for just sanitization
-            let sanitized = sanitize_session_name(profile_name);
-            if needs_prefix.contains(&sanitized) {
-                println!("  - {final_profile_name} (prefixed due to collision with other session)");
-            } else {
-                println!("  - {final_profile_name}");
-            }
-            total_profiles += 1;
-        }
+        total_profiles += write_sso_session_profiles(
+            &mut aws_config,
+            &SsoSessionContext {
+                session_name: &session_name,
+                display_name: &display_name,
+                start_url: &start_url,
+                region: &region,
+                sso_profiles: &sso_profiles,
+                extra_roles: &extra_roles,
+                needs_prefix: &needs_prefix,
+            },
+        )?;
     }
 
     if total_profiles == 0 {
