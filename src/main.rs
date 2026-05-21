@@ -602,6 +602,69 @@ fn compute_account_default_role(
     Ok(Some(api_roles[selection].clone()))
 }
 
+/// One profile to write for an account, produced by `expand_account_profiles`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
+struct ExpandedProfile {
+    profile_name: String,
+    account_id: String,
+    role: String,
+    /// Roles to render as `# sso_role_name = X` comment alternatives in the AWS config.
+    /// For the bare profile this is the full API-role set; for suffixed profiles it is
+    /// just the single role.
+    available_roles: Vec<String>,
+}
+
+/// Expand one account into the full set of profiles to write.
+///
+/// Produces:
+/// - One bare `{base_profile_name}` profile pointing at `default_role` (if `Some`).
+/// - One suffixed `{base_profile_name}/{sanitized_role}` profile for every other role in
+///   `api_roles ∪ extra_roles`, deduped, preserving input order (`api_roles` first).
+///
+/// `base_profile_name` is the account's profile-name *after* collision-prefix resolution
+/// has been applied by the caller — both bare and suffixed profiles share that base.
+#[allow(dead_code)]
+fn expand_account_profiles(
+    base_profile_name: &str,
+    account_id: &str,
+    api_roles: &[String],
+    extra_roles: &[String],
+    default_role: Option<&String>,
+) -> Vec<ExpandedProfile> {
+    let mut all_roles: Vec<String> = Vec::with_capacity(api_roles.len() + extra_roles.len());
+    for r in api_roles.iter().chain(extra_roles.iter()) {
+        if !all_roles.contains(r) {
+            all_roles.push(r.clone());
+        }
+    }
+
+    let mut out = Vec::new();
+
+    if let Some(default) = default_role {
+        out.push(ExpandedProfile {
+            profile_name: base_profile_name.to_string(),
+            account_id: account_id.to_string(),
+            role: default.clone(),
+            available_roles: api_roles.to_vec(),
+        });
+    }
+
+    for role in &all_roles {
+        if default_role.is_some_and(|d| d == role) {
+            continue;
+        }
+        out.push(ExpandedProfile {
+            profile_name: format!("{base_profile_name}/{}", sanitize_role_suffix(role)),
+            account_id: account_id.to_string(),
+            role: role.clone(),
+            available_roles: vec![role.clone()],
+        });
+    }
+
+    out
+}
+
 /// Select the appropriate role for a profile based on available options and defaults.
 ///
 /// Role selection priority:
@@ -1045,5 +1108,111 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, Some("ReadOnly".to_string()));
+    }
+
+    #[test]
+    fn test_expand_account_profiles_single_api_role_no_extras() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string()],
+            &[],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].profile_name, "prod");
+        assert_eq!(result[0].role, "AdminAccess");
+        assert_eq!(result[0].available_roles, vec!["AdminAccess".to_string()]);
+    }
+
+    #[test]
+    fn test_expand_account_profiles_multiple_api_roles() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &[],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].profile_name, "prod");
+        assert_eq!(result[0].role, "AdminAccess");
+        assert_eq!(result[1].profile_name, "prod/ReadOnly");
+        assert_eq!(result[1].role, "ReadOnly");
+        assert_eq!(result[1].available_roles, vec!["ReadOnly".to_string()]);
+    }
+
+    #[test]
+    fn test_expand_account_profiles_with_extra_roles() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string()],
+            &["AdminJIT".to_string(), "ReadOnlyJIT".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 3);
+        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
+        assert_eq!(names, vec!["prod", "prod/AdminJIT", "prod/ReadOnlyJIT"]);
+    }
+
+    #[test]
+    fn test_expand_account_profiles_no_api_roles_only_extras() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &[],
+            &["AdminJIT".to_string()],
+            None,
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].profile_name, "prod/AdminJIT");
+        assert_eq!(result[0].role, "AdminJIT");
+    }
+
+    #[test]
+    fn test_expand_account_profiles_dedupes_overlap_between_api_and_extras() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &["ReadOnly".to_string(), "AdminJIT".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 3);
+        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
+        assert_eq!(names, vec!["prod", "prod/ReadOnly", "prod/AdminJIT"]);
+    }
+
+    #[test]
+    fn test_expand_account_profiles_bare_profile_lists_api_roles_for_comments() {
+        // The bare profile's available_roles drives the "# sso_role_name = X" alternative comments.
+        // Only API roles should appear — comment-swapping to a JIT role would silently fail.
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &["AdminJIT".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        let bare = result.iter().find(|p| p.profile_name == "prod").unwrap();
+        assert_eq!(
+            bare.available_roles,
+            vec!["AdminAccess".to_string(), "ReadOnly".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_expand_account_profiles_sanitizes_role_suffix() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string()],
+            &["Power User".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        let suffixed = &result[1];
+        assert_eq!(suffixed.profile_name, "prod/Power-User");
+        assert_eq!(suffixed.role, "Power User"); // role string verbatim; only profile name is sanitized
     }
 }
