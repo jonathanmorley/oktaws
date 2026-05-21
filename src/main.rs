@@ -477,12 +477,19 @@ fn prompt_for_default_role(
     display_name: &str,
     needs_selection_count: usize,
     sso_profiles: &indexmap::IndexMap<String, (String, Vec<String>)>,
+    extra_roles: &[String],
 ) -> Result<Option<String>> {
-    // Collect all unique role names and count how many accounts have each role
+    // Collect all unique role names and count how many accounts have each role.
+    // Exclude any role that is declared as JIT-gated via extra_roles — those must
+    // never appear as session-default candidates because the bare account-name
+    // profile must always be backed by an always-on role.
     let mut role_counts: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
     for (_, (_, available_roles)) in sso_profiles {
         for role in available_roles {
+            if extra_roles.contains(role) {
+                continue;
+            }
             *role_counts.entry(role.clone()).or_insert(0) += 1;
         }
     }
@@ -710,7 +717,7 @@ fn write_sso_session_profiles(
     let session_default_role = if needs_selection_profiles.is_empty() {
         None
     } else {
-        prompt_for_default_role(display_name, needs_selection_profiles.len(), sso_profiles)?
+        prompt_for_default_role(display_name, needs_selection_profiles.len(), sso_profiles, extra_roles)?
     };
 
     // Expand and write profiles.
@@ -733,10 +740,16 @@ fn write_sso_session_profiles(
             session_default_role.as_ref(),
         )?;
 
-        if default_role.is_none() && !extra_roles.is_empty() {
-            println!(
-                "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
-            );
+        if default_role.is_none() {
+            if extra_roles.is_empty() {
+                println!(
+                    "  ! {account_name}: no roles visible and no extra_roles declared; skipping"
+                );
+            } else {
+                println!(
+                    "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
+                );
+            }
         }
 
         let expanded =
@@ -830,6 +843,7 @@ async fn init_sso(options: InitSso) -> Result<()> {
         .collect();
 
     // Load JIT-gated extra roles from the oktaws config once (same file for all sessions).
+    // TODO(multi-profile): consider per-session or per-account extra_roles scoping if org-wide noise becomes a problem
     let oktaws_config_path = oktaws_home()?.join(format!("{}.toml", options.organization));
     let extra_roles = load_sso_config(&oktaws_config_path)?.extra_roles;
 
