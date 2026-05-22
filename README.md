@@ -55,6 +55,37 @@ The command handles profile name collisions across multiple SSO applications by 
 
 **Note:** `~/.aws/config` is modified by `init-sso` but only read by other commands.
 
+#### Multiple Profiles Per Account
+
+`init-sso` generates one AWS profile per (account, role) pair visible on each account. The role chosen as that account's "default" is written to the bare profile name (matching the account name); every other role gets a suffixed profile of the form `account-name/RoleName`.
+
+Example: an account `prod` with roles `AdminAccess` and `ReadOnly`, where you select `AdminAccess` as the default, produces:
+
+```
+[profile prod]
+sso_role_name = AdminAccess
+...
+
+[profile prod/ReadOnly]
+sso_role_name = ReadOnly
+...
+```
+
+#### JIT-Gated Roles (`extra_roles`)
+
+When IAM Identity Center permission sets are gated behind just-in-time access, they are invisible to `init-sso` during inactive windows — so no profile gets generated for them. To declare profiles speculatively, add an `[sso]` section to `~/.oktaws/<okta-org>.toml`:
+
+```toml
+[sso]
+extra_roles = ["AdminJIT", "BreakGlassJIT"]
+```
+
+On the next `init-sso` run, oktaws will emit an `account-name/AdminJIT` profile (and similar for other entries) for every account in every SSO session belonging to this Okta org. `aws sso login --profile account-name/AdminJIT` will only succeed during an active JIT window — outside of one, it fails cleanly.
+
+`extra_roles` are never chosen as the bare profile's default role: the bare `account-name` profile is always backed by an always-on (API-discovered) role, so it never silently fails. Accounts with only JIT roles visible get suffixed profiles only, and `init-sso` prints a warning for those.
+
+This section coexists with `[profiles]` (used by the federated SAML flow); init-sso ignores `[profiles]` and federated commands ignore `[sso]`.
+
 ## Usage
 
 ### For Federated AWS Profiles

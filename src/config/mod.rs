@@ -1,5 +1,6 @@
 pub mod organization;
 pub mod profile;
+pub mod sso;
 
 use std::env::var as env_var;
 use std::path::PathBuf;

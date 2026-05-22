@@ -6,6 +6,7 @@ use oktaws::aws::config::ConfigStore;
 use oktaws::aws::profile::Store as ProfileStore;
 use oktaws::config::oktaws_home;
 use oktaws::config::organization::{Config as OrganizationConfig, Pattern as OrganizationPattern};
+use oktaws::config::sso::load_sso_config;
 use oktaws::okta::client::Client as OktaClient;
 // Import sso module to make its Client impl methods available
 #[allow(unused_imports)]
@@ -343,6 +344,37 @@ fn sanitize_session_name(name: &str) -> String {
     result.to_lowercase()
 }
 
+/// Sanitize a role name for use as a profile-name suffix.
+///
+/// Unlike `sanitize_session_name`, this preserves case (so `AdminAccess` and
+/// `adminaccess` remain distinguishable). It keeps alphanumerics, underscores,
+/// and hyphens; turns spaces into hyphens; and strips other characters — including
+/// `/`, which is reserved as the account/role separator.
+fn sanitize_role_suffix(name: &str) -> String {
+    let mut result = String::new();
+    let mut last_was_hyphen = false;
+
+    for c in name.chars() {
+        match c {
+            ' ' | '-' if !last_was_hyphen && !result.is_empty() => {
+                result.push('-');
+                last_was_hyphen = true;
+            }
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
+                result.push(c);
+                last_was_hyphen = false;
+            }
+            _ => {}
+        }
+    }
+
+    if result.ends_with('-') {
+        result.pop();
+    }
+
+    result
+}
+
 /// Determine the final profile name, adding session prefix if needed to avoid collisions
 fn determine_final_profile_name(
     profile_name: &str,
@@ -445,12 +477,19 @@ fn prompt_for_default_role(
     display_name: &str,
     needs_selection_count: usize,
     sso_profiles: &indexmap::IndexMap<String, (String, Vec<String>)>,
+    extra_roles: &[String],
 ) -> Result<Option<String>> {
-    // Collect all unique role names and count how many accounts have each role
+    // Collect all unique role names and count how many accounts have each role.
+    // Exclude any role that is declared as JIT-gated via extra_roles — those must
+    // never appear as session-default candidates because the bare account-name
+    // profile must always be backed by an always-on role.
     let mut role_counts: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
     for (_, (_, available_roles)) in sso_profiles {
         for role in available_roles {
+            if extra_roles.contains(role) {
+                continue;
+            }
             *role_counts.entry(role.clone()).or_insert(0) += 1;
         }
     }
@@ -478,7 +517,7 @@ fn prompt_for_default_role(
 
             let selection = dialoguer::Select::new()
                 .with_prompt(format!(
-                    "Choose default role for {display_name} ({needs_selection_count} profile{} need role selection)",
+                    "Choose default (always-on) role for {display_name} ({needs_selection_count} account{} need a default)",
                     if needs_selection_count == 1 { "" } else { "s" }
                 ))
                 .items(&options)
@@ -515,62 +554,231 @@ fn profile_needs_role_selection(available_roles: &[String], existing_role: Optio
     }
 }
 
-/// Select the appropriate role for a profile based on available options and defaults.
+/// Choose which role should back the bare `account-name` profile.
 ///
-/// Role selection priority:
-/// 1. If only one role available: use it automatically
-/// 2. If existing valid role: reuse it
-/// 3. If existing invalid role: prompt user (with notification)
-/// 4. If default role is valid: use it
-/// 5. Otherwise: prompt user interactively
+/// Candidates are restricted to `api_roles` — never `extra_roles` — so the bare
+/// profile is always always-on (the whole point of the multi-profile model).
 ///
-/// # Arguments
-/// * `profile_name` - Name of the profile (for display in prompts)
-/// * `available_roles` - List of roles available for this profile
-/// * `existing_role` - Previously configured role (if any)
-/// * `default_role` - User's default role choice for the session (if any)
-fn select_role_for_profile(
-    profile_name: &str,
-    available_roles: &[String],
+/// Returns `None` if `api_roles` is empty (account only has JIT roles available);
+/// the caller should skip emitting a bare profile in that case.
+///
+/// Priority:
+/// 1. Single API role available → use it (no prompt).
+/// 2. Existing role from `~/.aws/config` that is still in `api_roles` → reuse it.
+/// 3. Session default role that is in `api_roles` → use it. Also covers the case
+///    where the existing role is present in config but no longer always-on (e.g., it
+///    became JIT-gated) — we print a note and fall through to try the session default.
+/// 4. Otherwise → prompt interactively over `api_roles`.
+fn compute_account_default_role(
+    account_name: &str,
+    api_roles: &[String],
     existing_role: Option<String>,
-    default_role: Option<&String>,
-) -> Result<String> {
-    if available_roles.len() == 1 {
-        // Only one role available, use it
-        return Ok(available_roles[0].clone());
+    session_default_role: Option<&String>,
+) -> Result<Option<String>> {
+    if api_roles.is_empty() {
+        return Ok(None);
+    }
+
+    if api_roles.len() == 1 {
+        return Ok(Some(api_roles[0].clone()));
     }
 
     if let Some(existing) = existing_role {
-        // Profile exists, check if the existing role is still valid
-        if available_roles.contains(&existing) {
-            // Existing role is still valid, use it
-            return Ok(existing);
+        if api_roles.contains(&existing) {
+            return Ok(Some(existing));
         }
-        // Existing role is no longer available; fall through to try the default role
+        // Existing role is no longer always-on; fall through to try the session default
+        // before re-prompting.
         println!(
-            "  Note: Previously selected role '{existing}' is no longer available for {profile_name}"
+            "  Note: Previously selected role '{existing}' is no longer always-on for {account_name}"
         );
     }
 
-    if let Some(default) = default_role {
-        // Use the session default role if it is available for this profile
-        if available_roles.contains(default) {
-            return Ok(default.clone());
+    if let Some(default) = session_default_role {
+        if api_roles.contains(default) {
+            return Ok(Some(default.clone()));
         }
-        // No usable default role, prompt user
-        let selection = dialoguer::Select::new()
-            .with_prompt(format!("Choose Role for {profile_name}"))
-            .items(available_roles)
-            .interact()?;
-        return Ok(available_roles[selection].clone());
     }
 
-    // No existing profile and no default role, prompt user
     let selection = dialoguer::Select::new()
-        .with_prompt(format!("Choose Role for {profile_name}"))
-        .items(available_roles)
+        .with_prompt(format!(
+            "Choose default (always-on) role for {account_name}"
+        ))
+        .items(api_roles)
         .interact()?;
-    Ok(available_roles[selection].clone())
+    Ok(Some(api_roles[selection].clone()))
+}
+
+/// One profile to write for an account, produced by `expand_account_profiles`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExpandedProfile {
+    profile_name: String,
+    account_id: String,
+    role: String,
+}
+
+/// Expand one account into the full set of profiles to write.
+///
+/// Produces:
+/// - One bare `{base_profile_name}` profile pointing at `default_role` (if `Some`).
+/// - One suffixed `{base_profile_name}/{sanitized_role}` profile for every other role in
+///   `api_roles ∪ extra_roles`, deduped, preserving input order (`api_roles` first).
+///
+/// `base_profile_name` is the account's profile-name *after* collision-prefix resolution
+/// has been applied by the caller — both bare and suffixed profiles share that base.
+fn expand_account_profiles(
+    base_profile_name: &str,
+    account_id: &str,
+    api_roles: &[String],
+    extra_roles: &[String],
+    default_role: Option<&String>,
+) -> Vec<ExpandedProfile> {
+    let mut all_roles: Vec<String> = Vec::with_capacity(api_roles.len() + extra_roles.len());
+    for r in api_roles.iter().chain(extra_roles.iter()) {
+        if !all_roles.contains(r) {
+            all_roles.push(r.clone());
+        }
+    }
+
+    let mut out = Vec::new();
+
+    if let Some(default) = default_role {
+        out.push(ExpandedProfile {
+            profile_name: base_profile_name.to_string(),
+            account_id: account_id.to_string(),
+            role: default.clone(),
+        });
+    }
+
+    for role in &all_roles {
+        if default_role.is_some_and(|d| d == role) {
+            continue;
+        }
+        out.push(ExpandedProfile {
+            profile_name: format!("{base_profile_name}/{}", sanitize_role_suffix(role)),
+            account_id: account_id.to_string(),
+            role: role.clone(),
+        });
+    }
+
+    out
+}
+
+/// Context for a single SSO session, passed to `write_sso_session_profiles`.
+struct SsoSessionContext<'a> {
+    session_name: &'a str,
+    display_name: &'a str,
+    start_url: &'a str,
+    region: &'a str,
+    sso_profiles: &'a indexmap::IndexMap<String, (String, Vec<String>)>,
+    extra_roles: &'a [String],
+    needs_prefix: &'a std::collections::HashSet<String>,
+}
+
+/// Write all expanded profiles for one SSO session into `aws_config`.
+///
+/// Returns the number of profiles written.
+fn write_sso_session_profiles(
+    aws_config: &mut ConfigStore,
+    ctx: &SsoSessionContext<'_>,
+) -> Result<usize> {
+    let SsoSessionContext {
+        session_name,
+        display_name,
+        start_url,
+        region,
+        sso_profiles,
+        extra_roles,
+        needs_prefix,
+    } = ctx;
+    aws_config.upsert_sso_session(session_name, start_url, region)?;
+
+    // Determine which accounts need a default-role prompt.
+    let mut needs_selection_profiles = Vec::new();
+    for (account_name, (_, api_roles)) in *sso_profiles {
+        let true_api_roles: Vec<String> = api_roles
+            .iter()
+            .filter(|r| !extra_roles.contains(r))
+            .cloned()
+            .collect();
+        let base_profile_name =
+            determine_final_profile_name(account_name, session_name, needs_prefix);
+        let existing_role = aws_config.get_profile_role(&base_profile_name);
+        if profile_needs_role_selection(&true_api_roles, existing_role) {
+            needs_selection_profiles.push(account_name.clone());
+        }
+    }
+
+    let session_default_role = if needs_selection_profiles.is_empty() {
+        None
+    } else {
+        prompt_for_default_role(
+            display_name,
+            needs_selection_profiles.len(),
+            sso_profiles,
+            extra_roles,
+        )?
+    };
+
+    // Expand and write profiles.
+    println!("\nSSO profiles for {display_name} (session: {session_name}):");
+    let mut count = 0;
+    for (account_name, (account_id, api_roles)) in *sso_profiles {
+        let true_api_roles: Vec<String> = api_roles
+            .iter()
+            .filter(|r| !extra_roles.contains(r))
+            .cloned()
+            .collect();
+        let base_profile_name =
+            determine_final_profile_name(account_name, session_name, needs_prefix);
+        let existing_role = aws_config.get_profile_role(&base_profile_name);
+
+        let default_role = compute_account_default_role(
+            account_name,
+            &true_api_roles,
+            existing_role,
+            session_default_role.as_ref(),
+        )?;
+
+        if default_role.is_none() {
+            if extra_roles.is_empty() {
+                println!(
+                    "  ! {account_name}: no roles visible and no extra_roles declared; skipping"
+                );
+            } else {
+                println!(
+                    "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
+                );
+            }
+        }
+
+        let expanded = expand_account_profiles(
+            &base_profile_name,
+            account_id,
+            &true_api_roles,
+            extra_roles,
+            default_role.as_ref(),
+        );
+
+        let sanitized = sanitize_session_name(account_name);
+        let prefixed_note = if needs_prefix.contains(&sanitized) {
+            " (prefixed due to collision with other session)"
+        } else {
+            ""
+        };
+
+        for profile in expanded {
+            aws_config.upsert_sso_profile(
+                &profile.profile_name,
+                session_name,
+                &profile.account_id,
+                &profile.role,
+            )?;
+            println!("  - {}{prefixed_note}", profile.profile_name);
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 /// Generate AWS SSO (Identity Center) configuration in ~/.aws/config.
@@ -604,14 +812,10 @@ async fn init_sso(options: InitSso) -> Result<()> {
     }
 
     let mut aws_config = ConfigStore::load(None)?;
-    let mut total_profiles = 0;
 
-    // First pass: collect all profile data from all sessions
-    // We do this in two passes to detect profile name collisions across sessions
-    // before prompting the user for role selections
+    // First pass: collect all session data so we can detect profile-name collisions
+    // across sessions before prompting for role selections.
     let mut sessions = Vec::new();
-
-    // Process each SSO app as a separate SSO session
     for sso_link in sso_links {
         if let Some(session_data) = collect_sso_session_data(&okta_client, sso_link).await? {
             sessions.push(session_data);
@@ -622,85 +826,46 @@ async fn init_sso(options: InitSso) -> Result<()> {
         return Err(eyre!("No SSO profiles were configured"));
     }
 
-    // Second pass: detect collisions and write profiles
-    // Build a map of sanitized profile names to the sessions they appear in
-    let mut profile_name_sessions = std::collections::HashMap::new();
-
-    // Count occurrences of each sanitized profile name across all sessions
+    // Count occurrences of each sanitized profile name across all sessions.
+    let mut profile_name_sessions: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for (session_name, _, _, _, sso_profiles) in &sessions {
         for profile_name in sso_profiles.keys() {
             let sanitized = sanitize_session_name(profile_name);
             profile_name_sessions
                 .entry(sanitized)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(session_name.clone());
         }
     }
 
-    // Determine which profiles need session prefix (those that appear in multiple sessions)
+    // Profiles that appear in more than one session need a session prefix.
     let needs_prefix: std::collections::HashSet<String> = profile_name_sessions
         .iter()
         .filter(|(_, sessions)| sessions.len() > 1)
         .map(|(name, _)| name.clone())
         .collect();
 
-    // Write sessions and profiles with appropriate names
+    // Load JIT-gated extra roles from the oktaws config once (same file for all sessions).
+    // TODO(multi-profile): consider per-session or per-account extra_roles scoping if org-wide noise becomes a problem
+    let oktaws_config_path = oktaws_home()?.join(format!("{}.toml", options.organization));
+    let extra_roles = load_sso_config(&oktaws_config_path)?.extra_roles;
+
+    // Second pass: write sessions and profiles.
+    let mut total_profiles = 0;
     for (session_name, display_name, start_url, region, sso_profiles) in sessions {
-        // Create SSO session
-        aws_config.upsert_sso_session(&session_name, &start_url, &region)?;
-
-        // First, check which profiles need role selection (don't have valid existing roles)
-        let mut needs_selection_profiles = Vec::new();
-        for (profile_name, (_, available_roles)) in &sso_profiles {
-            let final_profile_name =
-                determine_final_profile_name(profile_name, &session_name, &needs_prefix);
-            let existing_role = aws_config.get_profile_role(&final_profile_name);
-
-            if profile_needs_role_selection(available_roles, existing_role) {
-                needs_selection_profiles.push(profile_name.clone());
-            }
-        }
-
-        // Only prompt for default role if there are profiles that need selection
-        let default_role = if needs_selection_profiles.is_empty() {
-            None
-        } else {
-            prompt_for_default_role(&display_name, needs_selection_profiles.len(), &sso_profiles)?
-        };
-
-        // Create SSO profiles
-        println!("\nSSO profiles for {display_name} (session: {session_name}):");
-        for (profile_name, (account_id, available_roles)) in &sso_profiles {
-            let final_profile_name =
-                determine_final_profile_name(profile_name, &session_name, &needs_prefix);
-            let existing_role = aws_config.get_profile_role(&final_profile_name);
-
-            // Determine which role to use
-            let role = select_role_for_profile(
-                profile_name,
-                available_roles,
-                existing_role,
-                default_role.as_ref(),
-            )?;
-
-            aws_config.upsert_sso_profile(
-                &final_profile_name,
-                &session_name,
-                account_id,
-                &role,
-                available_roles.clone(),
-            )?;
-
-            // Only show "renamed from" if we added a session prefix (collision resolution)
-            // Don't show it for just sanitization
-            let sanitized = sanitize_session_name(profile_name);
-            if needs_prefix.contains(&sanitized) {
-                println!("  - {final_profile_name} (prefixed due to collision with other session)");
-            } else {
-                println!("  - {final_profile_name}");
-            }
-            total_profiles += 1;
-        }
+        total_profiles += write_sso_session_profiles(
+            &mut aws_config,
+            &SsoSessionContext {
+                session_name: &session_name,
+                display_name: &display_name,
+                start_url: &start_url,
+                region: &region,
+                sso_profiles: &sso_profiles,
+                extra_roles: &extra_roles,
+                needs_prefix: &needs_prefix,
+            },
+        )?;
     }
 
     if total_profiles == 0 {
@@ -868,51 +1033,207 @@ mod tests {
     }
 
     #[test]
-    fn test_select_role_uses_default_when_existing_is_invalid() {
-        // Regression test: when an existing role is no longer available, the session
-        // default role should be used rather than prompting the user.
-        let roles = vec!["NewRole".to_string(), "ReadOnly".to_string()];
-        let default_role = "NewRole".to_string();
-        let result = select_role_for_profile(
-            "test-account",
-            &roles,
-            Some("OldRole".to_string()),
-            Some(&default_role),
+    fn test_sanitize_role_suffix_simple() {
+        assert_eq!(sanitize_role_suffix("AdminAccess"), "AdminAccess");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_with_dashes_and_underscores() {
+        assert_eq!(sanitize_role_suffix("Read-Only_Power"), "Read-Only_Power");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_spaces_become_dashes() {
+        assert_eq!(sanitize_role_suffix("Power User"), "Power-User");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_strips_special_chars() {
+        // Includes `/` — the suffix must never contain another `/`, since
+        // `/` is the separator between account and role.
+        assert_eq!(sanitize_role_suffix("Admin/JIT!"), "AdminJIT");
+    }
+
+    #[test]
+    fn test_sanitize_role_suffix_preserves_case() {
+        assert_eq!(sanitize_role_suffix("AdminAccess"), "AdminAccess");
+        assert_ne!(sanitize_role_suffix("AdminAccess"), "adminaccess");
+    }
+
+    #[test]
+    fn test_compute_account_default_role_single_api_role() {
+        let result =
+            compute_account_default_role("prod-account", &["AdminAccess".to_string()], None, None)
+                .unwrap();
+        assert_eq!(result, Some("AdminAccess".to_string()));
+    }
+
+    #[test]
+    fn test_compute_account_default_role_existing_still_valid() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            Some("ReadOnly".to_string()),
+            Some(&"AdminAccess".to_string()),
         )
         .unwrap();
-        assert_eq!(result, "NewRole");
+        assert_eq!(result, Some("ReadOnly".to_string()));
     }
 
     #[test]
-    fn test_select_role_uses_default_when_no_existing() {
-        let roles = vec!["NewRole".to_string(), "ReadOnly".to_string()];
-        let default_role = "NewRole".to_string();
-        let result =
-            select_role_for_profile("test-account", &roles, None, Some(&default_role)).unwrap();
-        assert_eq!(result, "NewRole");
-    }
-
-    #[test]
-    fn test_select_role_preserves_valid_existing_over_default() {
-        // A valid existing role should be kept even when a different default is set.
-        let roles = vec!["Admin".to_string(), "ReadOnly".to_string()];
-        let default_role = "ReadOnly".to_string();
-        let result = select_role_for_profile(
-            "test-account",
-            &roles,
-            Some("Admin".to_string()),
-            Some(&default_role),
+    fn test_compute_account_default_role_session_default_valid() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            None,
+            Some(&"AdminAccess".to_string()),
         )
         .unwrap();
-        assert_eq!(result, "Admin");
+        assert_eq!(result, Some("AdminAccess".to_string()));
     }
 
     #[test]
-    fn test_select_role_single_role_ignores_default() {
-        let roles = vec!["OnlyRole".to_string()];
-        let default_role = "SomethingElse".to_string();
+    fn test_compute_account_default_role_no_api_roles_returns_none() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &[],
+            None,
+            Some(&"AdminAccess".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_compute_account_default_role_session_default_not_in_api_roles() {
+        let result = compute_account_default_role(
+            "prod-account",
+            &["ReadOnly".to_string()],
+            None,
+            Some(&"AdminJIT".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, Some("ReadOnly".to_string()));
+    }
+
+    #[test]
+    fn test_expand_account_profiles_single_api_role_no_extras() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string()],
+            &[],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].profile_name, "prod");
+        assert_eq!(result[0].role, "AdminAccess");
+    }
+
+    #[test]
+    fn test_expand_account_profiles_multiple_api_roles() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &[],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].profile_name, "prod");
+        assert_eq!(result[0].role, "AdminAccess");
+        assert_eq!(result[1].profile_name, "prod/ReadOnly");
+        assert_eq!(result[1].role, "ReadOnly");
+    }
+
+    #[test]
+    fn test_expand_account_profiles_with_extra_roles() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string()],
+            &["AdminJIT".to_string(), "ReadOnlyJIT".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 3);
+        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
+        assert_eq!(names, vec!["prod", "prod/AdminJIT", "prod/ReadOnlyJIT"]);
+    }
+
+    #[test]
+    fn test_expand_account_profiles_no_api_roles_only_extras() {
         let result =
-            select_role_for_profile("test-account", &roles, None, Some(&default_role)).unwrap();
-        assert_eq!(result, "OnlyRole");
+            expand_account_profiles("prod", "111111111111", &[], &["AdminJIT".to_string()], None);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].profile_name, "prod/AdminJIT");
+        assert_eq!(result[0].role, "AdminJIT");
+    }
+
+    #[test]
+    fn test_expand_account_profiles_dedupes_overlap_between_api_and_extras() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &["ReadOnly".to_string(), "AdminJIT".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        assert_eq!(result.len(), 3);
+        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
+        assert_eq!(names, vec!["prod", "prod/ReadOnly", "prod/AdminJIT"]);
+    }
+
+    #[test]
+    fn test_expand_account_profiles_sanitizes_role_suffix() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &["AdminAccess".to_string()],
+            &["Power User".to_string()],
+            Some(&"AdminAccess".to_string()),
+        );
+        let suffixed = &result[1];
+        assert_eq!(suffixed.profile_name, "prod/Power-User");
+        assert_eq!(suffixed.role, "Power User"); // role string verbatim; only profile name is sanitized
+    }
+
+    #[test]
+    fn test_expand_account_profiles_caller_filters_overlap_from_api_roles() {
+        // The caller (init_sso) is responsible for ensuring api_roles excludes
+        // anything in extra_roles. This test pins the post-filter expectation.
+        let filtered_api: Vec<String> = ["Admin".to_string(), "ReadOnly".to_string()]
+            .into_iter()
+            .filter(|r| !["Admin".to_string()].contains(r))
+            .collect();
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &filtered_api,
+            &["Admin".to_string(), "BreakGlass".to_string()],
+            Some(&"ReadOnly".to_string()),
+        );
+        // Suffixed profiles exist for Admin (JIT) and BreakGlass (JIT), but not for
+        // a duplicate of ReadOnly.
+        let suffixed_names: Vec<&str> = result
+            .iter()
+            .filter(|p| p.profile_name != "prod")
+            .map(|p| p.profile_name.as_str())
+            .collect();
+        assert_eq!(suffixed_names, vec!["prod/Admin", "prod/BreakGlass"]);
+    }
+
+    #[test]
+    fn test_compute_account_default_role_existing_invalid_falls_through_to_session_default() {
+        // When the existing role from ~/.aws/config is no longer in api_roles (e.g.
+        // it became JIT-gated), use a valid session default instead of immediately
+        // re-prompting the user.
+        let result = compute_account_default_role(
+            "prod-account",
+            &["NewAdmin".to_string(), "ReadOnly".to_string()],
+            Some("OldAdmin".to_string()),
+            Some(&"NewAdmin".to_string()),
+        )
+        .unwrap();
+        assert_eq!(result, Some("NewAdmin".to_string()));
     }
 }
