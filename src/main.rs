@@ -693,7 +693,7 @@ fn write_sso_session_profiles(
     } = ctx;
     aws_config.upsert_sso_session(session_name, start_url, region)?;
 
-    // Determine which accounts need a default-role prompt.
+    // Count how many accounts lack a valid existing role (need the session default applied).
     let mut needs_selection_profiles = Vec::new();
     for (account_name, (_, api_roles)) in *sso_profiles {
         let true_api_roles: Vec<String> = api_roles
@@ -709,16 +709,16 @@ fn write_sso_session_profiles(
         }
     }
 
-    let session_default_role = if needs_selection_profiles.is_empty() {
-        None
-    } else {
-        prompt_for_default_role(
-            display_name,
-            needs_selection_profiles.len(),
-            sso_profiles,
-            extra_roles,
-        )?
-    };
+    // prompt_for_default_role handles all cases: 0 roles → None, 1 role → auto-select
+    // silently, 2+ roles → interactive prompt.  Always call it so the user can confirm
+    // or change the session-wide default on every run, even when ~/.aws/config already
+    // has valid entries for all accounts.
+    let session_default_role = prompt_for_default_role(
+        display_name,
+        needs_selection_profiles.len(),
+        sso_profiles,
+        extra_roles,
+    )?;
 
     // Expand and write profiles.
     println!("\nSSO profiles for {display_name} (session: {session_name}):");
@@ -740,26 +740,6 @@ fn write_sso_session_profiles(
             session_default_role.as_ref(),
         )?;
 
-        if default_role.is_none() {
-            if extra_roles.is_empty() {
-                println!(
-                    "  ! {account_name}: no roles visible and no extra_roles declared; skipping"
-                );
-            } else {
-                println!(
-                    "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
-                );
-            }
-        }
-
-        let expanded = expand_account_profiles(
-            &base_profile_name,
-            account_id,
-            &true_api_roles,
-            extra_roles,
-            default_role.as_ref(),
-        );
-
         let sanitized = sanitize_session_name(account_name);
         let prefixed_note = if needs_prefix.contains(&sanitized) {
             " (prefixed due to collision with other session)"
@@ -767,14 +747,71 @@ fn write_sso_session_profiles(
             ""
         };
 
-        for profile in expanded {
-            aws_config.upsert_sso_profile(
-                &profile.profile_name,
-                session_name,
-                &profile.account_id,
-                &profile.role,
-            )?;
-            println!("  - {}{prefixed_note}", profile.profile_name);
+        if default_role.is_none() {
+            // No always-on roles for this account.
+            let account_jit_roles: Vec<&String> = api_roles
+                .iter()
+                .filter(|r| extra_roles.contains(*r))
+                .collect();
+            if account_jit_roles.is_empty() {
+                println!(
+                    "  ! {account_name}: no roles visible and no extra_roles declared; skipping"
+                );
+            } else {
+                println!(
+                    "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
+                );
+                for role in account_jit_roles {
+                    let jit_name =
+                        format!("{base_profile_name}/{}", sanitize_role_suffix(role));
+                    aws_config.upsert_sso_profile(&jit_name, session_name, account_id, role)?;
+                    println!("  - {jit_name}{prefixed_note}");
+                    count += 1;
+                }
+            }
+            continue;
+        }
+
+        // expand_account_profiles always places the bare profile first; take only that.
+        // Pass empty extra_roles — JIT profiles are written separately below.
+        let Some(profile) = expand_account_profiles(
+            &base_profile_name,
+            account_id,
+            &true_api_roles,
+            &[],
+            default_role.as_ref(),
+        )
+        .into_iter()
+        .next() else {
+            continue;
+        };
+
+        aws_config.upsert_sso_profile(
+            &profile.profile_name,
+            session_name,
+            &profile.account_id,
+            &profile.role,
+        )?;
+
+        // Comment-out other always-on roles as alternatives (not JIT roles —
+        // those get their own suffixed profile entries below).
+        let alt_always_on: Vec<String> = true_api_roles
+            .iter()
+            .filter(|r| *r != &profile.role)
+            .cloned()
+            .collect();
+        if !alt_always_on.is_empty() {
+            aws_config.set_profile_alt_roles(&profile.profile_name, alt_always_on);
+        }
+
+        println!("  - {}{prefixed_note}", profile.profile_name);
+        count += 1;
+
+        // Write any JIT (extra) roles visible for this account as separate suffixed entries.
+        for role in api_roles.iter().filter(|r| extra_roles.contains(*r)) {
+            let jit_name = format!("{base_profile_name}/{}", sanitize_role_suffix(role));
+            aws_config.upsert_sso_profile(&jit_name, session_name, account_id, role)?;
+            println!("  - {jit_name}{prefixed_note}");
             count += 1;
         }
     }

@@ -1,16 +1,24 @@
 use eyre::{Result, eyre};
+use futures::future::join_all;
 use regex::Regex;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use serde::Deserialize;
 use std::sync::LazyLock;
 use std::time::Duration;
-use tracing::trace;
+use tracing::{debug, trace};
 
 const BASE_URL: &str = "https://portal.sso.us-east-1.amazonaws.com";
 
 pub struct Client {
     token: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PublicAccountRole {
+    pub account_id: String,
+    pub account_name: String,
+    pub role_names: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +76,169 @@ impl Client {
         Ok(Self { token })
     }
 
+    /// Retrieve account/role mappings using the portal bearer token already held by this client.
+    /// Calls the public IAM Identity Center API (`ListAccounts` / `ListAccountRoles`) directly
+    /// over `reqwest` using the same `x-amz-sso_bearer_token` header as the portal endpoints.
+    /// Roles are fetched in parallel batches of 3 to improve performance while avoiding rate limits.
+    /// Progress is displayed to stderr (e.g., "Processing accounts 1-3/50...").
+    ///
+    /// This method is defined on [`Client`] rather than in `okta/sso.rs` because `Client::token`
+    /// is private. The portal bearer token must stay encapsulated here; callers in `okta/sso.rs`
+    /// cannot access it directly and therefore cannot make the API calls themselves.
+    ///
+    /// Note: the public API identifies accounts by their 12-digit AWS account ID
+    /// (`GET /assignment/accounts` → `GET /assignment/roles?account_id=...`).
+    /// The portal API uses opaque app-instance IDs instead
+    /// (`GET /instance/appinstances` → `GET /instance/appinstance/{id}/profiles`).
+    /// The two identifier systems are not interchangeable, which is why the existing
+    /// `app_instances` / `profiles` code path cannot be reused here.
+    ///
+    /// # Errors
+    ///
+    /// The function will error for API/network failures.
+    pub async fn list_accounts_and_roles(&self) -> Result<Vec<PublicAccountRole>> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AccountInfo {
+            account_id: String,
+            account_name: String,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AccountsPage {
+            account_list: Option<Vec<AccountInfo>>,
+            next_token: Option<String>,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct RoleInfo {
+            role_name: String,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct RolesPage {
+            role_list: Option<Vec<RoleInfo>>,
+            next_token: Option<String>,
+        }
+
+        let http = reqwest::Client::new();
+
+        // --- ListAccounts ---
+        let mut accounts: Vec<(String, String)> = Vec::new();
+        let mut next_token: Option<String> = None;
+
+        loop {
+            let mut req = http
+                .get(format!("{BASE_URL}/assignment/accounts"))
+                .header("x-amz-sso_bearer_token", &self.token);
+            if let Some(ref tok) = next_token {
+                req = req.query(&[("next_token", tok.as_str())]);
+            }
+
+            let resp = req.send().await?;
+            let status = resp.status();
+            let text = resp.text().await?;
+            if !status.is_success() {
+                return Err(eyre!(
+                    "ListAccounts failed ({}): {}",
+                    status,
+                    text
+                ));
+            }
+            trace!("ListAccounts response: {}", &text);
+
+            let page: AccountsPage = serde_json::from_str(&text)?;
+            for acct in page.account_list.unwrap_or_default() {
+                accounts.push((acct.account_id, acct.account_name));
+            }
+            next_token = page.next_token;
+            if next_token.is_none() {
+                break;
+            }
+        }
+
+        debug!("ListAccounts returned {} accounts", accounts.len());
+
+        // --- ListAccountRoles for each account ---
+        let mut results = Vec::new();
+        let total = accounts.len();
+        let batch_size = 3;
+
+        for (batch_num, chunk) in accounts.chunks(batch_size).enumerate() {
+            let batch_start = batch_num * batch_size + 1;
+            let batch_end = (batch_start + chunk.len() - 1).min(total);
+
+            eprint!("\r  Processing accounts {batch_start}-{batch_end}/{total}... ");
+            std::io::Write::flush(&mut std::io::stderr()).ok();
+
+            let batch_futures: Vec<_> = chunk
+                .iter()
+                .map(|(account_id, account_name)| {
+                    let account_id = account_id.clone();
+                    let account_name = account_name.clone();
+                    let token = self.token.clone();
+                    let http = http.clone();
+                    async move {
+                        let mut role_names: Vec<String> = Vec::new();
+                        let mut role_next_token: Option<String> = None;
+
+                        loop {
+                            let mut req = http
+                                .get(format!("{BASE_URL}/assignment/roles"))
+                                .header("x-amz-sso_bearer_token", &token)
+                                .query(&[("account_id", account_id.as_str())]);
+                            if let Some(ref tok) = role_next_token {
+                                req = req.query(&[("next_token", tok.as_str())]);
+                            }
+
+                            let resp = req.send().await?;
+                            let status = resp.status();
+                            let text = resp.text().await?;
+                            if !status.is_success() {
+                                return Err(eyre!(
+                                    "ListAccountRoles failed for {} ({}): {}",
+                                    account_id,
+                                    status,
+                                    text
+                                ));
+                            }
+                            trace!("ListAccountRoles response for {}: {}", account_id, &text);
+
+                            let page: RolesPage = serde_json::from_str(&text)?;
+                            for role in page.role_list.unwrap_or_default() {
+                                role_names.push(role.role_name);
+                            }
+                            role_next_token = page.next_token;
+                            if role_next_token.is_none() {
+                                break;
+                            }
+                        }
+
+                        role_names.sort();
+                        role_names.dedup();
+
+                        Ok(PublicAccountRole {
+                            account_id,
+                            account_name: account_name.to_lowercase().replace([' ', '_'], "-"),
+                            role_names,
+                        })
+                    }
+                })
+                .collect();
+
+            let batch_results: Vec<Result<PublicAccountRole>> = join_all(batch_futures).await;
+            for result in batch_results {
+                results.push(result?);
+            }
+        }
+
+        eprintln!("\r  Processed {total}/{total} accounts        ");
+        Ok(results)
+    }
+
     /// # Errors
     ///
     /// The function will error for network issues, or if the response is not parseable as expected
@@ -82,26 +253,46 @@ impl Client {
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
 
-        let response = client
-            .get(format!("{BASE_URL}/instance/appinstances"))
-            .header("x-amz-sso_bearer_token", &self.token)
-            .header("x-amz-sso-bearer-token", &self.token)
-            .send()
-            .await?;
+        let mut all_instances = Vec::new();
+        let mut pagination_token: Option<String> = None;
 
-        let status = response.status();
-        let text = response.text().await?;
-        if !status.is_success() {
-            Err(eyre!(
-                "Error fetching app instances, StatusCode: {}, Response: {}",
-                status,
-                text
-            ))?;
+        loop {
+            let url = format!("{BASE_URL}/instance/appinstances");
+            let mut request = client.get(&url);
+            if let Some(ref token) = pagination_token {
+                request = request.query(&[("paginationToken", token.as_str())]);
+            }
+
+            let response = request
+                .header("x-amz-sso_bearer_token", &self.token)
+                .header("x-amz-sso-bearer-token", &self.token)
+                .send()
+                .await?;
+
+            let status = response.status();
+            let text = response.text().await?;
+            if !status.is_success() {
+                return Err(eyre!(
+                    "Error fetching app instances, StatusCode: {}, Response: {}",
+                    status,
+                    text
+                ));
+            }
+
+            trace!("Received {}", &text);
+            let Page::<AppInstance> {
+                result,
+                pagination_token: next_token,
+            } = serde_json::from_str(&text)?;
+            all_instances.extend(result);
+
+            if next_token.is_none() {
+                break;
+            }
+            pagination_token = next_token;
         }
 
-        trace!("Received {}", &text);
-        let Page::<AppInstance> { result, .. } = serde_json::from_str(&text)?;
-        Ok(result)
+        Ok(all_instances)
     }
 
     /// # Errors
