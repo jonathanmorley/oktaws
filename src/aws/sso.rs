@@ -50,6 +50,33 @@ pub struct Profile {
     pub relay_state: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountInfo {
+    account_id: String,
+    account_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountsPage {
+    account_list: Option<Vec<AccountInfo>>,
+    next_token: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RoleInfo {
+    role_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RolesPage {
+    role_list: Option<Vec<RoleInfo>>,
+    next_token: Option<String>,
+}
+
 impl Client {
     /// # Errors
     ///
@@ -96,40 +123,9 @@ impl Client {
     /// # Errors
     ///
     /// The function will error for API/network failures.
-    pub async fn list_accounts_and_roles(&self) -> Result<Vec<PublicAccountRole>> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct AccountInfo {
-            account_id: String,
-            account_name: String,
-        }
-
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct AccountsPage {
-            account_list: Option<Vec<AccountInfo>>,
-            next_token: Option<String>,
-        }
-
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct RoleInfo {
-            role_name: String,
-        }
-
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct RolesPage {
-            role_list: Option<Vec<RoleInfo>>,
-            next_token: Option<String>,
-        }
-
-        let http = reqwest::Client::new();
-
-        // --- ListAccounts ---
+    async fn fetch_all_accounts(&self, http: &reqwest::Client) -> Result<Vec<(String, String)>> {
         let mut accounts: Vec<(String, String)> = Vec::new();
         let mut next_token: Option<String> = None;
-
         loop {
             let mut req = http
                 .get(format!("{BASE_URL}/assignment/accounts"))
@@ -137,19 +133,13 @@ impl Client {
             if let Some(ref tok) = next_token {
                 req = req.query(&[("next_token", tok.as_str())]);
             }
-
             let resp = req.send().await?;
             let status = resp.status();
             let text = resp.text().await?;
             if !status.is_success() {
-                return Err(eyre!(
-                    "ListAccounts failed ({}): {}",
-                    status,
-                    text
-                ));
+                return Err(eyre!("ListAccounts failed ({}): {}", status, text));
             }
             trace!("ListAccounts response: {}", &text);
-
             let page: AccountsPage = serde_json::from_str(&text)?;
             for acct in page.account_list.unwrap_or_default() {
                 accounts.push((acct.account_id, acct.account_name));
@@ -159,10 +149,61 @@ impl Client {
                 break;
             }
         }
+        Ok(accounts)
+    }
 
+    async fn fetch_account_roles(
+        http: reqwest::Client,
+        token: String,
+        account_id: String,
+        account_name: String,
+    ) -> Result<PublicAccountRole> {
+        let mut role_names: Vec<String> = Vec::new();
+        let mut next_token: Option<String> = None;
+        loop {
+            let mut req = http
+                .get(format!("{BASE_URL}/assignment/roles"))
+                .header("x-amz-sso_bearer_token", &token)
+                .query(&[("account_id", account_id.as_str())]);
+            if let Some(ref tok) = next_token {
+                req = req.query(&[("next_token", tok.as_str())]);
+            }
+            let resp = req.send().await?;
+            let status = resp.status();
+            let text = resp.text().await?;
+            if !status.is_success() {
+                return Err(eyre!(
+                    "ListAccountRoles failed for {} ({}): {}",
+                    account_id, status, text
+                ));
+            }
+            trace!("ListAccountRoles response for {}: {}", account_id, &text);
+            let page: RolesPage = serde_json::from_str(&text)?;
+            for role in page.role_list.unwrap_or_default() {
+                role_names.push(role.role_name);
+            }
+            next_token = page.next_token;
+            if next_token.is_none() {
+                break;
+            }
+        }
+        role_names.sort();
+        role_names.dedup();
+        Ok(PublicAccountRole {
+            account_id,
+            account_name: account_name.to_lowercase().replace([' ', '_'], "-"),
+            role_names,
+        })
+    }
+
+    /// # Errors
+    ///
+    /// The function will error for API/network failures.
+    pub async fn list_accounts_and_roles(&self) -> Result<Vec<PublicAccountRole>> {
+        let http = reqwest::Client::new();
+        let accounts = self.fetch_all_accounts(&http).await?;
         debug!("ListAccounts returned {} accounts", accounts.len());
 
-        // --- ListAccountRoles for each account ---
         let mut results = Vec::new();
         let total = accounts.len();
         let batch_size = 3;
@@ -177,55 +218,12 @@ impl Client {
             let batch_futures: Vec<_> = chunk
                 .iter()
                 .map(|(account_id, account_name)| {
-                    let account_id = account_id.clone();
-                    let account_name = account_name.clone();
-                    let token = self.token.clone();
-                    let http = http.clone();
-                    async move {
-                        let mut role_names: Vec<String> = Vec::new();
-                        let mut role_next_token: Option<String> = None;
-
-                        loop {
-                            let mut req = http
-                                .get(format!("{BASE_URL}/assignment/roles"))
-                                .header("x-amz-sso_bearer_token", &token)
-                                .query(&[("account_id", account_id.as_str())]);
-                            if let Some(ref tok) = role_next_token {
-                                req = req.query(&[("next_token", tok.as_str())]);
-                            }
-
-                            let resp = req.send().await?;
-                            let status = resp.status();
-                            let text = resp.text().await?;
-                            if !status.is_success() {
-                                return Err(eyre!(
-                                    "ListAccountRoles failed for {} ({}): {}",
-                                    account_id,
-                                    status,
-                                    text
-                                ));
-                            }
-                            trace!("ListAccountRoles response for {}: {}", account_id, &text);
-
-                            let page: RolesPage = serde_json::from_str(&text)?;
-                            for role in page.role_list.unwrap_or_default() {
-                                role_names.push(role.role_name);
-                            }
-                            role_next_token = page.next_token;
-                            if role_next_token.is_none() {
-                                break;
-                            }
-                        }
-
-                        role_names.sort();
-                        role_names.dedup();
-
-                        Ok(PublicAccountRole {
-                            account_id,
-                            account_name: account_name.to_lowercase().replace([' ', '_'], "-"),
-                            role_names,
-                        })
-                    }
+                    Self::fetch_account_roles(
+                        http.clone(),
+                        self.token.clone(),
+                        account_id.clone(),
+                        account_name.clone(),
+                    )
                 })
                 .collect();
 
