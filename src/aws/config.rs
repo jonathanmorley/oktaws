@@ -43,7 +43,11 @@ impl ConfigStore {
                 .map_err(|e| eyre!("Failed to load AWS config file: {}", e))?;
         }
 
-        Ok(Self { path, config, alt_roles: HashMap::new() })
+        Ok(Self {
+            path,
+            config,
+            alt_roles: HashMap::new(),
+        })
     }
 
     /// Check if a profile is an SSO profile

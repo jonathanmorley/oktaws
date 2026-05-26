@@ -174,7 +174,9 @@ impl Client {
             if !status.is_success() {
                 return Err(eyre!(
                     "ListAccountRoles failed for {} ({}): {}",
-                    account_id, status, text
+                    account_id,
+                    status,
+                    text
                 ));
             }
             trace!("ListAccountRoles response for {}: {}", account_id, &text);
