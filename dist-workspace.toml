@@ -25,6 +25,9 @@ install-updater = false
 pr-run-mode = "upload"
 # Whether to enable GitHub Attestations
 github-attestations = true
+# Allow manual edits to generated CI (release.yml patched to skip Attest on fork PRs;
+# upstream cargo-dist bug: https://github.com/axodotdev/cargo-dist/issues/new)
+allow-dirty = ["ci"]
 
 [workspace]
 members = ["cargo:."]

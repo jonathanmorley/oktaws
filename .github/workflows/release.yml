@@ -153,6 +153,8 @@ jobs:
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
       - name: Attest
+        # Fork PRs cannot obtain the OIDC token required for attestation; skip on PRs.
+        if: ${{ needs.plan.outputs.publishing == 'true' }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}*"
