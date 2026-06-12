@@ -44,7 +44,7 @@ url = { version = "2", features = ["serde"] }
 whoami = "1"
 eyre = "0.6"
 aws-smithy-types = "1.4.9"
-aws-runtime = "1.7.4"
+aws-runtime = "1.7.5"
 aws-types = "1.3.16"
 mockall_double = "0.3"
 reqwest-retry = "0.7.0"
