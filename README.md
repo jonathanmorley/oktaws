@@ -55,21 +55,21 @@ The command handles profile name collisions across multiple SSO applications by 
 
 **Note:** `~/.aws/config` is modified by `init-sso` but only read by other commands.
 
-#### Multiple Profiles Per Account
+#### Role Selection Per Account
 
-`init-sso` generates one AWS profile per (account, role) pair visible on each account. The role chosen as that account's "default" is written to the bare profile name (matching the account name); every other role gets a suffixed profile of the form `account-name/RoleName`.
+`init-sso` generates **one bare profile per account**, named after the account. When multiple always-on roles are available, you are prompted once per SSO session to choose the default; the other always-on roles are written as commented-out alternatives directly inside the same profile block:
 
-Example: an account `prod` with roles `AdminAccess` and `ReadOnly`, where you select `AdminAccess` as the default, produces:
-
-```
+```ini
 [profile prod]
 sso_role_name = AdminAccess
-...
-
-[profile prod/ReadOnly]
-sso_role_name = ReadOnly
+# sso_role_name = ReadOnly
+sso_session = my-company-aws
 ...
 ```
+
+To switch to a different always-on role, uncomment it and comment out the current one, then re-authenticate with `aws sso login --profile prod`.
+
+JIT-gated roles declared via `extra_roles` are written as separate suffixed profile entries (see below).
 
 #### JIT-Gated Roles (`extra_roles`)
 
@@ -134,7 +134,7 @@ Fetching accounts and roles...
   Processed 50/50 accounts
 ✓ Found 50 accounts
 
-Choose default role for My Company AWS (45 profiles need role selection)
+Choose default (always-on) role for My Company AWS (45 accounts need a default)
 > PowerUserAccess (40 accounts)
   ReadOnlyAccess (50 accounts)
   AdministratorAccess (15 accounts)
@@ -146,8 +146,11 @@ SSO profiles for My Company AWS (session: my-company-aws):
   - development
   ...
 
-Successfully configured 50 SSO profiles across 1 session(s)
-Wrote config to ~/.aws/config
+=== Summary ===
+Total profiles configured: 50
+Write SSO configuration to ~/.aws/config? (y/n) y
+
+SSO configuration written successfully!
 ```
 
 ## Debugging

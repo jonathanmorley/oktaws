@@ -14,6 +14,8 @@ use tracing::instrument;
 pub struct ConfigStore {
     path: PathBuf,
     config: Ini,
+    /// Alternate (non-selected) role names per profile section, written as comments on save.
+    alt_roles: HashMap<String, Vec<String>>,
 }
 
 impl ConfigStore {
@@ -41,7 +43,11 @@ impl ConfigStore {
                 .map_err(|e| eyre!("Failed to load AWS config file: {}", e))?;
         }
 
-        Ok(Self { path, config })
+        Ok(Self {
+            path,
+            config,
+            alt_roles: HashMap::new(),
+        })
     }
 
     /// Check if a profile is an SSO profile
@@ -100,6 +106,13 @@ impl ConfigStore {
         Ok(())
     }
 
+    /// Store the alternate (non-selected) role names for a profile.
+    /// They are written as `# sso_role_name = <role>` comment lines on save.
+    pub fn set_profile_alt_roles(&mut self, profile_name: &str, alt_roles: Vec<String>) {
+        let section_name = format!("profile {profile_name}");
+        self.alt_roles.insert(section_name, alt_roles);
+    }
+
     /// Insert or update an SSO profile
     ///
     /// # Errors
@@ -143,7 +156,9 @@ impl ConfigStore {
         Ok(())
     }
 
-    /// Write a profile section with its configuration
+    /// Write a profile section with its configuration.
+    /// After `sso_role_name`, any alternate roles stored via `set_profile_alt_roles`
+    /// are written as `# sso_role_name = <role>` comment lines.
     fn write_profile(&self, output: &mut String, profile_section: &str) -> Result<()> {
         writeln!(output)?;
         writeln!(output, "[{profile_section}]")?;
@@ -155,6 +170,13 @@ impl ConfigStore {
             for key in keys {
                 if let Some(Some(value)) = section_map.get(key) {
                     writeln!(output, "{key} = {value}")?;
+                    if key == "sso_role_name" {
+                        if let Some(alts) = self.alt_roles.get(profile_section) {
+                            for alt in alts {
+                                writeln!(output, "# sso_role_name = {alt}")?;
+                            }
+                        }
+                    }
                 }
             }
         }

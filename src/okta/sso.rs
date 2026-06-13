@@ -166,49 +166,10 @@ impl Client {
         Ok(SsoOrgAuth { org_id, auth_code })
     }
 
-    /// Given an `amazon_aws_sso` identity center `AppInstance`, visit it to get the account name and roles that can be assumed
-    ///
-    /// # Errors
-    ///
-    /// Will return `Err` if there are any errors while fetching the roles.
-    async fn get_sso_account_role_mapping(
-        &self,
-        app_instance: &AppInstance,
-        application_name: String,
-        sso_client: &SsoClient,
-    ) -> Result<AppLinkAccountRoleMapping> {
-        let profiles = sso_client.profiles(&app_instance.id).await?;
-
-        if profiles.is_empty() {
-            return Err(eyre!(
-                "No roles found for app instance: {}",
-                app_instance.name
-            ));
-        }
-
-        let mut role_names = profiles.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
-        role_names.sort();
-        let account_name = app_instance.account_name().ok_or_else(|| {
-            eyre!(
-                "No account name found for app instance: {}",
-                app_instance.name
-            )
-        })?;
-
-        Ok(AppLinkAccountRoleMapping {
-            account_name,
-            role_names,
-            application_name,
-            account_id: app_instance
-                .account_id()
-                .map(std::string::ToString::to_string),
-        })
-    }
-
     /// Given an `amazon_aws_sso` identity center `AppLink`, iterate through all app instances to get a list of all account names and roles that can be assumed.
     ///
-    /// This function processes accounts in parallel batches of 10 to improve performance while avoiding rate limits.
-    /// Progress is displayed to stderr showing which accounts are being processed (e.g., "Processing accounts 1-10/50...").
+    /// This function processes accounts in parallel batches of 3 to avoid AWS SSO Portal rate limits.
+    /// Progress is displayed to stderr showing which accounts are being processed (e.g., "Processing accounts 1-3/50...").
     ///
     /// # Errors
     ///
@@ -221,43 +182,25 @@ impl Client {
         let org_auth = self.get_org_auth_for_app_link(app_link).await?;
         let sso_client = SsoClient::new(&org_auth.org_id, &org_auth.auth_code).await?;
 
-        let app_instances = sso_client.app_instances().await?;
-        let app_aws_accounts = app_instances
-            .iter()
-            .filter(|app_instance| app_instance.application_name == "AWS Account")
-            .collect::<Vec<_>>();
-
-        let total_accounts = app_aws_accounts.len();
-        let mut all_account_role_mappings = Vec::new();
-        let batch_size = 3; // Keep concurrency low to avoid AWS SSO Portal rate limits (429)
-
-        for (batch_num, chunk) in app_aws_accounts.chunks(batch_size).enumerate() {
-            let batch_start = batch_num * batch_size + 1;
-            let batch_end = std::cmp::min(batch_start + chunk.len() - 1, total_accounts);
-
-            eprint!("\r  Processing accounts {batch_start}-{batch_end}/{total_accounts}... ");
-            std::io::Write::flush(&mut std::io::stderr()).ok();
-
-            let mut futures = Vec::new();
-            for app_aws_account in chunk {
-                futures.push(self.get_sso_account_role_mapping(
-                    app_aws_account,
-                    app_name.clone(),
-                    &sso_client,
-                ));
-            }
-            let nested_account_role_mappings = futures::future::join_all(futures).await;
-            let account_role_mappings = nested_account_role_mappings
-                .into_iter()
-                .collect::<Result<Vec<AppLinkAccountRoleMapping>>>()?;
-            all_account_role_mappings.extend(account_role_mappings);
-        }
-
-        eprintln!("\r  Processed {total_accounts}/{total_accounts} accounts        ");
-        Ok(all_account_role_mappings)
+        Ok(sso_client
+            .list_accounts_and_roles()
+            .await?
+            .into_iter()
+            .map(|a| AppLinkAccountRoleMapping {
+                account_name: a.account_name,
+                role_names: a.role_names,
+                application_name: app_name.clone(),
+                account_id: Some(a.account_id),
+            })
+            .collect())
     }
 
     /// Given an identity center `AppLink`, return all app instances
+    ///
+    /// Note: this uses the portal app-instance identifier system (opaque instance IDs from
+    /// `GET /instance/appinstances`), which is distinct from the 12-digit AWS account IDs
+    /// used by [`crate::aws::sso::Client::list_accounts_and_roles`]. The two code paths
+    /// are not interchangeable.
     ///
     /// # Errors
     ///
