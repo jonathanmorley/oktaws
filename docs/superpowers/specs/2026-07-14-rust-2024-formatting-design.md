@@ -25,10 +25,10 @@ If `cargo fix --edition` reports code that cannot be migrated automatically, han
 This configuration/toolchain migration does not add a unit test. Its regression proof is formatter convergence and the existing behavioral suite:
 
 1. Run Cargo's formatter and confirm a second Cargo formatter check is clean.
-2. Run `nix fmt` in fail-on-change mode and confirm it makes no Rust changes.
-3. Re-run Cargo's formatter check to prove the two entry points converge.
-4. Run the repository's Rust checks, tests, clippy, and Nix flake checks.
-5. Review the final diff for changes outside the approved scope.
+1. Run `nix fmt` in fail-on-change mode and confirm it makes no Rust changes.
+1. Re-run Cargo's formatter check to prove the two entry points converge.
+1. Run the repository's Rust checks, tests, clippy, and Nix flake checks.
+1. Review the final diff for changes outside the approved scope.
 
 ## Alternatives Considered
 
