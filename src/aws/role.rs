@@ -6,7 +6,7 @@ use std::str::FromStr;
 use aws_arn::ResourceName as ARN;
 use aws_credential_types::Credentials;
 use aws_sdk_sts::Client as StsClient;
-use eyre::{eyre, Error, Result};
+use eyre::{Error, Result, eyre};
 use tracing::instrument;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -88,11 +88,11 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
-    use aws_sdk_sts::config::Region as StsRegion;
     use aws_sdk_sts::Config as StsConfig;
+    use aws_sdk_sts::config::Region as StsRegion;
     use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_types::body::SdkBody;
-    use base64::engine::{general_purpose::STANDARD as b64, Engine};
+    use base64::engine::{Engine, general_purpose::STANDARD as b64};
     use tokio_test::block_on;
 
     #[test]

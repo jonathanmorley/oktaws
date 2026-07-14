@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 use aws_credential_types::Credentials;
 use dialoguer::Input;
-use eyre::{eyre, Error, Result};
+use eyre::{Error, Result, eyre};
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
