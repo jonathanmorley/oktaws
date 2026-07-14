@@ -202,7 +202,7 @@ impl Organization {
         client: &OktaClient,
         filter: glob::Pattern,
         role_override: Option<&String>,
-    ) -> impl Iterator<Item = (String, Credentials)> {
+    ) -> impl Iterator<Item = (String, Credentials)> + use<> {
         let futures = self.into_profiles(filter).map(|profile| async {
             (
                 profile.name.clone(),
@@ -269,7 +269,6 @@ mod tests {
 
     use super::*;
 
-    use std::env;
     use std::fs::File;
     use std::io::Write;
 
@@ -300,6 +299,13 @@ mod tests {
         write!(bad_nested_file, "Not an oktaws config").unwrap();
 
         tempdir
+    }
+
+    fn pattern_in(dir: &Path, pattern: &str) -> Pattern {
+        let path_pattern = dir.join(format!("{pattern}.toml"));
+        let pattern = path_pattern.as_os_str().to_string_lossy();
+
+        Pattern(glob::Pattern::new(&pattern).unwrap())
     }
 
     #[test]
@@ -491,9 +497,8 @@ foo = "foo"
     #[serial]
     fn finds_all_organizations() {
         let tempdir = create_mock_config_dir();
-        env::set_var("OKTAWS_HOME", tempdir.path());
 
-        let org_pattern: Pattern = "*".parse().unwrap();
+        let org_pattern = pattern_in(tempdir.path(), "*");
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 3);
@@ -504,13 +509,11 @@ foo = "foo"
     fn does_not_find_nested_config() {
         let tempdir = create_mock_config_dir();
 
-        env::set_var("OKTAWS_HOME", tempdir.path());
-
         let mock_dir = tempdir.path().join("mock");
         std::fs::create_dir(&mock_dir).unwrap();
         create_mock_toml(&mock_dir, "quz");
 
-        let org_pattern: Pattern = "*".parse().unwrap();
+        let org_pattern = pattern_in(tempdir.path(), "*");
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 3);
@@ -520,9 +523,8 @@ foo = "foo"
     #[serial]
     fn filters_into_organizations() {
         let tempdir = create_mock_config_dir();
-        env::set_var("OKTAWS_HOME", tempdir.path());
 
-        let org_pattern: Pattern = "ba*".parse().unwrap();
+        let org_pattern = pattern_in(tempdir.path(), "ba*");
         let organizations = org_pattern.organizations().unwrap();
 
         assert_eq!(organizations.len(), 2);

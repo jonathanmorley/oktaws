@@ -16,7 +16,11 @@
       programs.alejandra.enable = true; # nix
       programs.jsonfmt.enable = true; # json
       programs.mdformat.enable = true; # markdown
-      programs.rustfmt.enable = true; # rust
+      programs.rustfmt = {
+        enable = true; # rust
+        edition =
+          (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.edition;
+      };
       programs.taplo.enable = true; # toml
       programs.xmllint.enable = true; # xml
     };
