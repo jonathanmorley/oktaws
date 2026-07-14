@@ -200,15 +200,15 @@ impl Client {
     pub fn extra_verification_token(text: &str) -> Result<Option<String>> {
         let doc = kuchiki::parse_html().one(text.to_string());
 
-        let extra_verification = if let Ok(head) = doc.select_first("head") {
-            if let Ok(title) = head.as_node().select_first("title") {
-                let re = Regex::new(r".* - Extra Verification$")?;
-                re.is_match(&title.text_contents())
-            } else {
-                false
-            }
-        } else {
-            false
+        let extra_verification = match doc.select_first("head") {
+            Ok(head) => match head.as_node().select_first("title") {
+                Ok(title) => {
+                    let re = Regex::new(r".* - Extra Verification$")?;
+                    re.is_match(&title.text_contents())
+                }
+                _ => false,
+            },
+            _ => false,
         };
 
         if extra_verification {

@@ -295,7 +295,7 @@ async fn init(options: Init) -> Result<()> {
         "Federated profiles (will be written to {}):",
         oktaws_config_path.display()
     );
-    println!("{}", &org_toml);
+    println!("{org_toml}");
 
     let write_to_file = dialoguer::Confirm::new()
         .with_prompt(format!("Write config to {}?", oktaws_config_path.display()))
@@ -594,10 +594,10 @@ fn compute_account_default_role(
         );
     }
 
-    if let Some(default) = session_default_role {
-        if api_roles.contains(default) {
-            return Ok(Some(default.clone()));
-        }
+    if let Some(default) = session_default_role
+        && api_roles.contains(default)
+    {
+        return Ok(Some(default.clone()));
     }
 
     let selection = dialoguer::Select::new()

@@ -287,8 +287,8 @@ impl Client {
                 let url = links
                     .get("verify")
                     .and_then(|link| match link {
-                        Single(ref link) => Some(link.href.clone()),
-                        Multi(ref links) => links.first().map(|link| link.href.clone()),
+                        Single(link) => Some(link.href.clone()),
+                        Multi(links) => links.first().map(|link| link.href.clone()),
                     })
                     .ok_or_else(|| eyre!("No verify link found"))?;
 
@@ -311,8 +311,8 @@ impl Client {
                 let url = links
                     .get("verify")
                     .and_then(|link| match link {
-                        Single(ref link) => Some(link.href.clone()),
-                        Multi(ref links) => links.first().map(|link| link.href.clone()),
+                        Single(link) => Some(link.href.clone()),
+                        Multi(links) => links.first().map(|link| link.href.clone()),
                     })
                     .ok_or_else(|| eyre!("No verify link found"))?;
 
@@ -339,8 +339,8 @@ impl Client {
                 let mut url = links
                     .get("verify")
                     .and_then(|link| match link {
-                        Single(ref link) => Some(link.href.clone()),
-                        Multi(ref links) => links.first().map(|link| link.href.clone()),
+                        Single(link) => Some(link.href.clone()),
+                        Multi(links) => links.first().map(|link| link.href.clone()),
                     })
                     .ok_or_else(|| eyre!("No verify link found"))?;
 
