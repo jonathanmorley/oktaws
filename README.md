@@ -55,15 +55,19 @@ The command handles profile name collisions across multiple SSO applications by 
 
 **Note:** `~/.aws/config` is modified by `init-sso` but only read by other commands.
 
-#### Role Selection Per Account
+#### Multiple Profiles Per Account
 
-`init-sso` generates **one bare profile per account**, named after the account. When multiple always-on roles are available, you are prompted once per SSO session to choose the default; the other always-on roles are written as commented-out alternatives directly inside the same profile block:
+`init-sso` generates one AWS profile per (account, role) pair visible on each account. The role chosen as that account's "default" is written to the bare profile name (matching the account name); every other role gets a suffixed profile of the form `account-name/RoleName`.
+
+Example: an account `prod` with roles `AdminAccess` and `ReadOnly`, where you select `AdminAccess` as the default, produces:
 
 ```ini
 [profile prod]
 sso_role_name = AdminAccess
-# sso_role_name = ReadOnly
-sso_session = my-company-aws
+...
+
+[profile prod/ReadOnly]
+sso_role_name = ReadOnly
 ...
 ```
 
