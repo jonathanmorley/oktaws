@@ -600,4 +600,74 @@ sso_registration_scopes = sso:account:access
 
         Ok(())
     }
+
+    // --- Tests covering the post-be3be6f refactor ---
+
+    // The `alt_roles` / `set_profile_alt_roles` feature was removed.  Verify that
+    // saved output never contains `# sso_role_name` comment lines — non-default
+    // roles now get their own profile entries instead.
+    //
+    // Note: configparser lowercases all section/key names, so profile names are
+    // stored (and therefore written) in lowercase.
+    #[test]
+    fn test_save_never_writes_role_comment_lines() -> Result<()> {
+        let tempfile = NamedTempFile::new()?;
+        let mut store = ConfigStore::load(Some(tempfile.path()))?;
+
+        store.upsert_sso_session("my-sso", "https://my-org.awsapps.com/start", "us-east-1")?;
+        store.upsert_sso_profile("prod", "my-sso", "111111111111", "AdminAccess")?;
+        // Add a second profile the way the new code does — as a real suffixed entry.
+        store.upsert_sso_profile("prod/readonly", "my-sso", "111111111111", "ReadOnly")?;
+
+        store.save()?;
+
+        let contents = fs::read_to_string(tempfile.path())?;
+
+        // Both profiles exist as real sections (configparser lowercases names).
+        assert!(contents.contains("[profile prod]"), "missing bare profile:\n{contents}");
+        assert!(contents.contains("[profile prod/readonly]"), "missing suffixed profile:\n{contents}");
+        // No comment lines must appear — the old `# sso_role_name = ...` pattern is gone.
+        assert!(
+            !contents.lines().any(|l| l.trim_start().starts_with('#')),
+            "saved config must not contain any comment lines, got:\n{contents}"
+        );
+
+        Ok(())
+    }
+
+    // Saving multiple profiles under the same session must not produce comment lines
+    // even when many roles are stored.
+    #[test]
+    fn test_save_multiple_suffixed_profiles_no_comments() -> Result<()> {
+        let tempfile = NamedTempFile::new()?;
+        let mut store = ConfigStore::load(Some(tempfile.path()))?;
+
+        store.upsert_sso_session("corp", "https://corp.awsapps.com/start", "us-east-1")?;
+        // Use lowercase suffixes to match configparser's normalization.
+        let profiles = [
+            ("myaccount", "AdminAccess"),
+            ("myaccount/readonly", "ReadOnly"),
+            ("myaccount/poweruser", "PowerUser"),
+            ("myaccount/jit-breakglass", "JITBreakGlass"),
+        ];
+        for (profile, role) in &profiles {
+            store.upsert_sso_profile(profile, "corp", "999999999999", role)?;
+        }
+
+        store.save()?;
+
+        let contents = fs::read_to_string(tempfile.path())?;
+
+        assert!(
+            !contents.lines().any(|l| l.trim_start().starts_with('#')),
+            "saved config must not contain any comment lines, got:\n{contents}"
+        );
+        // All four profiles are real sections.
+        assert!(contents.contains("[profile myaccount]"), "missing bare profile:\n{contents}");
+        assert!(contents.contains("[profile myaccount/readonly]"), "missing readonly profile:\n{contents}");
+        assert!(contents.contains("[profile myaccount/poweruser]"), "missing poweruser profile:\n{contents}");
+        assert!(contents.contains("[profile myaccount/jit-breakglass]"), "missing jit profile:\n{contents}");
+
+        Ok(())
+    }
 }

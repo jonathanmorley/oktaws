@@ -1250,4 +1250,97 @@ mod tests {
         .unwrap();
         assert_eq!(result, Some("NewAdmin".to_string()));
     }
+
+    // --- Tests covering the post-be3be6f refactor ---
+
+    // expand_account_profiles: when there is no default role, every role in
+    // api_roles gets a suffixed profile — not just JIT/extra roles.  This is the
+    // unified path introduced by the refactor; previously always-on api_roles
+    // that had no default would only appear as commented-out alternatives.
+    #[test]
+    fn test_expand_account_profiles_no_default_api_roles_become_suffixed() {
+        let result = expand_account_profiles(
+            "staging",
+            "222222222222",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &[],
+            None, // no default — all api_roles should become suffixed profiles
+        );
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].profile_name, "staging/AdminAccess");
+        assert_eq!(result[0].role, "AdminAccess");
+        assert_eq!(result[1].profile_name, "staging/ReadOnly");
+        assert_eq!(result[1].role, "ReadOnly");
+        // No bare "staging" profile because default_role is None.
+        assert!(!result.iter().any(|p| p.profile_name == "staging"));
+    }
+
+    // expand_account_profiles: with both api_roles and extra_roles but no
+    // default, all roles become suffixed — api_roles order is preserved first.
+    #[test]
+    fn test_expand_account_profiles_no_default_api_and_extra_all_suffixed() {
+        let result = expand_account_profiles(
+            "dev",
+            "333333333333",
+            &["ReadOnly".to_string()],
+            &["BreakGlass".to_string()],
+            None,
+        );
+        assert_eq!(result.len(), 2);
+        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
+        assert_eq!(names, vec!["dev/ReadOnly", "dev/BreakGlass"]);
+    }
+
+    // expand_account_profiles: no roles at all → empty (drives the
+    // `profiles.is_empty()` skip branch in write_sso_session_profiles).
+    #[test]
+    fn test_expand_account_profiles_no_roles_returns_empty() {
+        let result = expand_account_profiles("prod", "111111111111", &[], &[], None);
+        assert!(result.is_empty());
+    }
+
+    // expand_account_profiles: non-default always-on roles produce real suffixed
+    // profile entries (formerly they were written only as `# sso_role_name` comments).
+    #[test]
+    fn test_expand_account_profiles_non_default_always_on_produces_real_profile() {
+        let result = expand_account_profiles(
+            "prod",
+            "111111111111",
+            &[
+                "AdminAccess".to_string(),
+                "ReadOnly".to_string(),
+                "PowerUser".to_string(),
+            ],
+            &[],
+            Some(&"AdminAccess".to_string()),
+        );
+        // Bare profile for default, plus one suffixed entry per non-default always-on role.
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].profile_name, "prod");
+        assert_eq!(result[0].role, "AdminAccess");
+        assert_eq!(result[1].profile_name, "prod/ReadOnly");
+        assert_eq!(result[1].role, "ReadOnly");
+        assert_eq!(result[2].profile_name, "prod/PowerUser");
+        assert_eq!(result[2].role, "PowerUser");
+    }
+
+    // expand_account_profiles: api_roles and extra_roles together when a default
+    // exists — every non-default role (always-on or JIT) gets a suffixed profile,
+    // deduped in api_roles-first order.
+    #[test]
+    fn test_expand_account_profiles_api_and_extra_with_default_all_non_default_suffixed() {
+        let result = expand_account_profiles(
+            "acct",
+            "444444444444",
+            &["AdminAccess".to_string(), "ReadOnly".to_string()],
+            &["JITAccess".to_string(), "ReadOnly".to_string()], // ReadOnly is in both; should not duplicate
+            Some(&"AdminAccess".to_string()),
+        );
+        // Expected: bare "acct" (Admin), "acct/ReadOnly", "acct/JITAccess"
+        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
+        assert_eq!(names, vec!["acct", "acct/ReadOnly", "acct/JITAccess"]);
+        assert_eq!(result[0].role, "AdminAccess");
+        assert_eq!(result[1].role, "ReadOnly");
+        assert_eq!(result[2].role, "JITAccess");
+    }
 }

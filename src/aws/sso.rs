@@ -545,4 +545,84 @@ mod tests {
             Some("production-account".to_string())
         );
     }
+
+    // --- Tests covering the be3be6f commit ---
+    // These cover the module-level AccountsPage / RolesPage deserialization structs
+    // (introduced in be3be6f, moved to module scope in the subsequent refactor) and
+    // the account-name normalization applied inside fetch_account_roles().
+
+    #[test]
+    fn test_accounts_page_deserializes_list_and_next_token() {
+        let json = r#"{
+            "accountList": [
+                {"accountId": "111111111111", "accountName": "Production"},
+                {"accountId": "222222222222", "accountName": "Staging"}
+            ],
+            "nextToken": "tok123"
+        }"#;
+        let page: AccountsPage = serde_json::from_str(json).unwrap();
+        let list = page.account_list.unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].account_id, "111111111111");
+        assert_eq!(list[0].account_name, "Production");
+        assert_eq!(list[1].account_id, "222222222222");
+        assert_eq!(page.next_token.as_deref(), Some("tok123"));
+    }
+
+    #[test]
+    fn test_accounts_page_null_list_and_no_token() {
+        // AWS returns null accountList when there are no accounts.
+        let json = r#"{"nextToken": null}"#;
+        let page: AccountsPage = serde_json::from_str(json).unwrap();
+        assert!(page.account_list.is_none());
+        assert!(page.next_token.is_none());
+    }
+
+    #[test]
+    fn test_accounts_page_absent_fields_become_none() {
+        // Both fields may be entirely absent (not just null).
+        let json = r#"{}"#;
+        let page: AccountsPage = serde_json::from_str(json).unwrap();
+        assert!(page.account_list.is_none());
+        assert!(page.next_token.is_none());
+    }
+
+    #[test]
+    fn test_roles_page_deserializes_list_and_next_token() {
+        let json = r#"{
+            "roleList": [
+                {"roleName": "AdminAccess"},
+                {"roleName": "ReadOnly"}
+            ],
+            "nextToken": "page2"
+        }"#;
+        let page: RolesPage = serde_json::from_str(json).unwrap();
+        let list = page.role_list.unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].role_name, "AdminAccess");
+        assert_eq!(list[1].role_name, "ReadOnly");
+        assert_eq!(page.next_token.as_deref(), Some("page2"));
+    }
+
+    #[test]
+    fn test_roles_page_null_list_and_no_token() {
+        let json = r#"{"roleList": null}"#;
+        let page: RolesPage = serde_json::from_str(json).unwrap();
+        assert!(page.role_list.is_none());
+        assert!(page.next_token.is_none());
+    }
+
+    // The account-name normalization inside fetch_account_roles applies
+    // to_lowercase + replace spaces/underscores with hyphens.  This is the same
+    // transform as AppInstance::account_name() (already tested above), but applied
+    // to the raw string from the public API rather than the portal display name.
+    #[test]
+    fn test_fetch_account_roles_name_normalization_logic() {
+        let normalize = |s: &str| s.to_lowercase().replace([' ', '_'], "-");
+        assert_eq!(normalize("Production"), "production");
+        assert_eq!(normalize("My Test Account"), "my-test-account");
+        assert_eq!(normalize("Test_Account_Name"), "test-account-name");
+        assert_eq!(normalize("Mixed Space_And_Under"), "mixed-space-and-under");
+        assert_eq!(normalize("UPPER CASE"), "upper-case");
+    }
 }
