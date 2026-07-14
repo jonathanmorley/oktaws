@@ -594,10 +594,10 @@ fn compute_account_default_role(
         );
     }
 
-    if let Some(default) = session_default_role {
-        if api_roles.contains(default) {
-            return Ok(Some(default.clone()));
-        }
+    if let Some(default) = session_default_role
+        && api_roles.contains(default)
+    {
+        return Ok(Some(default.clone()));
     }
 
     let selection = dialoguer::Select::new()
