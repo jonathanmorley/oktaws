@@ -1,6 +1,6 @@
 use configparser::ini::Ini;
 use dirs;
-use eyre::{Result, eyre};
+use eyre::{eyre, Result};
 use std::collections::HashMap;
 use std::env::var as env_var;
 use std::fmt::Write as _;
@@ -624,8 +624,14 @@ sso_registration_scopes = sso:account:access
         let contents = fs::read_to_string(tempfile.path())?;
 
         // Both profiles exist as real sections (configparser lowercases names).
-        assert!(contents.contains("[profile prod]"), "missing bare profile:\n{contents}");
-        assert!(contents.contains("[profile prod/readonly]"), "missing suffixed profile:\n{contents}");
+        assert!(
+            contents.contains("[profile prod]"),
+            "missing bare profile:\n{contents}"
+        );
+        assert!(
+            contents.contains("[profile prod/readonly]"),
+            "missing suffixed profile:\n{contents}"
+        );
         // No comment lines must appear — the old `# sso_role_name = ...` pattern is gone.
         assert!(
             !contents.lines().any(|l| l.trim_start().starts_with('#')),
@@ -663,10 +669,22 @@ sso_registration_scopes = sso:account:access
             "saved config must not contain any comment lines, got:\n{contents}"
         );
         // All four profiles are real sections.
-        assert!(contents.contains("[profile myaccount]"), "missing bare profile:\n{contents}");
-        assert!(contents.contains("[profile myaccount/readonly]"), "missing readonly profile:\n{contents}");
-        assert!(contents.contains("[profile myaccount/poweruser]"), "missing poweruser profile:\n{contents}");
-        assert!(contents.contains("[profile myaccount/jit-breakglass]"), "missing jit profile:\n{contents}");
+        assert!(
+            contents.contains("[profile myaccount]"),
+            "missing bare profile:\n{contents}"
+        );
+        assert!(
+            contents.contains("[profile myaccount/readonly]"),
+            "missing readonly profile:\n{contents}"
+        );
+        assert!(
+            contents.contains("[profile myaccount/poweruser]"),
+            "missing poweruser profile:\n{contents}"
+        );
+        assert!(
+            contents.contains("[profile myaccount/jit-breakglass]"),
+            "missing jit profile:\n{contents}"
+        );
 
         Ok(())
     }

@@ -5,7 +5,7 @@ pub mod sso;
 use std::env::var as env_var;
 use std::path::PathBuf;
 
-use eyre::{Result, eyre};
+use eyre::{eyre, Result};
 
 /// Return the location for the Oktaws config directory.
 ///

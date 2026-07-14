@@ -1,8 +1,8 @@
-use eyre::{Result, eyre};
+use eyre::{eyre, Result};
 use futures::future::join_all;
 use regex::Regex;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::sync::LazyLock;
 use std::time::Duration;

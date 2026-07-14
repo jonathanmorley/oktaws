@@ -3,13 +3,13 @@ use crate::okta::auth::LoginRequest;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use backoff::ExponentialBackoff;
 use backoff::future::retry;
+use backoff::ExponentialBackoff;
 use dialoguer::Password;
-use eyre::{Result, eyre};
-use reqwest::Response;
+use eyre::{eyre, Result};
 use reqwest::cookie::Jar;
-use reqwest::header::{ACCEPT, HeaderValue};
+use reqwest::header::{HeaderValue, ACCEPT};
+use reqwest::Response;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};

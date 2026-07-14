@@ -7,7 +7,7 @@ use crate::{
 #[allow(unused_imports)]
 use crate::okta::sso;
 
-use eyre::{Result, eyre};
+use eyre::{eyre, Result};
 use futures::future::join_all;
 use serde::Deserialize;
 use tracing::warn;
