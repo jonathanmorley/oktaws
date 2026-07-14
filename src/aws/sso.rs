@@ -581,7 +581,7 @@ mod tests {
     #[test]
     fn test_accounts_page_absent_fields_become_none() {
         // Both fields may be entirely absent (not just null).
-        let json = r#"{}"#;
+        let json = r"{}";
         let page: AccountsPage = serde_json::from_str(json).unwrap();
         assert!(page.account_list.is_none());
         assert!(page.next_token.is_none());

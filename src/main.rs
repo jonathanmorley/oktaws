@@ -295,7 +295,7 @@ async fn init(options: Init) -> Result<()> {
         "Federated profiles (will be written to {}):",
         oktaws_config_path.display()
     );
-    println!("{}", &org_toml);
+    println!("{}", org_toml);
 
     let write_to_file = dialoguer::Confirm::new()
         .with_prompt(format!("Write config to {}?", oktaws_config_path.display()))
