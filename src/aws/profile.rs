@@ -31,7 +31,7 @@ impl Store {
 
         let credentials_file = if path.exists() {
             fs::read_to_string(&path)?.parse().wrap_err_with(|| {
-                format!("Failed to parse AWS credentials file {}", &path.display())
+                format!("Failed to parse AWS credentials file {}", path.display())
             })?
         } else {
             AwsCredentialsFile::default()

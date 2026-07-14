@@ -16,6 +16,12 @@ Run Cargo's edition migration before changing the manifest so compiler-provided 
 
 The migration stays limited to compiler-required edition changes, formatter output, and the two edition configuration points. It will not include unrelated refactoring.
 
+## CI Remediation
+
+The first PR run exposed two pre-existing failures outside the formatter migration. The locked Nixpkgs 26.11 revision no longer provides `x86_64-darwin`, so the flake and pull-request Nix matrix will stop advertising and checking that system. This is a Nix-only support change: the `x86_64-apple-darwin` binary release target remains in `dist-workspace.toml`.
+
+Rust 1.97 also promotes redundant borrows in formatting arguments to Clippy errors on Windows. Remove those borrows without changing runtime behavior.
+
 ## Failure Handling
 
 If `cargo fix --edition` reports code that cannot be migrated automatically, handle only the reported incompatibilities and preserve existing behavior. If the manifest edition cannot be read by Nix, flake evaluation should fail immediately rather than silently falling back to a potentially different formatter edition.

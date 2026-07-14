@@ -15,6 +15,8 @@
 - Limit source changes to compiler-required edition migration edits and rustfmt output.
 - Add no dependency and perform no unrelated refactor.
 - Use formatter convergence plus the existing check, test, clippy, and Nix flake checks as regression coverage; do not add a unit test for configuration-only behavior.
+- Drop only Nix support for `x86_64-darwin`; retain the Intel macOS binary release target.
+- Include the narrow Rust 1.97 Clippy fixes discovered by the PR checks.
 
 ______________________________________________________________________
 
@@ -23,6 +25,8 @@ ______________________________________________________________________
 - Modify `Cargo.toml`: declare Rust edition 2024 as the single source of truth.
 - Modify `treefmt.nix`: pass the manifest edition to treefmt-nix's rustfmt module.
 - Modify `src/**/*.rs` only if `cargo fix --edition` or edition-2024 rustfmt requires changes.
+- Modify `flake.nix` and `.github/workflows/pull.yml`: remove the unsupported `x86_64-darwin` Nix output and runner.
+- Modify `src/aws/profile.rs` and `src/main.rs`: remove the redundant formatting-argument borrows rejected by Rust 1.97 Clippy.
 - Create no production or test files.
 
 ### Task 1: Migrate to Rust 2024 and converge the formatters
@@ -150,3 +154,9 @@ git commit -m "build: migrate to Rust 2024 edition"
 ```
 
 Expected: one focused implementation commit after the separate design and plan commits.
+
+### Task 2: Repair the pre-existing cross-platform CI failures
+
+The locked Nixpkgs 26.11 revision no longer supports `x86_64-darwin`. Remove that system from `flake.nix` and remove the corresponding `macos-15-intel` Nix job from the pull-request workflow. Keep `x86_64-apple-darwin` in `dist-workspace.toml`, because Intel macOS binary releases remain supported independently of Nix.
+
+Remove the redundant borrows from `path.display()` in `src/aws/profile.rs` and `org_toml` in `src/main.rs` so Rust 1.97 Clippy passes on Windows. Verify formatter convergence, Clippy, all 118 tests, native `nix flake check`, and evaluation of every remaining flake system.
