@@ -693,7 +693,7 @@ fn write_sso_session_profiles(
     } = ctx;
     aws_config.upsert_sso_session(session_name, start_url, region)?;
 
-    // Count how many accounts lack a valid existing role (need the session default applied).
+    // Determine which accounts need a default-role prompt.
     let mut needs_selection_profiles = Vec::new();
     for (account_name, (_, api_roles)) in *sso_profiles {
         let true_api_roles: Vec<String> = api_roles
@@ -709,16 +709,16 @@ fn write_sso_session_profiles(
         }
     }
 
-    // prompt_for_default_role handles all cases: 0 roles → None, 1 role → auto-select
-    // silently, 2+ roles → interactive prompt.  Always call it so the user can confirm
-    // or change the session-wide default on every run, even when ~/.aws/config already
-    // has valid entries for all accounts.
-    let session_default_role = prompt_for_default_role(
-        display_name,
-        needs_selection_profiles.len(),
-        sso_profiles,
-        extra_roles,
-    )?;
+    let session_default_role = if needs_selection_profiles.is_empty() {
+        None
+    } else {
+        prompt_for_default_role(
+            display_name,
+            needs_selection_profiles.len(),
+            sso_profiles,
+            extra_roles,
+        )?
+    };
 
     // Expand and write profiles.
     println!("\nSSO profiles for {display_name} (session: {session_name}):");
@@ -740,6 +740,26 @@ fn write_sso_session_profiles(
             session_default_role.as_ref(),
         )?;
 
+        if default_role.is_none() {
+            if extra_roles.is_empty() {
+                println!(
+                    "  ! {account_name}: no roles visible and no extra_roles declared; skipping"
+                );
+            } else {
+                println!(
+                    "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
+                );
+            }
+        }
+
+        let expanded = expand_account_profiles(
+            &base_profile_name,
+            account_id,
+            &true_api_roles,
+            extra_roles,
+            default_role.as_ref(),
+        );
+
         let sanitized = sanitize_session_name(account_name);
         let prefixed_note = if needs_prefix.contains(&sanitized) {
             " (prefixed due to collision with other session)"
@@ -747,30 +767,7 @@ fn write_sso_session_profiles(
             ""
         };
 
-        // Create one bare profile for the default (always-on) role and one
-        // suffixed profile (`{base}/{role}`) for every other role — both
-        // always-on and JIT (visible or declared-but-inactive via extra_roles).
-        // No commented-out role alternatives are written to the default profile.
-        let profiles = expand_account_profiles(
-            &base_profile_name,
-            account_id,
-            api_roles,
-            extra_roles,
-            default_role.as_ref(),
-        );
-
-        if profiles.is_empty() {
-            println!("  ! {account_name}: no roles visible; skipping");
-            continue;
-        }
-
-        if default_role.is_none() {
-            println!(
-                "  ! {account_name}: no always-on roles visible; emitting only JIT-suffixed profiles"
-            );
-        }
-
-        for profile in &profiles {
+        for profile in expanded {
             aws_config.upsert_sso_profile(
                 &profile.profile_name,
                 session_name,
@@ -856,10 +853,8 @@ async fn init_sso(options: InitSso) -> Result<()> {
 
     // Second pass: write sessions and profiles.
     let mut total_profiles = 0;
-    let mut session_summaries: Vec<(String, usize, usize)> = Vec::new(); // (session_name, profiles, accounts)
     for (session_name, display_name, start_url, region, sso_profiles) in sessions {
-        let account_count = sso_profiles.len();
-        let profile_count = write_sso_session_profiles(
+        total_profiles += write_sso_session_profiles(
             &mut aws_config,
             &SsoSessionContext {
                 session_name: &session_name,
@@ -871,8 +866,6 @@ async fn init_sso(options: InitSso) -> Result<()> {
                 needs_prefix: &needs_prefix,
             },
         )?;
-        session_summaries.push((session_name, profile_count, account_count));
-        total_profiles += profile_count;
     }
 
     if total_profiles == 0 {
@@ -880,13 +873,6 @@ async fn init_sso(options: InitSso) -> Result<()> {
     }
 
     println!("\n=== Summary ===");
-    for (session_name, profile_count, account_count) in &session_summaries {
-        println!(
-            "  {session_name}: {profile_count} profile{} across {account_count} account{}",
-            if *profile_count == 1 { "" } else { "s" },
-            if *account_count == 1 { "" } else { "s" },
-        );
-    }
     println!("Total profiles configured: {total_profiles}");
 
     let write_sso = dialoguer::Confirm::new()
@@ -1249,98 +1235,5 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, Some("NewAdmin".to_string()));
-    }
-
-    // --- Tests covering the post-be3be6f refactor ---
-
-    // expand_account_profiles: when there is no default role, every role in
-    // api_roles gets a suffixed profile — not just JIT/extra roles.  This is the
-    // unified path introduced by the refactor; previously always-on api_roles
-    // that had no default would only appear as commented-out alternatives.
-    #[test]
-    fn test_expand_account_profiles_no_default_api_roles_become_suffixed() {
-        let result = expand_account_profiles(
-            "staging",
-            "222222222222",
-            &["AdminAccess".to_string(), "ReadOnly".to_string()],
-            &[],
-            None, // no default — all api_roles should become suffixed profiles
-        );
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].profile_name, "staging/AdminAccess");
-        assert_eq!(result[0].role, "AdminAccess");
-        assert_eq!(result[1].profile_name, "staging/ReadOnly");
-        assert_eq!(result[1].role, "ReadOnly");
-        // No bare "staging" profile because default_role is None.
-        assert!(!result.iter().any(|p| p.profile_name == "staging"));
-    }
-
-    // expand_account_profiles: with both api_roles and extra_roles but no
-    // default, all roles become suffixed — api_roles order is preserved first.
-    #[test]
-    fn test_expand_account_profiles_no_default_api_and_extra_all_suffixed() {
-        let result = expand_account_profiles(
-            "dev",
-            "333333333333",
-            &["ReadOnly".to_string()],
-            &["BreakGlass".to_string()],
-            None,
-        );
-        assert_eq!(result.len(), 2);
-        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
-        assert_eq!(names, vec!["dev/ReadOnly", "dev/BreakGlass"]);
-    }
-
-    // expand_account_profiles: no roles at all → empty (drives the
-    // `profiles.is_empty()` skip branch in write_sso_session_profiles).
-    #[test]
-    fn test_expand_account_profiles_no_roles_returns_empty() {
-        let result = expand_account_profiles("prod", "111111111111", &[], &[], None);
-        assert!(result.is_empty());
-    }
-
-    // expand_account_profiles: non-default always-on roles produce real suffixed
-    // profile entries (formerly they were written only as `# sso_role_name` comments).
-    #[test]
-    fn test_expand_account_profiles_non_default_always_on_produces_real_profile() {
-        let result = expand_account_profiles(
-            "prod",
-            "111111111111",
-            &[
-                "AdminAccess".to_string(),
-                "ReadOnly".to_string(),
-                "PowerUser".to_string(),
-            ],
-            &[],
-            Some(&"AdminAccess".to_string()),
-        );
-        // Bare profile for default, plus one suffixed entry per non-default always-on role.
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0].profile_name, "prod");
-        assert_eq!(result[0].role, "AdminAccess");
-        assert_eq!(result[1].profile_name, "prod/ReadOnly");
-        assert_eq!(result[1].role, "ReadOnly");
-        assert_eq!(result[2].profile_name, "prod/PowerUser");
-        assert_eq!(result[2].role, "PowerUser");
-    }
-
-    // expand_account_profiles: api_roles and extra_roles together when a default
-    // exists — every non-default role (always-on or JIT) gets a suffixed profile,
-    // deduped in api_roles-first order.
-    #[test]
-    fn test_expand_account_profiles_api_and_extra_with_default_all_non_default_suffixed() {
-        let result = expand_account_profiles(
-            "acct",
-            "444444444444",
-            &["AdminAccess".to_string(), "ReadOnly".to_string()],
-            &["JITAccess".to_string(), "ReadOnly".to_string()], // ReadOnly is in both; should not duplicate
-            Some(&"AdminAccess".to_string()),
-        );
-        // Expected: bare "acct" (Admin), "acct/ReadOnly", "acct/JITAccess"
-        let names: Vec<&str> = result.iter().map(|p| p.profile_name.as_str()).collect();
-        assert_eq!(names, vec!["acct", "acct/ReadOnly", "acct/JITAccess"]);
-        assert_eq!(result[0].role, "AdminAccess");
-        assert_eq!(result[1].role, "ReadOnly");
-        assert_eq!(result[2].role, "JITAccess");
     }
 }

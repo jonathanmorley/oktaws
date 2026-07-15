@@ -166,7 +166,8 @@ impl Client {
         Ok(SsoOrgAuth { org_id, auth_code })
     }
 
-    /// Given an `amazon_aws_sso` identity center `AppLink`, iterate through all app instances to get a list of all account names and roles that can be assumed.
+    /// Given an `amazon_aws_sso` identity center `AppLink`, use the paginated assignment APIs
+    /// to get all AWS account names, account IDs, and roles that can be assumed.
     ///
     /// This function processes accounts in parallel batches of 3 to avoid AWS SSO Portal rate limits.
     /// Progress is displayed to stderr showing which accounts are being processed (e.g., "Processing accounts 1-3/50...").

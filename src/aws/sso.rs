@@ -10,6 +10,17 @@ use tracing::{debug, trace};
 
 const BASE_URL: &str = "https://portal.sso.us-east-1.amazonaws.com";
 
+fn retrying_client(max_retries: u32) -> ClientWithMiddleware {
+    let retry_policy = ExponentialBackoff::builder()
+        .retry_bounds(Duration::from_secs(1), Duration::from_secs(32))
+        .base(2)
+        .build_with_max_retries(max_retries);
+
+    ClientBuilder::new(reqwest::Client::new())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build()
+}
+
 pub struct Client {
     token: String,
 }
@@ -123,12 +134,16 @@ impl Client {
     /// # Errors
     ///
     /// The function will error for API/network failures.
-    async fn fetch_all_accounts(&self, http: &reqwest::Client) -> Result<Vec<(String, String)>> {
+    async fn fetch_all_accounts(
+        &self,
+        http: &ClientWithMiddleware,
+        base_url: &str,
+    ) -> Result<Vec<(String, String)>> {
         let mut accounts: Vec<(String, String)> = Vec::new();
         let mut next_token: Option<String> = None;
         loop {
             let mut req = http
-                .get(format!("{BASE_URL}/assignment/accounts"))
+                .get(format!("{base_url}/assignment/accounts"))
                 .header("x-amz-sso_bearer_token", &self.token);
             if let Some(ref tok) = next_token {
                 req = req.query(&[("next_token", tok.as_str())]);
@@ -153,7 +168,8 @@ impl Client {
     }
 
     async fn fetch_account_roles(
-        http: reqwest::Client,
+        http: ClientWithMiddleware,
+        base_url: String,
         token: String,
         account_id: String,
         account_name: String,
@@ -162,7 +178,7 @@ impl Client {
         let mut next_token: Option<String> = None;
         loop {
             let mut req = http
-                .get(format!("{BASE_URL}/assignment/roles"))
+                .get(format!("{base_url}/assignment/roles"))
                 .header("x-amz-sso_bearer_token", &token)
                 .query(&[("account_id", account_id.as_str())]);
             if let Some(ref tok) = next_token {
@@ -202,8 +218,16 @@ impl Client {
     ///
     /// The function will error for API/network failures.
     pub async fn list_accounts_and_roles(&self) -> Result<Vec<PublicAccountRole>> {
-        let http = reqwest::Client::new();
-        let accounts = self.fetch_all_accounts(&http).await?;
+        let http = retrying_client(5);
+        self.list_accounts_and_roles_with(&http, BASE_URL).await
+    }
+
+    async fn list_accounts_and_roles_with(
+        &self,
+        http: &ClientWithMiddleware,
+        base_url: &str,
+    ) -> Result<Vec<PublicAccountRole>> {
+        let accounts = self.fetch_all_accounts(http, base_url).await?;
         debug!("ListAccounts returned {} accounts", accounts.len());
 
         let mut results = Vec::new();
@@ -222,6 +246,7 @@ impl Client {
                 .map(|(account_id, account_name)| {
                     Self::fetch_account_roles(
                         http.clone(),
+                        base_url.to_string(),
                         self.token.clone(),
                         account_id.clone(),
                         account_name.clone(),
@@ -244,20 +269,20 @@ impl Client {
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn app_instances(&self) -> Result<Vec<AppInstance>> {
-        let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(Duration::from_secs(1), Duration::from_secs(32))
-            .base(2)
-            .build_with_max_retries(5);
+        let client = retrying_client(5);
+        self.app_instances_with(&client, BASE_URL).await
+    }
 
-        let client: ClientWithMiddleware = ClientBuilder::new(reqwest::Client::new())
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
-
+    async fn app_instances_with(
+        &self,
+        client: &ClientWithMiddleware,
+        base_url: &str,
+    ) -> Result<Vec<AppInstance>> {
         let mut all_instances = Vec::new();
         let mut pagination_token: Option<String> = None;
 
         loop {
-            let url = format!("{BASE_URL}/instance/appinstances");
+            let url = format!("{base_url}/instance/appinstances");
             let mut request = client.get(&url);
             if let Some(ref token) = pagination_token {
                 request = request.query(&[("paginationToken", token.as_str())]);
@@ -300,14 +325,7 @@ impl Client {
     /// The function will error for network issues, or if the response is not parseable as expected
     ///
     pub async fn profiles(&self, app_instance_id: &str) -> Result<Vec<Profile>> {
-        let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(Duration::from_secs(1), Duration::from_secs(32))
-            .base(2)
-            .build_with_max_retries(10);
-
-        let client: ClientWithMiddleware = ClientBuilder::new(reqwest::Client::new())
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
+        let client = retrying_client(10);
 
         let response = client
             .get(format!(
@@ -361,6 +379,24 @@ impl AppInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use wiremock::matchers::{header, method, path, query_param, query_param_is_missing};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn fast_retrying_client(max_retries: u32) -> ClientWithMiddleware {
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_millis(1), Duration::from_millis(2))
+            .base(2)
+            .build_with_max_retries(max_retries);
+
+        ClientBuilder::new(reqwest::Client::new())
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build()
+    }
 
     // Helper to create test AppInstance
     fn create_test_instance(name: &str) -> AppInstance {
@@ -546,83 +582,178 @@ mod tests {
         );
     }
 
-    // --- Tests covering the be3be6f commit ---
-    // These cover the module-level AccountsPage / RolesPage deserialization structs
-    // (introduced in be3be6f, moved to module scope in the subsequent refactor) and
-    // the account-name normalization applied inside fetch_account_roles().
+    #[tokio::test]
+    async fn test_list_accounts_and_roles_follows_all_pagination_tokens() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/assignment/accounts"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param_is_missing("next_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "accountList": [{
+                    "accountId": "111111111111",
+                    "accountName": "Production Account"
+                }],
+                "nextToken": "accounts-page-2"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/assignment/accounts"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param("next_token", "accounts-page-2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "accountList": [{
+                    "accountId": "222222222222",
+                    "accountName": "Shared_Services"
+                }]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
 
-    #[test]
-    fn test_accounts_page_deserializes_list_and_next_token() {
-        let json = r#"{
-            "accountList": [
-                {"accountId": "111111111111", "accountName": "Production"},
-                {"accountId": "222222222222", "accountName": "Staging"}
-            ],
-            "nextToken": "tok123"
-        }"#;
-        let page: AccountsPage = serde_json::from_str(json).unwrap();
-        let list = page.account_list.unwrap();
-        assert_eq!(list.len(), 2);
-        assert_eq!(list[0].account_id, "111111111111");
-        assert_eq!(list[0].account_name, "Production");
-        assert_eq!(list[1].account_id, "222222222222");
-        assert_eq!(page.next_token.as_deref(), Some("tok123"));
+        Mock::given(method("GET"))
+            .and(path("/assignment/roles"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param("account_id", "111111111111"))
+            .and(query_param_is_missing("next_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "roleList": [{"roleName": "ReadOnly"}],
+                "nextToken": "roles-page-2"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/assignment/roles"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param("account_id", "111111111111"))
+            .and(query_param("next_token", "roles-page-2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "roleList": [
+                    {"roleName": "AdminAccess"},
+                    {"roleName": "ReadOnly"}
+                ]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/assignment/roles"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param("account_id", "222222222222"))
+            .and(query_param_is_missing("next_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "roleList": [{"roleName": "PowerUser"}]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = Client {
+            token: "test-token".to_string(),
+        };
+        let accounts = client
+            .list_accounts_and_roles_with(&fast_retrying_client(1), &server.uri())
+            .await
+            .unwrap();
+
+        assert_eq!(accounts.len(), 2);
+        assert_eq!(accounts[0].account_id, "111111111111");
+        assert_eq!(accounts[0].account_name, "production-account");
+        assert_eq!(accounts[0].role_names, vec!["AdminAccess", "ReadOnly"]);
+        assert_eq!(accounts[1].account_id, "222222222222");
+        assert_eq!(accounts[1].account_name, "shared-services");
+        assert_eq!(accounts[1].role_names, vec!["PowerUser"]);
     }
 
-    #[test]
-    fn test_accounts_page_null_list_and_no_token() {
-        // AWS returns null accountList when there are no accounts.
-        let json = r#"{"nextToken": null}"#;
-        let page: AccountsPage = serde_json::from_str(json).unwrap();
-        assert!(page.account_list.is_none());
-        assert!(page.next_token.is_none());
+    #[tokio::test]
+    async fn test_list_accounts_retries_transient_server_errors() {
+        let server = MockServer::start().await;
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let responder_attempts = Arc::clone(&attempts);
+
+        Mock::given(method("GET"))
+            .and(path("/assignment/accounts"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .respond_with(move |_: &wiremock::Request| {
+                if responder_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    ResponseTemplate::new(503)
+                } else {
+                    ResponseTemplate::new(200).set_body_json(json!({"accountList": []}))
+                }
+            })
+            .expect(2)
+            .mount(&server)
+            .await;
+
+        let client = Client {
+            token: "test-token".to_string(),
+        };
+        let accounts = client
+            .list_accounts_and_roles_with(&fast_retrying_client(1), &server.uri())
+            .await
+            .unwrap();
+
+        assert!(accounts.is_empty());
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
-    #[test]
-    fn test_accounts_page_absent_fields_become_none() {
-        // Both fields may be entirely absent (not just null).
-        let json = r"{}";
-        let page: AccountsPage = serde_json::from_str(json).unwrap();
-        assert!(page.account_list.is_none());
-        assert!(page.next_token.is_none());
-    }
+    #[tokio::test]
+    async fn test_app_instances_follows_all_pagination_tokens() {
+        let server = MockServer::start().await;
 
-    #[test]
-    fn test_roles_page_deserializes_list_and_next_token() {
-        let json = r#"{
-            "roleList": [
-                {"roleName": "AdminAccess"},
-                {"roleName": "ReadOnly"}
-            ],
-            "nextToken": "page2"
-        }"#;
-        let page: RolesPage = serde_json::from_str(json).unwrap();
-        let list = page.role_list.unwrap();
-        assert_eq!(list.len(), 2);
-        assert_eq!(list[0].role_name, "AdminAccess");
-        assert_eq!(list[1].role_name, "ReadOnly");
-        assert_eq!(page.next_token.as_deref(), Some("page2"));
-    }
+        Mock::given(method("GET"))
+            .and(path("/instance/appinstances"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param_is_missing("paginationToken"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "result": [{
+                    "id": "instance-1",
+                    "name": "111111111111 (Production)",
+                    "description": "Production",
+                    "applicationId": "application-1",
+                    "applicationName": "AWS Account",
+                    "icon": "icon-1"
+                }],
+                "paginationToken": "instances-page-2"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/instance/appinstances"))
+            .and(header("x-amz-sso_bearer_token", "test-token"))
+            .and(query_param("paginationToken", "instances-page-2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "result": [{
+                    "id": "instance-2",
+                    "name": "222222222222 (Development)",
+                    "description": "Development",
+                    "applicationId": "application-1",
+                    "applicationName": "AWS Account",
+                    "icon": "icon-2"
+                }]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
 
-    #[test]
-    fn test_roles_page_null_list_and_no_token() {
-        let json = r#"{"roleList": null}"#;
-        let page: RolesPage = serde_json::from_str(json).unwrap();
-        assert!(page.role_list.is_none());
-        assert!(page.next_token.is_none());
-    }
+        let client = Client {
+            token: "test-token".to_string(),
+        };
+        let instances = client
+            .app_instances_with(&fast_retrying_client(1), &server.uri())
+            .await
+            .unwrap();
 
-    // The account-name normalization inside fetch_account_roles applies
-    // to_lowercase + replace spaces/underscores with hyphens.  This is the same
-    // transform as AppInstance::account_name() (already tested above), but applied
-    // to the raw string from the public API rather than the portal display name.
-    #[test]
-    fn test_fetch_account_roles_name_normalization_logic() {
-        let normalize = |s: &str| s.to_lowercase().replace([' ', '_'], "-");
-        assert_eq!(normalize("Production"), "production");
-        assert_eq!(normalize("My Test Account"), "my-test-account");
-        assert_eq!(normalize("Test_Account_Name"), "test-account-name");
-        assert_eq!(normalize("Mixed Space_And_Under"), "mixed-space-and-under");
-        assert_eq!(normalize("UPPER CASE"), "upper-case");
+        assert_eq!(
+            instances
+                .iter()
+                .map(|instance| instance.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["instance-1", "instance-2"]
+        );
     }
 }

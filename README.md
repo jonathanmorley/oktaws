@@ -61,7 +61,7 @@ The command handles profile name collisions across multiple SSO applications by 
 
 Example: an account `prod` with roles `AdminAccess` and `ReadOnly`, where you select `AdminAccess` as the default, produces:
 
-```ini
+```
 [profile prod]
 sso_role_name = AdminAccess
 ...
@@ -70,10 +70,6 @@ sso_role_name = AdminAccess
 sso_role_name = ReadOnly
 ...
 ```
-
-To switch to a different always-on role, uncomment it and comment out the current one, then re-authenticate with `aws sso login --profile prod`.
-
-JIT-gated roles declared via `extra_roles` are written as separate suffixed profile entries (see below).
 
 #### JIT-Gated Roles (`extra_roles`)
 
@@ -138,7 +134,7 @@ Fetching accounts and roles...
   Processed 50/50 accounts
 ✓ Found 50 accounts
 
-Choose default (always-on) role for My Company AWS (45 accounts need a default)
+Choose default role for My Company AWS (45 profiles need role selection)
 > PowerUserAccess (40 accounts)
   ReadOnlyAccess (50 accounts)
   AdministratorAccess (15 accounts)
@@ -150,11 +146,8 @@ SSO profiles for My Company AWS (session: my-company-aws):
   - development
   ...
 
-=== Summary ===
-Total profiles configured: 50
-Write SSO configuration to ~/.aws/config? (y/n) y
-
-SSO configuration written successfully!
+Successfully configured 50 SSO profiles across 1 session(s)
+Wrote config to ~/.aws/config
 ```
 
 ## Debugging

@@ -59,6 +59,7 @@ mockall = "0.14"
 serial_test = "3.5.0"
 tempfile = "3"
 tokio-test = "0.4"
+wiremock = "0.6.5"
 
 [package]
 authors = ["Jonathan Morley <morley.jonathan@gmail.com>"]
