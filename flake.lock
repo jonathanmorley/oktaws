@@ -44,7 +44,7 @@
       },
       "original": {
         "owner": "nixos",
-        "ref": "nixpkgs-26.05-darwin",
+        "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
