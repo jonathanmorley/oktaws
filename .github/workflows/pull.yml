@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@d39b183d8d7c85028c4b64a005898c879197d13e # v1.0.2
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test
